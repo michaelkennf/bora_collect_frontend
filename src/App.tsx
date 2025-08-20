@@ -40,7 +40,7 @@ export default function App() {
             <Route path="exports" element={<ExportsStats />} />
           </Route>
           <Route path="/controleur" element={<PrivateRoute roles={["CONTROLLER"]}><ControllerHome /></PrivateRoute>}>
-            <Route index element={<DashboardController />} />
+            <Route index element={<DashboardController setView={() => {}} />} />
             <Route path="formulaire" element={<SchoolForm />} />
           </Route>
           <Route path="/admin/utilisateurs" element={
