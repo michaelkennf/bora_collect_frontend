@@ -3,16 +3,17 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import AdminHome, { DashboardAdmin } from './pages/AdminHome';
-import ControllerLayout, { DashboardController } from './pages/ControllerHome';
-import AdminUsers from './pages/AdminUsers';
-import AdminParametres from './pages/AdminParametres';
+import ControllerHome, { DashboardController } from './pages/ControllerHome';
+import AnalystHome from './pages/AnalystHome';
+import RecordsList from './pages/RecordsList';
+import RecordsSyncedList from './pages/RecordsSyncedList';
 import SchoolForm from './pages/SchoolForm';
 import ExportsStats from './pages/ExportsStats';
-import AnalystHome from './pages/AnalystHome';
+import AdminUsers from './pages/AdminUsers';
+import AdminParametres from './pages/AdminParametres';
+import AdminDeletedUsers from './pages/AdminDeletedUsers';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import MaintenanceSystem from './pages/MaintenanceSystem';
-import AdminDeletedUsers from './pages/AdminDeletedUsers';
 
 // Route protégée selon le rôle
 function PrivateRoute({ children, roles }: { children: React.ReactNode; roles: string[] }) {
@@ -33,17 +34,12 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/admin" element={<PrivateRoute roles={["ADMIN"]}><AdminHome /></PrivateRoute>}>
             <Route index element={<DashboardAdmin />} />
-            <Route path="utilisateurs" element={<AdminUsers />} />
+            <Route path="users" element={<AdminUsers />} />
             <Route path="parametres" element={<AdminParametres />} />
+            <Route path="deleted-users" element={<AdminDeletedUsers />} />
             <Route path="exports" element={<ExportsStats />} />
-            <Route path="maintenance" element={<MaintenanceSystem />} />
-            <Route path="deleted-users" element={
-              <PrivateRoute roles={["ADMIN"]}>
-                <AdminDeletedUsers />
-              </PrivateRoute>
-            } />
           </Route>
-          <Route path="/controleur" element={<PrivateRoute roles={["CONTROLLER"]}><ControllerLayout /></PrivateRoute>}>
+          <Route path="/controleur" element={<PrivateRoute roles={["CONTROLLER"]}><ControllerHome /></PrivateRoute>}>
             <Route index element={<DashboardController />} />
             <Route path="formulaire" element={<SchoolForm />} />
           </Route>

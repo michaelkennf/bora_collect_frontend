@@ -1,8 +1,8 @@
-# 📊 Interface Analyste - BoraCollect
+# 📊 Interface Analyste - FikiriCollect
 
-## 🎯 Vue d'Ensemble
+## Vue d'ensemble
 
-L'interface Analyste de BoraCollect permet aux analystes de consulter et analyser toutes les enquêtes sur les solutions de cuisson propre enregistrées dans le système. Cette interface est conçue pour fournir une vue complète et détaillée des données collectées.
+L'interface Analyste de FikiriCollect permet aux analystes de consulter et analyser toutes les enquêtes sur les solutions de cuisson propre enregistrées dans le système. Cette interface est conçue pour fournir une vue complète et détaillée des données collectées.
 
 ## 🏠 Tableau de Bord Principal
 

@@ -6,6 +6,7 @@ class SyncService {
   private isOnline: boolean = navigator.onLine;
   private syncInterval: number | null = null;
   private isSyncing: boolean = false;
+  private syncCallbacks: Array<() => void> = [];
 
   constructor() {
     this.initializeSync();
@@ -15,13 +16,13 @@ class SyncService {
   private initializeSync(): void {
     // Écouter les changements de connectivité
     window.addEventListener('online', () => {
-      console.log('🌐 Connexion internet rétablie');
+      console.log('Connexion internet rétablie');
       this.isOnline = true;
       this.syncLocalRecords();
     });
 
     window.addEventListener('offline', () => {
-      console.log('📱 Connexion internet perdue');
+      console.log('Connexion internet perdue');
       this.isOnline = false;
     });
 
@@ -36,12 +37,11 @@ class SyncService {
 
   // Démarrer la synchronisation périodique
   private startPeriodicSync(): void {
-    // Synchroniser toutes les 30 secondes si en ligne
     this.syncInterval = window.setInterval(() => {
       if (this.isOnline && !this.isSyncing) {
         this.syncLocalRecords();
       }
-    }, 30000); // 30 secondes
+    }, 10000); // 10 secondes
   }
 
   // Arrêter la synchronisation périodique
@@ -52,42 +52,17 @@ class SyncService {
     }
   }
 
-  // Synchroniser les enregistrements locaux
-  public async syncLocalRecords(): Promise<void> {
-    if (this.isSyncing || !this.isOnline) {
-      return;
-    }
-
-    this.isSyncing = true;
-    console.log('🔄 Début de la synchronisation des enregistrements locaux...');
-
-    try {
-      const unsyncedRecords = await localStorageService.getUnsyncedRecords();
-      
-      if (unsyncedRecords.length === 0) {
-        console.log('✅ Aucun enregistrement à synchroniser');
-        return;
-      }
-
-      console.log(`📤 Synchronisation de ${unsyncedRecords.length} enregistrement(s)...`);
-
-      for (const record of unsyncedRecords) {
-        try {
-          await this.syncSingleRecord(record);
-          console.log(`✅ Enregistrement synchronisé: ${record.id}`);
-        } catch (error) {
-          console.error(`❌ Erreur lors de la synchronisation de ${record.id}:`, error);
-        }
-      }
-
-      console.log('🎉 Synchronisation terminée avec succès');
-
-    } catch (error) {
-      console.error('❌ Erreur lors de la synchronisation:', error);
-    } finally {
-      this.isSyncing = false;
-    }
+  // Ajouter un callback de synchronisation
+  public onSync(callback: () => void): void {
+    this.syncCallbacks.push(callback);
   }
+
+  // Notifier tous les callbacks de synchronisation
+  private notifySyncCallbacks(): void {
+    this.syncCallbacks.forEach(callback => callback());
+  }
+
+
 
   // Synchroniser un seul enregistrement
   private async syncSingleRecord(record: LocalRecord): Promise<void> {
@@ -97,23 +72,33 @@ class SyncService {
       throw new Error('Token d\'authentification manquant');
     }
 
+    console.log(`Synchronisation de l'enregistrement: ${record.id}`);
+    
+    // Vérifier la structure des données
+    const dataToSend = {
+      formData: record.formData.formData || record.formData
+    };
+    console.log('Structure des données à envoyer:', dataToSend);
+
     const response = await fetch('http://localhost:3000/records', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({
-        formData: record.formData
-      })
+      body: JSON.stringify(dataToSend)
     });
 
     if (!response.ok) {
-      throw new Error(`Erreur serveur: ${response.status} ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`Erreur serveur: ${response.status} ${response.statusText} - ${errorText}`);
     }
 
+    const result = await response.json();
+    console.log(`Enregistrement synchronisé avec l'ID serveur: ${result.id}`);
+
     // Marquer comme synchronisé et supprimer du stockage local
-    await localStorageService.markAsSynced(record.id);
+    await localStorageService.markAsSynced(record.id, result.id);
     await localStorageService.removeSyncedRecord(record.id);
   }
 
@@ -123,7 +108,64 @@ class SyncService {
       throw new Error('Pas de connexion internet');
     }
     
+    console.log('🚀 Synchronisation forcée demandée...');
     await this.syncLocalRecords();
+  }
+
+  // Méthode publique pour synchroniser (utilisée par les composants)
+  public async syncLocalRecords(): Promise<void> {
+    if (!this.isOnline) {
+      console.log('📱 Pas de connexion internet, synchronisation impossible');
+      return;
+    }
+    
+    if (this.isSyncing) {
+      console.log('Synchronisation déjà en cours, ignorée');
+      return;
+    }
+
+    this.isSyncing = true;
+    console.log('🔄 Début de la synchronisation des enregistrements locaux...');
+
+    try {
+      const unsyncedRecords = await localStorageService.getUnsyncedRecords();
+      console.log(`📊 Enregistrements locaux trouvés: ${unsyncedRecords.length}`);
+      
+      if (unsyncedRecords.length === 0) {
+        console.log('✅ Aucun enregistrement à synchroniser - tout est à jour');
+        return;
+      }
+
+      console.log(`🚀 Synchronisation de ${unsyncedRecords.length} enregistrement(s)...`);
+
+      let syncedCount = 0;
+      let errorCount = 0;
+      
+      for (const record of unsyncedRecords) {
+        try {
+          console.log(`📤 Synchronisation de l'enregistrement: ${record.id}`);
+          await this.syncSingleRecord(record);
+          syncedCount++;
+          console.log(`✅ Enregistrement synchronisé avec succès: ${record.id}`);
+        } catch (error) {
+          errorCount++;
+          console.error(`❌ Erreur lors de la synchronisation de ${record.id}:`, error);
+        }
+      }
+
+      console.log(`🎯 Synchronisation terminée: ${syncedCount}/${unsyncedRecords.length} enregistrements synchronisés`);
+      if (errorCount > 0) {
+        console.warn(`⚠️ ${errorCount} enregistrement(s) en erreur`);
+      }
+      
+      // Notifier les composants que la synchronisation est terminée
+      this.notifySyncCallbacks();
+
+    } catch (error) {
+      console.error('💥 Erreur lors de la synchronisation:', error);
+    } finally {
+      this.isSyncing = false;
+    }
   }
 
   // Vérifier le statut de la synchronisation
@@ -175,13 +217,13 @@ class SyncService {
   // Simuler une perte de connexion (pour les tests)
   public simulateOffline(): void {
     this.isOnline = false;
-    console.log(' Simulation: Connexion internet perdue');
+    console.log('Simulation: Connexion internet perdue');
   }
 
   // Simuler une reconnexion (pour les tests)
   public simulateOnline(): void {
     this.isOnline = true;
-    console.log(' Simulation: Connexion internet rétablie');
+    console.log('Simulation: Connexion internet rétablie');
     this.syncLocalRecords();
   }
 }

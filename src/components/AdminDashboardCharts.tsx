@@ -10,6 +10,7 @@ import {
   ArcElement,
   PointElement,
   LineElement,
+  Filler,
 } from 'chart.js';
 import { Bar, Doughnut, Line } from 'react-chartjs-2';
 
@@ -22,7 +23,8 @@ ChartJS.register(
   Legend,
   ArcElement,
   PointElement,
-  LineElement
+  LineElement,
+  Filler
 );
 
 interface AdminDashboardChartsProps {
@@ -61,27 +63,31 @@ export default function AdminDashboardCharts({ users }: AdminDashboardChartsProp
     ],
   };
 
-  // Données pour le graphique linéaire - Nouveaux utilisateurs par jour (30 derniers jours)
+  // Données pour le graphique linéaire - Nouveaux utilisateurs par mois (6 mois à partir du mois actuel)
   const now = new Date();
-  const days = [];
+  const currentMonth = now.getMonth(); // Mois actuel (0-indexed)
+  const currentYear = now.getFullYear();
+  const months = [];
   const newUsersCount = [];
   
-  for (let i = 29; i >= 0; i--) {
-    const date = new Date(now);
-    date.setDate(now.getDate() - i);
-    const dateStr = date.toISOString().slice(0, 10);
-    days.push(dateStr);
+  for (let i = 0; i < 6; i++) {
+    const date = new Date(currentYear, currentMonth + i, 1);
+    const monthName = date.toLocaleDateString('fr-FR', { month: 'short' });
+    months.push(monthName);
+    
+    const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+    const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
     
     const count = users.filter((user: any) => {
       const userDate = new Date(user.createdAt);
-      return userDate.toISOString().slice(0, 10) === dateStr;
+      return userDate >= monthStart && userDate <= monthEnd;
     }).length;
     
     newUsersCount.push(count);
   }
 
   const timeSeriesData = {
-    labels: days.map(day => new Date(day).toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' })),
+    labels: months,
     datasets: [
       {
         label: 'Nouveaux utilisateurs',
@@ -137,7 +143,7 @@ export default function AdminDashboardCharts({ users }: AdminDashboardChartsProp
                 },
                 title: {
                   display: true,
-                  text: 'Nouveaux utilisateurs (30 derniers jours)',
+                  text: 'Nouveaux utilisateurs (6 mois à partir du mois actuel)',
                 },
               },
               scales: {

@@ -66,12 +66,14 @@ export default function ControllerDashboardCharts({ personalStats }: ControllerD
             return;
           }
           
-          // Calculer les vraies statistiques
+          // Calculer les vraies statistiques - 6 mois à partir du mois actuel
           const now = new Date();
+          const currentMonth = now.getMonth(); // Mois actuel (0-indexed)
+          const currentYear = now.getFullYear();
           const last6Months = [];
           
-          for (let i = 5; i >= 0; i--) {
-            const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          for (let i = 0; i < 6; i++) {
+            const date = new Date(currentYear, currentMonth + i, 1);
             const monthName = date.toLocaleDateString('fr-FR', { month: 'short' });
             const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
             const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
@@ -227,7 +229,7 @@ export default function ControllerDashboardCharts({ personalStats }: ControllerD
     <div className="space-y-8">
       {/* Graphique en barres - Évolution mensuelle */}
       <div className="bg-white p-6 rounded-lg shadow-lg">
-        <h3 className="text-lg font-semibold mb-4 text-center">Évolution des Enquêtes (6 derniers mois)</h3>
+        <h3 className="text-lg font-semibold mb-4 text-center">Évolution des Enquêtes (6 mois à partir du mois actuel)</h3>
         <div className="h-80">
           <Bar
             data={monthlyData}

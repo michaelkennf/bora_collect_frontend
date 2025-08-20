@@ -1,41 +1,39 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { syncService } from '../services/syncService';
+import { localStorageService } from '../services/localStorageService';
 
 interface Record {
   id: string;
   formData: {
     household: {
       nomOuCode: string;
-      age: number;
-      sexe: string;
-      tailleMenage: number;
+      age: string;
+      sexe: 'Homme' | 'Femme';
+      tailleMenage: string;
       communeQuartier: string;
       geolocalisation: string;
     };
     cooking: {
       combustibles: string[];
       equipements: string[];
-      frequence: string;
-      coutMensuel: number;
+      autresCombustibles?: string;
+      autresEquipements?: string;
     };
     knowledge: {
-      niveau: string;
-      sources: string[];
+      connaissanceSolutions: 'Oui' | 'Non';
+      solutionsConnaissances?: string;
       avantages: string[];
-      inconvenients: string[];
+      autresAvantages?: string;
     };
     constraints: {
-      financieres: boolean;
-      techniques: boolean;
-      culturelles: boolean;
-      disponibilite: boolean;
+      obstacles: string[];
+      autresObstacles?: string;
+      pretA: string;
     };
     adoption: {
-      solutionsAdoptees: string[];
-      intentionAdoption: string;
-      facteursDecision: string[];
+      pretAcheterFoyer: 'Oui' | 'Non';
+      pretAcheterGPL: 'Oui' | 'Non';
     };
   };
   status: 'PENDING' | 'SENT' | 'PENDING_VALIDATION' | 'TO_CORRECT';
@@ -48,16 +46,15 @@ interface Record {
     name: string;
     email: string;
   };
+  synced?: boolean; // Added for local records
 }
 
 interface RecordsListProps {
-  onSyncComplete?: () => void;
 }
 
-export default function RecordsList({ onSyncComplete }: RecordsListProps) {
+export default function RecordsList() {
   const [records, setRecords] = useState<Record[]>([]);
   const [loading, setLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState('');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<{
@@ -69,7 +66,6 @@ export default function RecordsList({ onSyncComplete }: RecordsListProps) {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [filterCommune, setFilterCommune] = useState<string>('');
-  const navigate = useNavigate();
 
   // Communes de Kinshasa
   const communes = [
@@ -80,6 +76,96 @@ export default function RecordsList({ onSyncComplete }: RecordsListProps) {
     'Maluku', 'Kimbaseke', 'Ndjili'
   ];
 
+  // Fonction utilitaire pour valider la structure des données
+  const isValidRecord = (record: any): record is Record => {
+    return record && 
+           record.formData && 
+           record.formData.household && 
+           record.formData.cooking && 
+           record.formData.knowledge && 
+           record.formData.constraints && 
+           record.formData.adoption;
+  };
+
+  // Fonction de vérification de cohérence des données
+  const verifyDataConsistency = (record: Record) => {
+    if (!record || !record.formData) return false;
+    
+    // Vérifier que l'ID de l'enregistrement correspond
+    if (record.id !== showDetails?.id) return false;
+    
+    // Vérifier que les données de base correspondent
+    if (record.formData.household?.nomOuCode !== showDetails?.formData?.household?.nomOuCode) return false;
+    
+    return true;
+  };
+
+  // Fonction utilitaire pour déterminer le statut de synchronisation (LOGIQUE SIMPLIFIÉE ET FONCTIONNELLE)
+  const getRecordSyncStatus = (record: any) => {
+    // CAS 1: Enregistrement local (commence par 'local_')
+    if (record.id && record.id.toString().startsWith('local_')) {
+      // Pour les enregistrements locaux, vérifier le flag synced
+      if (record.synced === true) {
+        return 'SYNCED';
+      } else {
+        return 'UNSYNCED';
+      }
+    }
+    
+    // CAS 2: Enregistrement du serveur (ne commence PAS par 'local_')
+    // Tous les enregistrements serveur sont considérés comme synchronisés
+    return 'SYNCED';
+  };
+
+  // Fonction pour obtenir le statut de synchronisation (version simplifiée)
+  const getSyncStatusDisplay = (record: any) => {
+    const syncStatus = getRecordSyncStatus(record);
+    
+    if (syncStatus === 'SYNCED') {
+      return { label: 'Synchronisé', color: 'bg-green-100 text-green-800' };
+    } else {
+      return { label: 'Non synchronisé', color: 'bg-yellow-100 text-yellow-800' };
+    }
+  };
+
+  // Obtenir le statut en français (maintenant basé sur la synchronisation)
+  const getStatusLabel = (status: string | undefined) => {
+    if (!status) return 'Statut inconnu';
+    
+    // Vérifier si l'enregistrement a été synchronisé avec le serveur
+    if (status === 'SENT') {
+      return 'Synchronisé';
+    } else {
+      // Tous les autres statuts sont considérés comme non synchronisés
+      return 'Non synchronisé';
+    }
+  };
+
+  // Obtenir la couleur du statut (maintenant basé sur la synchronisation)
+  const getStatusColor = (status: string) => {
+    if (status === 'SENT') {
+      return 'bg-green-100 text-green-800'; // Synchronisé
+    } else {
+      return 'bg-yellow-100 text-yellow-800'; // Non synchronisé
+    }
+  };
+
+  // Voir les détails d'un enregistrement
+  const viewDetails = (record: Record) => {
+    // Vérifier que l'enregistrement a la structure attendue
+    if (isValidRecord(record)) {
+      setShowDetails(record);
+    } else {
+      toast.error('Structure de données invalide pour cet enregistrement');
+      console.error('Enregistrement invalide:', record);
+    }
+  };
+
+  // Fermer le modal de détails
+  const closeDetails = () => {
+    setShowDetails(null);
+  };
+
   // Récupérer l'ID de l'utilisateur connecté
   useEffect(() => {
     const user = localStorage.getItem('user');
@@ -89,7 +175,7 @@ export default function RecordsList({ onSyncComplete }: RecordsListProps) {
     }
   }, []);
 
-  // Charger les enregistrements depuis le serveur
+  // Charger les enregistrements depuis le serveur ET le stockage local
   const loadRecords = async () => {
     if (!currentUserId) return;
     
@@ -101,6 +187,7 @@ export default function RecordsList({ onSyncComplete }: RecordsListProps) {
         return;
       }
 
+      // Charger les enregistrements du serveur
       const res = await fetch('http://localhost:3000/records', {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -109,21 +196,35 @@ export default function RecordsList({ onSyncComplete }: RecordsListProps) {
         throw new Error('Erreur lors du chargement des enregistrements');
       }
       
-      const data = await res.json();
+      const serverRecords = await res.json();
+      
+      // Charger les enregistrements locaux
+      const localRecords = await localStorageService.getLocalRecords();
       
       // Filtrer par l'utilisateur connecté (seulement pour les contrôleurs)
       const user = localStorage.getItem('user');
       if (user) {
         const userData = JSON.parse(user);
+        
         if (userData.role === 'CONTROLLER') {
-          const userRecords = data.filter((record: Record) => record.authorId === currentUserId);
-          setRecords(userRecords);
+          
+          // Pour les contrôleurs : enregistrements serveur + enregistrements locaux
+          const userServerRecords = serverRecords.filter((record: any) => record.authorId === currentUserId);
+          
+          // Les enregistrements locaux sont toujours visibles pour le contrôleur qui les a créés
+          const userLocalRecords = localRecords.filter(lr => !lr.synced);
+          
+          // Combiner les deux types d'enregistrements
+          const allUserRecords = [...userServerRecords, ...userLocalRecords];
+          
+          setRecords(allUserRecords);
         } else {
           // Les analystes et admins voient tous les enregistrements
-          setRecords(data);
+          const allRecords = [...serverRecords, ...localRecords.filter(lr => !lr.synced)];
+          setRecords(allRecords);
         }
       } else {
-        setRecords(data);
+        setRecords([...serverRecords, ...localRecords.filter(lr => !lr.synced)]);
       }
       
       // Mettre à jour le statut de synchronisation
@@ -134,87 +235,60 @@ export default function RecordsList({ onSyncComplete }: RecordsListProps) {
         isOnline: status.isOnline
       });
     } catch (err: any) {
-      console.error('Erreur lors du chargement des enregistrements:', err);
+      console.error('❌ Erreur lors du chargement des enregistrements:', err);
       setError(err.message || 'Erreur lors du chargement');
     } finally {
       setLoading(false);
     }
   };
 
+  // Écouter les changements de synchronisation
   useEffect(() => {
+    const handleSyncUpdate = () => {
+      loadRecords(); // Recharger les enregistrements
+    };
+
+    // S'abonner aux mises à jour de synchronisation
+    syncService.onSync(handleSyncUpdate);
+
+    // Charger les enregistrements au montage
     if (currentUserId) {
       loadRecords();
     }
+
+    // Nettoyer l'abonnement
+    return () => {
+      // Note: syncService n'a pas de méthode unsubscribe, mais c'est OK pour ce cas d'usage
+    };
   }, [currentUserId]);
 
-  // Synchroniser les données locales
-  const syncLocalData = async () => {
-    if (!currentUserId) return;
-    
-    setSyncing(true);
-    setError('');
-    
-    try {
-      await syncService.syncLocalRecords();
-      toast.success('Synchronisation terminée avec succès !');
-      
-      // Recharger les enregistrements
-      await loadRecords();
-      
-      if (onSyncComplete) {
-        onSyncComplete();
-      }
-    } catch (err: any) {
-      setError(err.message || 'Erreur de synchronisation');
-      toast.error('Erreur lors de la synchronisation');
-    } finally {
-      setSyncing(false);
+  // Fonction de filtrage des enregistrements
+  const filteredRecords = records.filter((record) => {
+    // Vérifier que l'enregistrement a la structure attendue
+    if (!isValidRecord(record)) {
+      return false;
     }
-  };
-
-  // Filtrer les enregistrements
-  const filteredRecords = records.filter(record => {
-    const matchesSearch = 
-      record.formData.household.nomOuCode.toLowerCase().includes(search.toLowerCase()) ||
-      record.formData.household.communeQuartier.toLowerCase().includes(search.toLowerCase());
     
-    const matchesStatus = !filterStatus || record.status === filterStatus;
+    const matchesSearch = 
+      (record.formData.household.nomOuCode?.toLowerCase() || '').includes(search.toLowerCase()) ||
+      (record.formData.household.communeQuartier?.toLowerCase() || '').includes(search.toLowerCase());
+    
+    // Logique de filtrage basée sur la synchronisation (CORRIGÉE)
+    let matchesStatus = true;
+    if (filterStatus) {
+      if (filterStatus === 'SENT') {
+        // Synchronisé : enregistrements serveur OU enregistrements locaux avec synced = true
+        matchesStatus = getRecordSyncStatus(record) === 'SYNCED';
+      } else if (filterStatus === 'PENDING') {
+        // Non synchronisé : enregistrements locaux avec synced = false
+        matchesStatus = getRecordSyncStatus(record) === 'UNSYNCED';
+      }
+    }
+    
     const matchesCommune = !filterCommune || record.formData.household.communeQuartier === filterCommune;
     
     return matchesSearch && matchesStatus && matchesCommune;
   });
-
-  // Obtenir le statut en français
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'PENDING': return 'En attente';
-      case 'SENT': return 'Envoyé';
-      case 'PENDING_VALIDATION': return 'En validation';
-      case 'TO_CORRECT': return 'À corriger';
-      default: return status;
-    }
-  };
-
-  // Obtenir la couleur du statut
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'PENDING': return 'bg-yellow-100 text-yellow-800';
-      case 'SENT': return 'bg-green-100 text-green-800';
-      case 'PENDING_VALIDATION': return 'bg-blue-100 text-blue-800';
-      case 'TO_CORRECT': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  // Voir les détails d'un enregistrement
-  const viewDetails = (record: Record) => {
-    setShowDetails(record);
-  };
-
-  // Fermer le modal de détails
-  const closeDetails = () => {
-    setShowDetails(null);
-  };
 
   if (loading) {
     return (
@@ -229,37 +303,23 @@ export default function RecordsList({ onSyncComplete }: RecordsListProps) {
     <div className="max-w-7xl mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold">Liste des Enquêtes</h1>
-        <div className="flex gap-4">
-          <button
-            onClick={syncLocalData}
-            disabled={syncing}
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
-          >
-            {syncing ? '🔄 Synchronisation...' : '🔄 Synchroniser'}
-          </button>
-          <button
-            onClick={() => navigate('/form')}
-            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors"
-          >
-            ➕ Nouvelle Enquête
-          </button>
-        </div>
       </div>
 
       {/* Statut de synchronisation */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+      <div className="bg-white rounded-lg shadow p-4 mb-6">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <span className={`w-3 h-3 rounded-full ${syncStatus.isOnline ? 'bg-green-500' : 'bg-red-500'}`}></span>
-            <span className="text-sm text-blue-800">
-              {syncStatus.isOnline ? '🌐 En ligne' : '📱 Hors ligne'}
-            </span>
-            <span className="text-sm text-blue-600">
-              {syncStatus.pendingCount > 0 ? `${syncStatus.pendingCount} en attente de synchronisation` : 'Tout synchronisé'}
-            </span>
+          <div>
+            <h3 className="text-lg font-semibold text-gray-800">Statut de Synchronisation</h3>
+            <p className="text-sm text-gray-600">
+              {syncStatus.pendingCount > 0 
+                ? `${syncStatus.pendingCount} enregistrement(s) en attente de synchronisation`
+                : 'Tous les enregistrements sont synchronisés'
+              }
+            </p>
           </div>
-          <div className="text-sm text-blue-600">
-            Total: {records.length} enquêtes
+          <div className="text-right">
+            <span className="text-sm text-gray-600">Connexion:</span>
+            <span className="font-medium">{syncStatus.isOnline ? 'Connecté' : 'Déconnecté'}</span>
           </div>
         </div>
       </div>
@@ -285,10 +345,8 @@ export default function RecordsList({ onSyncComplete }: RecordsListProps) {
               className="w-full border border-gray-300 rounded px-3 py-2"
             >
               <option value="">Tous les statuts</option>
-              <option value="PENDING">En attente</option>
-              <option value="SENT">Envoyé</option>
-              <option value="PENDING_VALIDATION">En validation</option>
-              <option value="TO_CORRECT">À corriger</option>
+              <option value="SENT">Synchronisé</option>
+              <option value="PENDING">Non synchronisé</option>
             </select>
           </div>
           <div>
@@ -341,41 +399,50 @@ export default function RecordsList({ onSyncComplete }: RecordsListProps) {
                       <div className="flex-shrink-0 h-10 w-10">
                         <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
                           <span className="text-blue-800 font-semibold text-sm">
-                            {record.formData.household.nomOuCode[0]?.toUpperCase() || '?'}
+                            {record.formData?.household?.nomOuCode?.[0]?.toUpperCase() || '?'}
                           </span>
                         </div>
                       </div>
                       <div className="ml-4">
                         <div className="text-sm font-medium text-gray-900">
-                          {record.formData.household.nomOuCode}
+                          {record.formData?.household?.nomOuCode || 'Nom non spécifié'}
                         </div>
                         <div className="text-sm text-gray-500">
-                          {record.formData.household.age} ans, {record.formData.household.sexe}
+                          {record.formData?.household?.age ? `${record.formData.household.age} ans` : 'Âge non spécifié'}, {record.formData?.household?.sexe || 'Sexe non spécifié'}
                         </div>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {record.formData.household.communeQuartier}
+                    {record.formData?.household?.communeQuartier || 'Commune non spécifiée'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     <div className="flex flex-wrap gap-1">
-                      {record.formData.cooking.combustibles.slice(0, 2).map((combustible, index) => (
-                        <span key={index} className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+                      {record.formData?.cooking?.combustibles?.map((combustible, index) => (
+                        <span key={index} className="inline-block bg-green-100 text-green-800 px-2 py-1 rounded text-xs">
                           {combustible}
                         </span>
-                      ))}
-                      {record.formData.cooking.combustibles.length > 2 && (
-                        <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
-                          +{record.formData.cooking.combustibles.length - 2}
-                        </span>
-                      )}
+                      )) || <span className="text-gray-500 text-xs">Aucun combustible</span>}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(record.status)}`}>
-                      {getStatusLabel(record.status)}
-                    </span>
+                    {(() => {
+                      const syncStatus = getSyncStatusDisplay(record);
+                      return (
+                        <span className={`inline-flex items-center gap-2 px-2 py-1 text-xs font-semibold rounded-full ${syncStatus.color}`}>
+                          {syncStatus.label === 'Synchronisé' ? (
+                            <>
+                              <span>✅</span>
+                              {syncStatus.label}
+                            </>
+                          ) : (
+                            <>
+                              {syncStatus.label}
+                            </>
+                          )}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {new Date(record.createdAt).toLocaleDateString('fr-FR')}
@@ -402,168 +469,209 @@ export default function RecordsList({ onSyncComplete }: RecordsListProps) {
       </div>
 
       {/* Modal de détails */}
-      {showDetails && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold">Détails de l'Enquête</h3>
-              <button
-                onClick={closeDetails}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </button>
-            </div>
-            
-            <div className="space-y-6">
-              {/* Informations du ménage */}
-              <div>
-                <h4 className="font-semibold text-blue-600 mb-2">Informations du Ménage</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <span className="font-medium">Nom/Code:</span> {showDetails.formData.household.nomOuCode}
-                  </div>
-                  <div>
-                    <span className="font-medium">Âge:</span> {showDetails.formData.household.age} ans
-                  </div>
-                  <div>
-                    <span className="font-medium">Sexe:</span> {showDetails.formData.household.sexe}
-                  </div>
-                  <div>
-                    <span className="font-medium">Taille du ménage:</span> {showDetails.formData.household.tailleMenage} personnes
-                  </div>
-                  <div>
-                    <span className="font-medium">Commune/Quartier:</span> {showDetails.formData.household.communeQuartier}
-                  </div>
-                  <div>
-                    <span className="font-medium">Géolocalisation:</span> {showDetails.formData.household.geolocalisation}
-                  </div>
-                </div>
+      {showDetails && showDetails.formData && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              {/* En-tête du modal */}
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Détails de l'enquête - {showDetails.formData?.household?.nomOuCode || 'Ménage'}
+                </h3>
+                <button
+                  onClick={closeDetails}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
 
-              {/* Solutions de cuisson */}
-              <div>
-                <h4 className="font-semibold text-green-600 mb-2">Solutions de Cuisson</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <span className="font-medium">Combustibles:</span>
-                    <div className="mt-1">
-                      {showDetails.formData.cooking.combustibles.map((combustible, index) => (
-                        <span key={index} className="inline-block bg-green-100 text-green-800 px-2 py-1 rounded text-sm mr-2 mb-1">
-                          {combustible}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="font-medium">Équipements:</span>
-                    <div className="mt-1">
-                      {showDetails.formData.cooking.equipements.map((equipement, index) => (
-                        <span key={index} className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm mr-2 mb-1">
-                          {equipement}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="font-medium">Fréquence:</span> {showDetails.formData.cooking.frequence}
-                  </div>
-                  <div>
-                    <span className="font-medium">Coût mensuel:</span> {showDetails.formData.cooking.coutMensuel} FC
-                  </div>
-                </div>
-              </div>
-
-              {/* Connaissances et perceptions */}
-              <div>
-                <h4 className="font-semibold text-purple-600 mb-2">Connaissances et Perceptions</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <span className="font-medium">Niveau de connaissance:</span> {showDetails.formData.knowledge.niveau}
-                  </div>
-                  <div>
-                    <span className="font-medium">Sources d'information:</span>
-                    <div className="mt-1">
-                      {showDetails.formData.knowledge.sources.map((source, index) => (
-                        <span key={index} className="inline-block bg-purple-100 text-purple-800 px-2 py-1 rounded text-sm mr-2 mb-1">
-                          {source}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Contraintes */}
-              <div>
-                <h4 className="font-semibold text-orange-600 mb-2">Contraintes Identifiées</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <span className="font-medium">Financières:</span> {showDetails.formData.constraints.financieres ? 'Oui' : 'Non'}
-                  </div>
-                  <div>
-                    <span className="font-medium">Techniques:</span> {showDetails.formData.constraints.techniques ? 'Oui' : 'Non'}
-                  </div>
-                  <div>
-                    <span className="font-medium">Culturelles:</span> {showDetails.formData.constraints.culturelles ? 'Oui' : 'Non'}
-                  </div>
-                  <div>
-                    <span className="font-medium">Disponibilité:</span> {showDetails.formData.constraints.disponibilite ? 'Oui' : 'Non'}
-                  </div>
-                </div>
-              </div>
-
-              {/* Adoption */}
-              <div>
-                <h4 className="font-semibold text-indigo-600 mb-2">Adoption des Solutions</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <span className="font-medium">Solutions adoptées:</span>
-                    <div className="mt-1">
-                      {showDetails.formData.adoption.solutionsAdoptees.map((solution, index) => (
-                        <span key={index} className="inline-block bg-indigo-100 text-indigo-800 px-2 py-1 rounded text-sm mr-2 mb-1">
-                          {solution}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="font-medium">Intention d'adoption:</span> {showDetails.formData.adoption.intentionAdoption}
-                  </div>
-                </div>
-              </div>
-
-              {/* Métadonnées */}
-              <div className="border-t pt-4">
-                <h4 className="font-semibold text-gray-600 mb-2">Informations Système</h4>
-                <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
-                  <div>
-                    <span className="font-medium">Statut:</span> {getStatusLabel(showDetails.status)}
-                  </div>
-                  <div>
-                    <span className="font-medium">Créé le:</span> {new Date(showDetails.createdAt).toLocaleString('fr-FR')}
-                  </div>
-                  {showDetails.syncedAt && (
+              {/* Contenu du modal */}
+              <div className="max-h-96 overflow-y-auto">
+                {/* Informations générales */}
+                <div className="mb-6">
+                  <h4 className="text-md font-semibold text-gray-800 mb-3 border-b pb-2">
+                    Informations générales
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <span className="font-medium">Synchronisé le:</span> {new Date(showDetails.syncedAt).toLocaleString('fr-FR')}
+                      <span className="font-medium text-gray-700">Ménage :</span>
+                      <span className="ml-2 text-gray-900">{showDetails.formData?.household?.nomOuCode || 'N/A'}</span>
                     </div>
-                  )}
-                  {showDetails.author && (
                     <div>
-                      <span className="font-medium">Auteur:</span> {showDetails.author.name}
+                      <span className="font-medium text-gray-700">Commune/Quartier :</span>
+                      <span className="ml-2 text-gray-900">{showDetails.formData?.household?.communeQuartier || 'N/A'}</span>
                     </div>
-                  )}
+                    <div>
+                      <span className="font-medium text-gray-700">Date de création :</span>
+                      <span className="ml-2 text-gray-900">
+                        {showDetails.createdAt ? new Date(showDetails.createdAt).toLocaleDateString('fr-FR') : 'N/A'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            <div className="flex justify-end mt-6">
-              <button
-                onClick={closeDetails}
-                className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 transition-colors"
-              >
-                Fermer
-              </button>
+                {/* Données du ménage */}
+                {showDetails.formData?.household && (
+                  <div className="mb-6">
+                    <h4 className="text-md font-semibold text-gray-800 mb-3 border-b pb-2">
+                      Données du ménage
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <span className="font-medium text-gray-700">Age :</span>
+                        <span className="ml-2 text-gray-900">{showDetails.formData.household.age || 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Sexe :</span>
+                        <span className="ml-2 text-gray-900">{showDetails.formData.household.sexe || 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Taille du ménage :</span>
+                        <span className="ml-2 text-gray-900">{showDetails.formData.household.tailleMenage || 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Géolocalisation :</span>
+                        <span className="ml-2 text-gray-900">{showDetails.formData.household.geolocalisation || 'N/A'}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Solutions de cuisson actuelles */}
+                {showDetails.formData?.cooking && (
+                  <div className="mb-6">
+                    <h4 className="text-md font-semibold text-gray-800 mb-3 border-b pb-2">
+                      Solutions de cuisson actuelles
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <span className="font-medium text-gray-700">Combustibles :</span>
+                        <span className="ml-2 text-gray-900">
+                          {Array.isArray(showDetails.formData.cooking.combustibles) 
+                            ? showDetails.formData.cooking.combustibles.join(', ') 
+                            : 'N/A'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Équipements :</span>
+                        <span className="ml-2 text-gray-900">
+                          {Array.isArray(showDetails.formData.cooking.equipements) 
+                            ? showDetails.formData.cooking.equipements.join(', ') 
+                            : 'N/A'}
+                        </span>
+                      </div>
+                      {showDetails.formData.cooking.autresCombustibles && (
+                        <div>
+                          <span className="font-medium text-gray-700">Autres combustibles :</span>
+                          <span className="ml-2 text-gray-900">{showDetails.formData.cooking.autresCombustibles}</span>
+                        </div>
+                      )}
+                      {showDetails.formData.cooking.autresEquipements && (
+                        <div>
+                          <span className="font-medium text-gray-700">Autres équipements :</span>
+                          <span className="ml-2 text-gray-900">{showDetails.formData.cooking.autresEquipements}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Connaissance des solutions propres */}
+                {showDetails.formData?.knowledge && (
+                  <div className="mb-6">
+                    <h4 className="text-md font-semibold text-gray-800 mb-3 border-b pb-2">
+                      Connaissance des solutions propres
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <span className="font-medium text-gray-700">Connaissance :</span>
+                        <span className="ml-2 text-gray-900">{showDetails.formData.knowledge.connaissanceSolutions || 'N/A'}</span>
+                      </div>
+                      {showDetails.formData.knowledge.solutionsConnaissances && (
+                        <div>
+                          <span className="font-medium text-gray-700">Solutions connues :</span>
+                          <span className="ml-2 text-gray-900">{showDetails.formData.knowledge.solutionsConnaissances}</span>
+                        </div>
+                      )}
+                      <div>
+                        <span className="font-medium text-gray-700">Avantages :</span>
+                        <span className="ml-2 text-gray-900">
+                          {Array.isArray(showDetails.formData.knowledge.avantages) 
+                            ? showDetails.formData.knowledge.avantages.join(', ') 
+                            : 'N/A'}
+                        </span>
+                      </div>
+                      {showDetails.formData.knowledge.autresAvantages && (
+                        <div>
+                          <span className="font-medium text-gray-700">Autres avantages :</span>
+                          <span className="ml-2 text-gray-900">{showDetails.formData.knowledge.autresAvantages}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Contraintes d'adoption */}
+                {showDetails.formData?.constraints && (
+                  <div className="mb-6">
+                    <h4 className="text-md font-semibold text-gray-800 mb-3 border-b pb-2">
+                      Contraintes d'adoption
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <span className="font-medium text-gray-700">Obstacles :</span>
+                        <span className="ml-2 text-gray-900">
+                          {Array.isArray(showDetails.formData.constraints.obstacles) 
+                            ? showDetails.formData.constraints.obstacles.join(', ') 
+                            : 'N/A'}
+                        </span>
+                      </div>
+                      {showDetails.formData.constraints.autresObstacles && (
+                        <div>
+                          <span className="font-medium text-gray-700">Autres obstacles :</span>
+                          <span className="ml-2 text-gray-900">{showDetails.formData.constraints.autresObstacles}</span>
+                        </div>
+                      )}
+                      <div>
+                        <span className="font-medium text-gray-700">Prêt à :</span>
+                        <span className="ml-2 text-gray-900">{showDetails.formData.constraints.pretA || 'N/A'}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Intention d'adoption */}
+                {showDetails.formData?.adoption && (
+                  <div className="mb-6">
+                    <h4 className="text-md font-semibold text-gray-800 mb-3 border-b pb-2">
+                      Intention d'adoption
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <span className="font-medium text-gray-700">Prêt à acheter foyer :</span>
+                        <span className="ml-2 text-gray-900">{showDetails.formData.adoption.pretAcheterFoyer || 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Prêt à acheter GPL :</span>
+                        <span className="ml-2 text-gray-900">{showDetails.formData.adoption.pretAcheterGPL || 'N/A'}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Boutons d'action */}
+              <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
+                <button
+                  onClick={closeDetails}
+                  className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors"
+                >
+                  Fermer
+                </button>
+              </div>
             </div>
           </div>
         </div>

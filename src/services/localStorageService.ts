@@ -5,10 +5,12 @@ export interface LocalRecord {
   createdAt: Date;
   synced: boolean;
   syncedAt?: Date;
+  serverId?: string; // ID de l'enregistrement sur le serveur après synchronisation
 }
 
 class LocalStorageService {
   private readonly STORAGE_KEY = 'local_records';
+  private readonly SYNC_STATUS_KEY = 'sync_status';
 
   // Sauvegarder un enregistrement en local
   async saveRecord(formData: any): Promise<string> {
@@ -23,7 +25,7 @@ class LocalStorageService {
     records.push(record);
     await this.saveLocalRecords(records);
 
-    console.log('📱 Enregistrement sauvegardé en local:', record.id);
+    console.log('Enregistrement sauvegardé en local:', record.id);
     return record.id;
   }
 
@@ -48,14 +50,17 @@ class LocalStorageService {
   }
 
   // Marquer un enregistrement comme synchronisé
-  async markAsSynced(recordId: string): Promise<void> {
+  async markAsSynced(recordId: string, serverId?: string): Promise<void> {
     const records = await this.getLocalRecords();
     const record = records.find(r => r.id === recordId);
     if (record) {
       record.synced = true;
       record.syncedAt = new Date();
+      if (serverId) {
+        record.serverId = serverId;
+      }
       await this.saveLocalRecords(records);
-      console.log('✅ Enregistrement marqué comme synchronisé:', recordId);
+      console.log('Enregistrement marqué comme synchronisé:', recordId, serverId ? `(ID serveur: ${serverId})` : '');
     }
   }
 
@@ -64,7 +69,7 @@ class LocalStorageService {
     const records = await this.getLocalRecords();
     const filteredRecords = records.filter(r => r.id !== recordId);
     await this.saveLocalRecords(filteredRecords);
-    console.log('🗑️ Enregistrement synchronisé supprimé du stockage local:', recordId);
+    console.log('Enregistrement synchronisé supprimé du stockage local:', recordId);
   }
 
   // Récupérer les enregistrements non synchronisés
@@ -99,7 +104,7 @@ class LocalStorageService {
 
     if (filteredRecords.length !== records.length) {
       await this.saveLocalRecords(filteredRecords);
-      console.log('🧹 Nettoyage des anciens enregistrements terminé');
+      console.log('Nettoyage des anciens enregistrements terminé');
     }
   }
 
@@ -138,6 +143,26 @@ class LocalStorageService {
       oldestRecord,
       newestRecord
     };
+  }
+
+  // Sauvegarder le statut de synchronisation
+  async saveSyncStatus(status: any): Promise<void> {
+    try {
+      localStorage.setItem(this.SYNC_STATUS_KEY, JSON.stringify(status));
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde du statut de synchronisation:', error);
+    }
+  }
+
+  // Récupérer le statut de synchronisation
+  async getSyncStatus(): Promise<any> {
+    try {
+      const data = localStorage.getItem(this.SYNC_STATUS_KEY);
+      return data ? JSON.parse(data) : null;
+    } catch (error) {
+      console.error('Erreur lors de la récupération du statut de synchronisation:', error);
+      return null;
+    }
   }
 }
 

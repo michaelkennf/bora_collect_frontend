@@ -61,12 +61,10 @@ const Login = () => {
         <div className="text-center mb-6">
           <img 
             src={logo2} 
-            alt="Logo BoraCollect" 
+            alt="Logo FikiriCollect" 
             className="mx-auto h-16 w-auto mb-3"
           />
-          <h1 className="text-2xl font-bold text-blue-800 mb-1">
-            BoraCollect
-          </h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">FikiriCollect</h1>
           <p className="text-gray-600 text-sm">
             Plateforme de collecte de données
           </p>
@@ -136,16 +134,6 @@ const Login = () => {
             {isLoading ? 'Connexion...' : 'Se connecter'}
           </button>
         </form>
-
-        {/* Informations de test */}
-        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-          <p className="text-xs text-blue-700 font-medium mb-2">🔑 Identifiants de test :</p>
-          <div className="text-xs text-blue-600 space-y-1">
-            <div><strong>Admin:</strong> admin@test.com / admin123</div>
-            <div><strong>Contrôleur:</strong> controller@test.com / controller123</div>
-            <div><strong>Analyste:</strong> analyst@test.com / analyst123</div>
-          </div>
-        </div>
 
         {/* Signature */}
         <div className="mt-6 text-center">

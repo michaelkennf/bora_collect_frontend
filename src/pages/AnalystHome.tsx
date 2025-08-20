@@ -37,7 +37,7 @@ const communesKinshasa = [
 
 export default function AnalystHome() {
   const [user, setUser] = useState<any>(null);
-  const [view, setView] = useState<'dashboard'|'enquetes'>('dashboard');
+  const [view, setView] = useState<'dashboard'|'enquetes'|'statistiques'>('dashboard');
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [dashboardError, setDashboardError] = useState('');
   const [records, setRecords] = useState<any[]>([]);
@@ -47,7 +47,6 @@ export default function AnalystHome() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [search, setSearch] = useState('');
   const [communeFilter, setCommuneFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -55,9 +54,8 @@ export default function AnalystHome() {
     if (u) setUser(JSON.parse(u));
   }, []);
 
-  // Récupérer les statistiques du tableau de bord
+  // Récupérer les statistiques du tableau de bord (chargement automatique dès la connexion)
   useEffect(() => {
-    if (view !== 'dashboard') return;
     setDashboardLoading(true);
     setDashboardError('');
     
@@ -72,7 +70,12 @@ export default function AnalystHome() {
       setDashboardError('Erreur lors du chargement des statistiques');
     })
     .finally(() => setDashboardLoading(false));
-  }, [view]);
+  }, []); // Chargement automatique au montage du composant
+
+  // Récupérer les enquêtes (chargement automatique dès la connexion)
+  useEffect(() => {
+    fetchRecords();
+  }, []); // Chargement automatique au montage du composant
 
   // Récupérer les enquêtes
   const fetchRecords = async () => {
@@ -83,7 +86,6 @@ export default function AnalystHome() {
       const params = [];
       if (search) params.push(`nomOuCode=${encodeURIComponent(search)}`);
       if (communeFilter) params.push(`commune=${encodeURIComponent(communeFilter)}`);
-      if (statusFilter) params.push(`status=${encodeURIComponent(statusFilter)}`);
       if (params.length) url += params.join('&');
       
       const res = await fetch(url, {
@@ -91,7 +93,34 @@ export default function AnalystHome() {
       });
       if (!res.ok) throw new Error('Erreur lors du chargement');
       const data = await res.json();
-      setRecords(data);
+      
+      // Enrichir les records avec les informations des utilisateurs
+      const enrichedRecords = await Promise.all(
+        data.map(async (record: any) => {
+          if (record.authorId) {
+            try {
+              const userRes = await fetch(`http://localhost:3000/users/${record.authorId}`, {
+                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+              });
+              if (userRes.ok) {
+                const userData = await userRes.json();
+                return {
+                  ...record,
+                  authorName: userData.name || userData.email || 'Utilisateur inconnu'
+                };
+              }
+            } catch (error) {
+              console.warn(`Impossible de récupérer les informations de l'utilisateur ${record.authorId}:`, error);
+            }
+          }
+          return {
+            ...record,
+            authorName: record.authorId || 'N/A'
+          };
+        })
+      );
+      
+      setRecords(enrichedRecords);
     } catch (err: any) {
       setRecordsError(err.message || 'Erreur inconnue');
     } finally {
@@ -99,13 +128,14 @@ export default function AnalystHome() {
     }
   };
 
+  // Recharger les enquêtes quand les filtres changent
   useEffect(() => {
     if (view === 'enquetes') {
       fetchRecords();
     }
-  }, [view, search, communeFilter, statusFilter]);
+  }, [view, search, communeFilter]);
 
-  // Calcul des statistiques des solutions de cuisson
+  // Calcul des statistiques des solutions de cuisson (version améliorée avec répartition par commune)
   const calculateCookingStats = () => {
     if (!records.length) return null;
 
@@ -114,10 +144,22 @@ export default function AnalystHome() {
       equipements: {} as Record<string, number>,
       communes: {} as Record<string, number>,
       status: {} as Record<string, number>,
-      totalEnquetes: records.length
+      totalEnquetes: records.length,
+      totalEnqueteurs: 0, // NOUVEAU : Nombre total d'enquêteurs
+      // NOUVEAU : Statistiques détaillées par commune
+      equipementsParCommune: {} as Record<string, Record<string, number>>,
+      combustiblesParCommune: {} as Record<string, Record<string, number>>
     };
 
+    // Set pour compter les enquêteurs uniques
+    const enqueteursUniques = new Set<string>();
+
     records.forEach(record => {
+      // Compter les enquêteurs uniques
+      if (record.authorId) {
+        enqueteursUniques.add(record.authorId);
+      }
+
       // Stats par statut
       const status = record.status || 'Inconnu';
       stats.status[status] = (stats.status[status] || 0) + 1;
@@ -126,29 +168,99 @@ export default function AnalystHome() {
       const commune = record.formData?.household?.communeQuartier || 'Non spécifiée';
       stats.communes[commune] = (stats.communes[commune] || 0) + 1;
 
-      // Stats par combustible
+      // Initialiser les objets pour cette commune si nécessaire
+      if (!stats.equipementsParCommune[commune]) {
+        stats.equipementsParCommune[commune] = {};
+        stats.combustiblesParCommune[commune] = {};
+      }
+
+      // Stats par combustible (global et par commune)
       if (record.formData?.cooking?.combustibles) {
         record.formData.cooking.combustibles.forEach((combustible: string) => {
+          // Global
           stats.combustibles[combustible] = (stats.combustibles[combustible] || 0) + 1;
+          // Par commune
+          stats.combustiblesParCommune[commune][combustible] = 
+            (stats.combustiblesParCommune[commune][combustible] || 0) + 1;
         });
       }
 
-      // Stats par équipement
+      // Stats par équipement (global et par commune)
       if (record.formData?.cooking?.equipements) {
         record.formData.cooking.equipements.forEach((equipement: string) => {
+          // Global
           stats.equipements[equipement] = (stats.equipements[equipement] || 0) + 1;
+          // Par commune
+          stats.equipementsParCommune[commune][equipement] = 
+            (stats.equipementsParCommune[commune][equipement] || 0) + 1;
         });
       }
     });
+
+    // Calculer le nombre total d'enquêteurs uniques
+    stats.totalEnqueteurs = enqueteursUniques.size;
 
     return stats;
   };
 
   const cookingStats = calculateCookingStats();
 
-  // Données pour les graphiques
+  // Données pour les graphiques (version améliorée avec répartition par commune)
   const getChartData = () => {
     if (!cookingStats) return null;
+
+    // Préparer les données pour les graphiques par commune
+    const communesAvecDonnees = Object.keys(cookingStats.communes).filter(commune => 
+      cookingStats.communes[commune] > 0
+    ); // TOUTES les communes avec des enquêtes
+
+    // Créer les datasets pour équipements par commune
+    const equipementsLabels = Object.keys(cookingStats.equipements);
+    const datasetsEquipements = equipementsLabels.map((equipement, index) => ({
+      label: equipement,
+      data: communesAvecDonnees.map(commune => 
+        cookingStats.equipementsParCommune[commune]?.[equipement] || 0
+      ),
+      backgroundColor: [
+        'rgba(255, 99, 132, 0.8)',
+        'rgba(54, 162, 235, 0.8)',
+        'rgba(255, 206, 86, 0.8)',
+        'rgba(75, 192, 192, 0.8)',
+        'rgba(153, 102, 255, 0.8)',
+      ][index % 5],
+      borderColor: [
+        'rgba(255, 99, 132, 1)',
+        'rgba(54, 162, 235, 1)',
+        'rgba(255, 206, 86, 1)',
+        'rgba(75, 192, 192, 1)',
+        'rgba(153, 102, 255, 1)',
+      ][index % 5],
+      borderWidth: 1
+    }));
+
+    // Créer les datasets pour combustibles par commune
+    const combustiblesLabels = Object.keys(cookingStats.combustibles);
+    const datasetsCombustibles = combustiblesLabels.map((combustible, index) => ({
+      label: combustible,
+      data: communesAvecDonnees.map(commune => 
+        cookingStats.combustiblesParCommune[commune]?.[combustible] || 0
+      ),
+      backgroundColor: [
+        'rgba(255, 159, 64, 0.8)',
+        'rgba(199, 199, 199, 0.8)',
+        'rgba(83, 102, 255, 0.8)',
+        'rgba(78, 252, 3, 0.8)',
+        'rgba(252, 3, 244, 0.8)',
+      ][index % 5],
+      borderColor: [
+        'rgba(255, 159, 64, 1)',
+        'rgba(199, 199, 199, 1)',
+        'rgba(83, 102, 255, 1)',
+        'rgba(78, 252, 3, 1)',
+        'rgba(252, 3, 244, 1)',
+      ][index % 5],
+      borderWidth: 1
+    }));
 
     return {
       combustibles: {
@@ -180,25 +292,21 @@ export default function AnalystHome() {
         }]
       },
       communes: {
-        labels: Object.keys(cookingStats.communes).slice(0, 10), // Top 10 communes
+        labels: Object.keys(cookingStats.communes), // TOUTES les communes
         datasets: [{
           label: 'Nombre d\'enquêtes',
-          data: Object.values(cookingStats.communes).slice(0, 10),
+          data: Object.values(cookingStats.communes), // TOUTES les données
           backgroundColor: 'rgba(54, 162, 235, 0.8)',
         }]
       },
-      status: {
-        labels: Object.keys(cookingStats.status),
-        datasets: [{
-          label: 'Nombre d\'enquêtes',
-          data: Object.values(cookingStats.status),
-          backgroundColor: [
-            'rgba(255, 99, 132, 0.8)',
-            'rgba(54, 162, 235, 0.8)',
-            'rgba(255, 206, 86, 0.8)',
-            'rgba(75, 192, 192, 0.8)',
-          ],
-        }]
+      // NOUVEAU : Graphiques par commune
+      equipementsParCommune: {
+        labels: communesAvecDonnees,
+        datasets: datasetsEquipements
+      },
+      combustiblesParCommune: {
+        labels: communesAvecDonnees,
+        datasets: datasetsCombustibles
       }
     };
   };
@@ -225,6 +333,12 @@ export default function AnalystHome() {
             className={`px-3 py-2 rounded font-semibold ${view==='enquetes' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white text-sm`}
           >
             Les enquêtes
+          </button>
+          <button 
+            onClick={() => setView('statistiques')} 
+            className={`px-3 py-2 rounded font-semibold ${view==='statistiques' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white text-sm`}
+          >
+            Statistiques Détaillées
           </button>
           {user && (
             <div className="w-8 h-8 rounded-full bg-white text-blue-900 flex items-center justify-center font-bold ml-2">
@@ -277,12 +391,18 @@ export default function AnalystHome() {
             ) : (
               <>
                 {/* Statistiques globales */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
                   <div className="bg-white p-6 rounded-lg shadow-lg text-center">
                     <div className="text-3xl font-bold text-blue-600 mb-2">
                       {cookingStats?.totalEnquetes || 0}
                     </div>
                     <div className="text-gray-600">Total des enquêtes</div>
+                  </div>
+                  <div className="bg-white p-6 rounded-lg shadow-lg text-center">
+                    <div className="text-3xl font-bold text-indigo-600 mb-2">
+                      {cookingStats?.totalEnqueteurs || 0}
+                    </div>
+                    <div className="text-gray-600">Total des enquêteurs</div>
                   </div>
                   <div className="bg-white p-6 rounded-lg shadow-lg text-center">
                     <div className="text-3xl font-bold text-green-600 mb-2">
@@ -356,8 +476,8 @@ export default function AnalystHome() {
                 {/* Graphique des communes */}
                 {chartData && (
                   <div className="bg-white p-6 rounded-lg shadow-lg mb-8">
-                    <h3 className="text-lg font-bold mb-4 text-center">Top 10 des Communes par Nombre d'Enquêtes</h3>
-                    <div style={{ height: '400px' }}>
+                    <h3 className="text-lg font-bold mb-4 text-center">Répartition par Commune - Toutes les Communes de Kinshasa</h3>
+                    <div style={{ height: '500px', width: '100%' }}>
                       <Bar
                         data={chartData.communes}
                         options={{
@@ -371,7 +491,12 @@ export default function AnalystHome() {
                             y: { beginAtZero: true, title: { display: true, text: 'Nombre d\'enquêtes' } },
                             x: { 
                               title: { display: true, text: 'Communes' },
-                              ticks: { maxRotation: 45, minRotation: 45 }
+                              ticks: { 
+                                maxRotation: 45, 
+                                minRotation: 45,
+                                autoSkip: false,
+                                maxTicksLimit: 0
+                              }
                             }
                           },
                         }}
@@ -380,21 +505,91 @@ export default function AnalystHome() {
                   </div>
                 )}
 
-                {/* Graphique des statuts */}
+                {/* NOUVEAU : Graphique des équipements par commune */}
                 {chartData && (
                   <div className="bg-white p-6 rounded-lg shadow-lg mb-8">
-                    <h3 className="text-lg font-bold mb-4 text-center">Répartition par Statut des Enquêtes</h3>
+                    <h3 className="text-lg font-bold mb-4 text-center">Répartition par Type d'Équipement par Commune</h3>
+                    <p className="text-sm text-gray-600 text-center mb-4">
+                      Classement des types d'équipements les plus utilisés dans chaque commune
+                    </p>
                     <div className="flex justify-center">
-                      <div style={{ width: '400px', height: '300px' }}>
-                        <Doughnut
-                          data={chartData.status}
+                      <div style={{ width: '100%', height: '500px' }}>
+                        <Bar
+                          data={chartData.equipementsParCommune}
                           options={{
                             responsive: true,
                             maintainAspectRatio: false,
                             plugins: {
-                              legend: { position: 'bottom' },
+                              legend: { position: 'top' },
                               title: { display: false },
                             },
+                            scales: {
+                              x: {
+                                title: {
+                                  display: true,
+                                  text: 'Communes'
+                                },
+                                ticks: {
+                                  maxRotation: 45,
+                                  minRotation: 45,
+                                  autoSkip: false,
+                                  maxTicksLimit: 0
+                                }
+                              },
+                              y: {
+                                title: {
+                                  display: true,
+                                  text: 'Nombre d\'enquêtes'
+                                },
+                                beginAtZero: true
+                              }
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* NOUVEAU : Graphique des combustibles par commune */}
+                {chartData && (
+                  <div className="bg-white p-6 rounded-lg shadow-lg mb-8">
+                    <h3 className="text-lg font-bold mb-4 text-center">Répartition par Type de Combustible par Commune</h3>
+                    <p className="text-sm text-gray-600 text-center mb-4">
+                      Classement des types de combustibles les plus utilisés dans chaque commune
+                    </p>
+                    <div className="flex justify-center">
+                      <div style={{ width: '100%', height: '500px' }}>
+                        <Bar
+                          data={chartData.combustiblesParCommune}
+                          options={{
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                              legend: { position: 'top' },
+                              title: { display: false },
+                            },
+                            scales: {
+                              x: {
+                                title: {
+                                  display: true,
+                                  text: 'Communes'
+                                },
+                                ticks: {
+                                  maxRotation: 45,
+                                  minRotation: 45,
+                                  autoSkip: false,
+                                  maxTicksLimit: 0
+                                }
+                              },
+                              y: {
+                                title: {
+                                  display: true,
+                                  text: 'Nombre d\'enquêtes'
+                                },
+                                beginAtZero: true
+                              }
+                            }
                           }}
                         />
                       </div>
@@ -424,7 +619,7 @@ export default function AnalystHome() {
             {/* Filtres */}
             <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
               <h4 className="text-lg font-semibold mb-4">Filtres de recherche</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block font-semibold mb-2 text-sm text-gray-700">Recherche par nom du ménage</label>
                   <input
@@ -446,28 +641,12 @@ export default function AnalystHome() {
                     {communesKinshasa.map(commune => <option key={commune} value={commune}>{commune}</option>)}
                   </select>
                 </div>
-                <div>
-                  <label className="block font-semibold mb-2 text-sm text-gray-700">Statut</label>
-                  <select
-                    value={statusFilter}
-                    onChange={e => setStatusFilter(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Tous les statuts</option>
-                    <option value="PENDING">En attente</option>
-                    <option value="PENDING_VALIDATION">En attente de validation</option>
-                    <option value="SENT">Envoyé</option>
-                    <option value="VALIDATED">Validé</option>
-                    <option value="TO_CORRECT">À corriger</option>
-                  </select>
-                </div>
               </div>
               <div className="mt-4 flex justify-end">
                 <button
                   onClick={() => {
                     setSearch('');
                     setCommuneFilter('');
-                    setStatusFilter('');
                   }}
                   className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors"
                 >
@@ -550,17 +729,17 @@ export default function AnalystHome() {
                               <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                                 record.status === 'VALIDATED' ? 'bg-green-100 text-green-800' :
                                 record.status === 'SENT' ? 'bg-blue-100 text-blue-800' :
-                                record.status === 'PENDING_VALIDATION' ? 'bg-yellow-100 text-yellow-800' :
-                                record.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
-                                record.status === 'TO_CORRECT' ? 'bg-red-100 text-red-800' :
-                                'bg-gray-100 text-gray-800'
+                                record.status === 'PENDING_VALIDATION' ? 'bg-green-100 text-green-800' :
+                                record.status === 'PENDING' ? 'bg-green-100 text-green-800' :
+                                record.status === 'TO_CORRECT' ? 'bg-green-100 text-green-800' :
+                                'bg-green-100 text-green-800'
                               }`}>
-                                {record.status === 'VALIDATED' ? 'Validé' :
-                                 record.status === 'SENT' ? 'Envoyé' :
-                                 record.status === 'PENDING_VALIDATION' ? 'En attente de validation' :
-                                 record.status === 'PENDING' ? 'En attente' :
-                                 record.status === 'TO_CORRECT' ? 'À corriger' :
-                                 record.status || 'Inconnu'}
+                                {record.status === 'VALIDATED' ? 'Synchronisé' :
+                                 record.status === 'SENT' ? 'Synchronisé' :
+                                 record.status === 'PENDING_VALIDATION' ? 'Synchronisé' :
+                                 record.status === 'PENDING' ? 'Synchronisé' :
+                                 record.status === 'TO_CORRECT' ? 'Synchronisé' :
+                                 'Synchronisé'}
                               </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -581,6 +760,265 @@ export default function AnalystHome() {
                   </div>
                 )}
               </div>
+            )}
+          </div>
+        )}
+
+        {/* Page des statistiques détaillées */}
+        {view === 'statistiques' && (
+          <div>
+            <h1 className="text-3xl font-bold mb-6 text-center">Statistiques Détaillées - Toutes les Communes</h1>
+            
+            {/* Message d'information */}
+            <div className="max-w-4xl mx-auto bg-blue-50 rounded-xl shadow p-6 mb-8">
+              <p className="text-lg text-gray-800 mb-4 text-center">
+                Tableaux récapitulatifs détaillés des données collectées dans toutes les communes de Kinshasa.<br/>
+                Visualisez les statistiques numériques précises pour chaque zone géographique.
+              </p>
+            </div>
+
+            {/* Chargement */}
+            {dashboardLoading ? (
+              <div className="text-center py-8">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <p className="mt-2 text-gray-600">Chargement des statistiques...</p>
+              </div>
+            ) : (
+              <>
+                {/* Tableau récapitulatif par commune */}
+                {cookingStats && (
+                  <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
+                    <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">
+                      Récapitulatif par Commune - {Object.keys(cookingStats.communes).length} Communes
+                    </h2>
+                    
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Commune
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Nombre d'Enquêtes
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Types de Combustibles
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Types d'Équipements
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              % du Total
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {Object.entries(cookingStats.communes)
+                            .sort(([,a], [,b]) => b - a) // Trier par nombre d'enquêtes décroissant
+                            .map(([commune, count]) => {
+                              const totalEnquetes = cookingStats.totalEnquetes;
+                              const pourcentage = totalEnquetes > 0 ? ((count / totalEnquetes) * 100).toFixed(1) : '0.0';
+                              
+                              return (
+                                <tr key={commune} className="hover:bg-gray-50">
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    {commune}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                      {count}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                                    {Object.keys(cookingStats.combustiblesParCommune[commune] || {}).length}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                                    {Object.keys(cookingStats.equipementsParCommune[commune] || {}).length}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                      {pourcentage}%
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tableau détaillé des combustibles par commune */}
+                {cookingStats && (
+                  <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
+                    <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">
+                      Répartition des Combustibles par Commune
+                    </h2>
+                    
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Commune
+                            </th>
+                            {Object.keys(cookingStats.combustibles).map(combustible => (
+                              <th key={combustible} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                {combustible}
+                              </th>
+                            ))}
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Total
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {Object.keys(cookingStats.communes)
+                            .sort((a, b) => cookingStats.communes[b] - cookingStats.communes[a])
+                            .map(commune => {
+                              const totalCommune = Object.values(cookingStats.combustiblesParCommune[commune] || {}).reduce((sum, count) => sum + count, 0);
+                              
+                              return (
+                                <tr key={commune} className="hover:bg-gray-50">
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    {commune}
+                                  </td>
+                                  {Object.keys(cookingStats.combustibles).map(combustible => {
+                                    const count = cookingStats.combustiblesParCommune[commune]?.[combustible] || 0;
+                                    return (
+                                      <td key={combustible} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                                        {count > 0 ? (
+                                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                            {count}
+                                          </span>
+                                        ) : (
+                                          <span className="text-gray-400">-</span>
+                                        )}
+                                      </td>
+                                    );
+                                  })}
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-center">
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                      {totalCommune}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tableau détaillé des équipements par commune */}
+                {cookingStats && (
+                  <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
+                    <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">
+                      Répartition des Équipements par Commune
+                    </h2>
+                    
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Commune
+                            </th>
+                            {Object.keys(cookingStats.equipements).map(equipement => (
+                              <th key={equipement} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                {equipement}
+                              </th>
+                            ))}
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Total
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {Object.keys(cookingStats.communes)
+                            .sort((a, b) => cookingStats.communes[b] - cookingStats.communes[a])
+                            .map(commune => {
+                              const totalCommune = Object.values(cookingStats.equipementsParCommune[commune] || {}).reduce((sum, count) => sum + count, 0);
+                              
+                              return (
+                                <tr key={commune} className="hover:bg-gray-50">
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    {commune}
+                                  </td>
+                                  {Object.keys(cookingStats.equipements).map(equipement => {
+                                    const count = cookingStats.equipementsParCommune[commune]?.[equipement] || 0;
+                                    return (
+                                      <td key={equipement} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                                        {count > 0 ? (
+                                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                            {count}
+                                          </span>
+                                        ) : (
+                                          <span className="text-gray-400">-</span>
+                                        )}
+                                      </td>
+                                    );
+                                  })}
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-center">
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                      {totalCommune}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Statistiques globales détaillées */}
+                {cookingStats && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    {/* Statistiques des combustibles */}
+                    <div className="bg-white rounded-lg shadow-lg p-6">
+                      <h3 className="text-xl font-bold mb-4 text-center text-gray-800">
+                        Statistiques Globales - Combustibles
+                      </h3>
+                      <div className="space-y-3">
+                        {Object.entries(cookingStats.combustibles)
+                          .sort(([,a], [,b]) => b - a)
+                          .map(([combustible, count]) => (
+                            <div key={combustible} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                              <span className="font-medium text-gray-700">{combustible}</span>
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                {count} enquêtes
+                              </span>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+
+                    {/* Statistiques des équipements */}
+                    <div className="bg-white rounded-lg shadow-lg p-6">
+                      <h3 className="text-xl font-bold mb-4 text-center text-gray-800">
+                        Statistiques Globales - Équipements
+                      </h3>
+                      <div className="space-y-3">
+                        {Object.entries(cookingStats.equipements)
+                          .sort(([,a], [,b]) => b - a)
+                          .map(([equipement, count]) => (
+                            <div key={equipement} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                              <span className="font-medium text-gray-700">{equipement}</span>
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                {count} enquêtes
+                              </span>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
@@ -622,12 +1060,12 @@ export default function AnalystHome() {
                       <span className="ml-2 text-gray-900">{selectedRecord.formData?.household?.nomOuCode || 'N/A'}</span>
                     </div>
                     <div>
-                      <span className="font-medium text-gray-700">Commune/Quartier :</span>
-                      <span className="ml-2 text-gray-900">{selectedRecord.formData?.household?.communeQuartier || 'N/A'}</span>
+                      <span className="font-medium text-gray-700">Enquêteur :</span>
+                      <span className="ml-2 text-gray-900">{selectedRecord.authorName || selectedRecord.authorId || 'N/A'}</span>
                     </div>
                     <div>
-                      <span className="font-medium text-gray-700">Statut :</span>
-                      <span className="ml-2 text-gray-900">{selectedRecord.status || 'N/A'}</span>
+                      <span className="font-medium text-gray-700">Commune/Quartier :</span>
+                      <span className="ml-2 text-gray-900">{selectedRecord.formData?.household?.communeQuartier || 'N/A'}</span>
                     </div>
                     <div>
                       <span className="font-medium text-gray-700">Date de création :</span>
@@ -756,15 +1194,6 @@ export default function AnalystHome() {
 
               {/* Boutons d'action */}
               <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-                <button
-                  onClick={() => {
-                    // Logique d'impression (à implémenter)
-                    console.log('Impression de l\'enquête:', selectedRecord.id);
-                  }}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Imprimer
-                </button>
                 <button
                   onClick={() => {
                     setShowDetailModal(false);

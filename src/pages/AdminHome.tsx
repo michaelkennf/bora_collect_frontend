@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import logo2 from '../assets/images/logo2.jpg';
 import AdminDashboardCharts from '../components/AdminDashboardCharts';
-import FormBuilder from '../components/FormBuilder';
 import UserManager from '../components/UserManager';
+import FormBuilder from '../components/FormBuilder';
+import AdminParametres from './AdminParametres';
 import AdminSettings from '../components/AdminSettings';
-import SystemMaintenance from '../components/SystemMaintenance';
 import AdminStatistics from '../components/AdminStatistics';
 
 export function DashboardAdmin() {
@@ -63,7 +63,7 @@ export function DashboardAdmin() {
 
   return (
     <>
-      <h1 className="text-3xl font-bold mb-6 text-center">Tableau de bord Admin - BoraCollect</h1>
+      <h1 className="text-3xl font-bold mb-6 text-center">Tableau de bord Admin - FikiriCollect</h1>
       {/* Statistiques utilisateurs */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="bg-white p-6 rounded-lg shadow-lg text-center">
@@ -89,13 +89,12 @@ export function DashboardAdmin() {
         <AdminDashboardCharts users={users} />
       )}
       <div className="max-w-4xl mx-auto bg-blue-50 rounded-xl shadow p-6 mb-8">
-        <p className="text-lg text-gray-800 mb-4 text-center">Bienvenue sur le tableau de bord administrateur de BoraCollect.<br/>Ici, vous pouvez&nbsp;:</p>
+        <p className="text-lg text-gray-800 mb-4 text-center">Bienvenue sur le tableau de bord administrateur de FikiriCollect.<br/>Ici, vous pouvez&nbsp;:</p>
         <ul className="list-disc ml-8 text-gray-700 mb-4">
-          <li>Gérer les utilisateurs et leurs permissions</li>
-          <li>Créer et personnaliser des formulaires</li>
-          <li>Consulter les statistiques détaillées du système</li>
+          <li>Gérer les utilisateurs du système</li>
+          <li>Consulter les statistiques globales</li>
+          <li>Exporter les données et rapports</li>
           <li>Configurer les paramètres du système</li>
-          <li>Effectuer la maintenance du système</li>
         </ul>
       </div>
     </>
@@ -104,14 +103,33 @@ export function DashboardAdmin() {
 
 export default function AdminLayout() {
   const [user, setUser] = useState<any>(null);
-  const location = useLocation();
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const [view, setView] = useState('dashboard'); // 'dashboard', 'utilisateurs', 'formulaires', 'statistiques', 'parametres', 'maintenance'
+  const [view, setView] = useState('dashboard'); // 'dashboard', 'utilisateurs', 'formulaires', 'statistiques', 'parametres'
+
+  // Fonction pour charger les utilisateurs
+  const fetchUsers = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('http://localhost:3000/users', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      if (!res.ok) throw new Error('Erreur lors du chargement');
+      const data = await res.json();
+      setUsers(data);
+    } catch (err: any) {
+      console.error('Erreur:', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     const u = localStorage.getItem('user');
     if (u) setUser(JSON.parse(u));
-  }, [location.pathname]);
+    fetchUsers();
+  }, []);
 
   useEffect(() => {
     const handler = () => {
@@ -130,12 +148,36 @@ export default function AdminLayout() {
           <span className="font-bold text-lg ml-2 truncate" style={{maxWidth: 120}}>Admin</span>
         </div>
         <div className="flex items-center gap-1 flex-shrink min-w-0">
-          <button onClick={() => setView('dashboard')} className={`px-3 py-2 rounded font-semibold ${view === 'dashboard' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white text-sm`}>Dashboard</button>
-          <button onClick={() => setView('utilisateurs')} className={`px-3 py-2 rounded font-semibold ${view === 'utilisateurs' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white text-sm`}>Utilisateurs</button>
-          <button onClick={() => setView('formulaires')} className={`px-3 py-2 rounded font-semibold text-white text-sm ${view === 'formulaires' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'}`} style={{ minWidth: 180 }}>Formulaires</button>
-          <button onClick={() => setView('statistiques')} className={`px-3 py-2 rounded font-semibold ${view === 'statistiques' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white text-sm`}>Statistiques</button>
-          <button onClick={() => setView('parametres')} className={`px-3 py-2 rounded font-semibold ${view === 'parametres' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white text-sm`}>Paramètres</button>
-          <button onClick={() => setView('maintenance')} className={`px-3 py-2 rounded font-semibold ${view === 'maintenance' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white text-sm`}>Maintenance</button>
+          <button 
+            onClick={() => setView('dashboard')} 
+            className={`px-3 py-2 rounded font-semibold ${view === 'dashboard' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white text-sm`}
+          >
+            Dashboard
+          </button>
+          <button 
+            onClick={() => setView('utilisateurs')} 
+            className={`px-3 py-2 rounded font-semibold ${view === 'utilisateurs' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white text-sm`}
+          >
+            Utilisateurs
+          </button>
+          <button 
+            onClick={() => setView('formulaires')} 
+            className={`px-3 py-2 rounded font-semibold ${view === 'formulaires' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white text-sm`}
+          >
+            Formulaires
+          </button>
+          <button 
+            onClick={() => setView('statistiques')} 
+            className={`px-3 py-2 rounded font-semibold ${view === 'statistiques' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white text-sm`}
+          >
+            Statistiques
+          </button>
+          <button 
+            onClick={() => setView('parametres')} 
+            className={`px-3 py-2 rounded font-semibold ${view === 'parametres' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white text-sm`}
+          >
+            Paramètres
+          </button>
           {user && (
             <div className="w-8 h-8 rounded-full bg-white text-blue-900 flex items-center justify-center font-bold ml-2">
               {user.name?.[0]?.toUpperCase() || '?'}
@@ -148,9 +190,8 @@ export default function AdminLayout() {
         {view === 'dashboard' && <DashboardAdmin />}
         {view === 'utilisateurs' && <UserManager onUserAdded={() => {}} />}
         {view === 'formulaires' && <FormBuilder />}
-        {view === 'statistiques' && <AdminStatistics />}
-        {view === 'parametres' && <AdminSettings />}
-        {view === 'maintenance' && <SystemMaintenance />}
+        {view === 'statistiques' && <AdminDashboardCharts users={users} />}
+        {view === 'parametres' && <AdminParametres />}
       </main>
     </div>
   );

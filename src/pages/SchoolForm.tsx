@@ -167,18 +167,44 @@ export default function SchoolForm() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const navigate = useNavigate();
 
+  // Vérification d'authentification au chargement du composant
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const user = localStorage.getItem('user');
+    
+    if (!token || !user) {
+      toast.error('❌ Session expirée. Veuillez vous reconnecter.');
+      navigate('/login');
+      return;
+    }
+    
+    // Vérifier que l'utilisateur est bien un contrôleur
+    try {
+      const userData = JSON.parse(user);
+      if (userData.role !== 'CONTROLLER') {
+        toast.error('❌ Accès non autorisé. Seuls les contrôleurs peuvent accéder à cette page.');
+        navigate('/login');
+        return;
+      }
+    } catch (error) {
+      toast.error('❌ Erreur de session. Veuillez vous reconnecter.');
+      navigate('/login');
+      return;
+    }
+  }, [navigate]);
+
   // Écouter les changements de connectivité
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      toast.info('🌐 Connexion internet rétablie - Synchronisation en cours...');
+      toast.info('Connexion internet rétablie - Synchronisation en cours...');
       // Synchroniser les données locales
       syncService.syncLocalRecords();
     };
 
     const handleOffline = () => {
       setIsOnline(false);
-      toast.warning('📱 Mode hors ligne - Les données seront sauvegardées localement');
+      toast.warning('Mode hors ligne - Les données seront sauvegardées localement');
     };
 
     window.addEventListener('online', handleOnline);
@@ -190,23 +216,44 @@ export default function SchoolForm() {
     };
   }, []);
 
-  // Capturer la géolocalisation
+  // Capturer la géolocalisation (fonction améliorée pour mode hors ligne)
   const captureGeolocation = () => {
     if (!navigator.geolocation) {
-      setGeolocation(prev => ({ ...prev, error: 'Géolocalisation non supportée' }));
+      setGeolocation(prev => ({ 
+        ...prev, 
+        error: 'Géolocalisation non supportée par votre navigateur' 
+      }));
+      toast.error('❌ Votre navigateur ne supporte pas la géolocalisation');
       return;
     }
 
     setGeolocation(prev => ({ ...prev, isCapturing: true, error: null }));
+    toast.info('📍 Capture GPS en cours... Veuillez patienter');
+
+    // Options GPS optimisées pour la précision
+    const options = {
+      enableHighAccuracy: true,  // Précision maximale
+      timeout: 30000,           // 30 secondes de timeout (plus long pour mode hors ligne)
+      maximumAge: 300000,       // 5 minutes max pour les données GPS en cache
+    };
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude, accuracy } = position.coords;
+        const timestamp = Date.now();
+        
+        console.log('✅ GPS capturé avec succès:', {
+          latitude,
+          longitude,
+          accuracy: `${accuracy}m`,
+          timestamp: new Date(timestamp).toLocaleString('fr-FR')
+        });
+
         setGeolocation({
           latitude,
           longitude,
           accuracy,
-          timestamp: Date.now(),
+          timestamp,
           isCapturing: false,
           error: null,
         });
@@ -218,26 +265,72 @@ export default function SchoolForm() {
             ...prev.formData,
             household: {
               ...prev.formData.household,
-              geolocalisation: `${latitude}, ${longitude}`,
+              geolocalisation: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
             },
           },
         }));
+
+        // Notification de succès
+        toast.success(`📍 Position GPS capturée avec précision de ${Math.round(accuracy)}m`);
+        
+        // Afficher les informations GPS détaillées
+        console.log('📍 Informations GPS détaillées:', {
+          coordonnées: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+          précision: `${Math.round(accuracy)} mètres`,
+          heure: new Date(timestamp).toLocaleTimeString('fr-FR'),
+          date: new Date(timestamp).toLocaleDateString('fr-FR')
+        });
       },
       (error) => {
+        console.error('❌ Erreur GPS complète:', error);
+        
+        let errorMessage = '';
+        let toastMessage = '';
+        
+        // Gestion détaillée des erreurs GPS
+        if (error && typeof error === 'object') {
+          switch (error.code) {
+            case 1: // PERMISSION_DENIED
+              errorMessage = 'Permission GPS refusée. Veuillez autoriser l\'accès à votre position dans les paramètres de votre navigateur.';
+              toastMessage = '❌ Permission GPS refusée. Autorisez l\'accès dans les paramètres.';
+              break;
+            case 2: // POSITION_UNAVAILABLE
+              errorMessage = 'Position GPS temporairement indisponible. Assurez-vous d\'être à l\'extérieur et réessayez dans quelques instants.';
+              toastMessage = '⚠️ Position GPS indisponible. Sortez à l\'extérieur et réessayez.';
+              break;
+            case 3: // TIMEOUT
+              errorMessage = 'Délai de capture GPS dépassé. Vérifiez que vous êtes à l\'extérieur et que votre appareil GPS fonctionne.';
+              toastMessage = '⏰ Délai GPS dépassé. Vérifiez votre position et réessayez.';
+              break;
+            default:
+              errorMessage = `Erreur GPS inconnue (Code: ${error.code}). Message: ${error.message || 'Aucun message d\'erreur'}`;
+              toastMessage = '❌ Erreur GPS inconnue. Réessayez.';
+          }
+        } else {
+          // Erreur non standard
+          errorMessage = 'Erreur GPS inattendue. Vérifiez que votre appareil supporte le GPS et réessayez.';
+          toastMessage = '❌ Erreur GPS inattendue. Vérifiez votre appareil.';
+        }
+
+        console.error('❌ Détails de l\'erreur GPS:', {
+          error: error,
+          code: error?.code,
+          message: error?.message,
+          errorMessage: errorMessage
+        });
+
         setGeolocation({
           latitude: null,
           longitude: null,
           accuracy: null,
           timestamp: null,
           isCapturing: false,
-          error: `Erreur GPS: ${error.message}`,
+          error: errorMessage,
         });
+
+        toast.error(toastMessage);
       },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 60000,
-      }
+      options
     );
   };
 
@@ -384,25 +477,46 @@ export default function SchoolForm() {
     setIsSubmitting(true);
 
     try {
-      // Vérifier la connectivité
+      // ÉTAPE 1: TOUJOURS sauvegarder en local d'abord (sécurité)
+      const localId = await localStorageService.saveRecord(form);
+      console.log('✅ Enregistrement sauvegardé en local avec ID:', localId);
+
+      // ÉTAPE 2: Vérifier la connectivité
       if (!isOnline) {
-        // Mode hors ligne : sauvegarder en local
-        await localStorageService.saveRecord(form);
-        toast.success('✅ Formulaire sauvegardé en local (mode hors ligne)');
-        toast.info('📱 Les données seront synchronisées automatiquement lors de la reconnexion');
+        // Mode hors ligne : notification simple de sauvegarde locale
+        toast.success('✅ Formulaire sauvegardé localement');
+        
+        // Réinitialiser le formulaire
         setForm(initialForm);
         setGeolocation({ latitude: null, longitude: null, accuracy: null, timestamp: null, isCapturing: false, error: null });
+        
+        // Démarrer la synchronisation automatique
+        setTimeout(() => {
+          syncService.syncLocalRecords();
+        }, 1000);
+        
+        setIsSubmitting(false);
         return;
       }
 
-      // Mode en ligne : envoyer directement au serveur
+      // ÉTAPE 3: Mode en ligne - vérifier le token
       const token = localStorage.getItem('token');
       if (!token) {
-        toast.error('❌ Session expirée. Veuillez vous reconnecter.');
+        // Session expirée : notification de sauvegarde locale
+        toast.success('✅ Formulaire sauvegardé localement');
+        toast.info('📡 Synchronisation automatique lors de la reconnexion');
+        
+        // Réinitialiser le formulaire
+        setForm(initialForm);
+        setGeolocation({ latitude: null, longitude: null, accuracy: null, timestamp: null, isCapturing: false, error: null });
+        
+        setIsSubmitting(false);
         navigate('/login');
         return;
       }
 
+      // ÉTAPE 4: Tentative d'envoi au serveur
+      console.log('🌐 Tentative d\'envoi du formulaire au serveur...');
       const response = await fetch('http://localhost:3000/records', {
         method: 'POST',
         headers: {
@@ -412,31 +526,72 @@ export default function SchoolForm() {
         body: JSON.stringify({ formData: form })
       });
 
+      // ÉTAPE 5: Traitement de la réponse du serveur
       if (response.ok) {
-        toast.success('✅ Formulaire soumis avec succès !');
+        // SUCCÈS: Le serveur a accepté le formulaire
+        const result = await response.json();
+        console.log('✅ Formulaire envoyé avec succès au serveur:', result);
+        
+        // Nettoyer le stockage local (optionnel, mais recommandé)
+        try {
+          await localStorageService.markAsSynced(localId, result.id);
+          await localStorageService.removeSyncedRecord(localId);
+          console.log('✅ Stockage local nettoyé après synchronisation');
+        } catch (cleanupError) {
+          console.warn('⚠️ Erreur lors du nettoyage local (non critique):', cleanupError);
+        }
+        
+        // NOTIFICATION UNIQUE : Formulaire envoyé au serveur
+        toast.success('✅ Formulaire envoyé au serveur');
+        
+        // Réinitialiser le formulaire
         setForm(initialForm);
         setGeolocation({ latitude: null, longitude: null, accuracy: null, timestamp: null, isCapturing: false, error: null });
         
-        // Rediriger vers la liste des enregistrements
-        navigate('/records');
+        // Rediriger vers la page du contrôleur
+        navigate('/controleur');
+        
       } else {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Erreur lors de la soumission');
+        // ÉCHEC: Le serveur a rejeté le formulaire
+        let errorMessage = 'Erreur lors de la soumission au serveur';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch (parseError) {
+          console.warn('Impossible de parser la réponse d\'erreur du serveur');
+        }
+        
+        console.error('❌ Erreur serveur:', errorMessage);
+        
+        // NOTIFICATION SIMPLE : Formulaire sauvegardé localement
+        toast.success('✅ Formulaire sauvegardé localement');
+        
+        // Réinitialiser le formulaire
+        setForm(initialForm);
+        setGeolocation({ latitude: null, longitude: null, accuracy: null, timestamp: null, isCapturing: false, error: null });
+        
+        // Programmer la synchronisation automatique
+        setTimeout(() => {
+          syncService.syncLocalRecords();
+        }, 2000);
       }
 
     } catch (error: any) {
-      console.error('Erreur lors de la soumission:', error);
+      // ERREUR: Exception JavaScript (réseau, parsing, etc.)
+      console.error('❌ Exception lors de la soumission:', error);
       
-      if (!isOnline) {
-        // En cas d'erreur en mode hors ligne, sauvegarder en local
-        await localStorageService.saveRecord(form);
-        toast.success('✅ Formulaire sauvegardé en local suite à l\'erreur');
-        toast.info('📱 Les données seront synchronisées lors de la reconnexion');
-        setForm(initialForm);
-        setGeolocation({ latitude: null, longitude: null, accuracy: null, timestamp: null, isCapturing: false, error: null });
-      } else {
-        toast.error(`❌ Erreur lors de la soumission: ${error.message}`);
-      }
+      // NOTIFICATION SIMPLE : Formulaire sauvegardé localement
+      toast.success('✅ Formulaire sauvegardé localement');
+      
+      // Réinitialiser le formulaire
+      setForm(initialForm);
+      setGeolocation({ latitude: null, longitude: null, accuracy: null, timestamp: null, isCapturing: false, error: null });
+      
+      // Programmer la synchronisation automatique
+      setTimeout(() => {
+        syncService.syncLocalRecords();
+      }, 2000);
+      
     } finally {
       setIsSubmitting(false);
     }
@@ -444,21 +599,6 @@ export default function SchoolForm() {
 
   return (
     <div className="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-lg mt-8">
-      {/* Bouton de retour */}
-      <div className="mb-6">
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg shadow"
-          style={{ backgroundColor: '#0033A0', color: 'white', border: 'none', outline: 'none' }}
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-          Retour
-        </button>
-      </div>
-      
       <form onSubmit={handleSubmit}>
         <h2 className="text-2xl font-bold text-center mb-6">SOLUTIONS DE CUISSON PROPRE</h2>
         <p className="text-center text-gray-600 mb-6">Enquête sur l'adoption des solutions de cuisson propre en RDC</p>
@@ -472,14 +612,22 @@ export default function SchoolForm() {
               </svg>
             </div>
             <div className="flex-1">
-              <h4 className="font-semibold text-blue-800 mb-2">📍 Géolocalisation GPS Obligatoire</h4>
+              <h4 className="font-semibold text-blue-800 mb-2">📍 Géolocalisation GPS Obligatoire (Fonctionne Hors Ligne)</h4>
               <p className="text-blue-700 text-sm mb-2">
-                Pour garantir la précision des données et permettre une analyse géographique fiable, 
-                la capture automatique de votre position GPS est <strong>obligatoire</strong>.
+                <strong>✅ IMPORTANT :</strong> La capture GPS fonctionne <strong>SANS INTERNET</strong> ! 
+                Le GPS utilise le récepteur intégré de votre appareil et ne nécessite aucune connexion.
               </p>
-              <div className="text-blue-600 text-xs">
-                <strong>Avantages :</strong> Précision des données, analyse géographique, validation de la localisation, 
-                suivi des tendances par zone géographique.
+              <div className="text-blue-600 text-xs space-y-1">
+                <div><strong>Avantages :</strong></div>
+                <ul className="list-disc list-inside ml-2 space-y-1">
+                  <li>Fonctionne en mode hors ligne (sans internet)</li>
+                  <li>Précision maximale avec GPS haute précision</li>
+                  <li>Capture automatique des coordonnées</li>
+                  <li>Validation en temps réel de la position</li>
+                </ul>
+                <div className="mt-2 text-blue-700">
+                  <strong>💡 Conseil :</strong> Assurez-vous d'être à l'extérieur ou près d'une fenêtre pour une meilleure réception GPS.
+                </div>
               </div>
             </div>
           </div>
@@ -606,15 +754,72 @@ export default function SchoolForm() {
                 <button
                   type="button"
                   onClick={captureGeolocation}
-                  disabled={isSubmitting}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
+                  disabled={isSubmitting || geolocation.isCapturing}
+                  className={`px-4 py-2 rounded transition-colors ${
+                    geolocation.isCapturing 
+                      ? 'bg-yellow-600 text-white cursor-wait' 
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  } disabled:bg-gray-400 disabled:cursor-not-allowed`}
                 >
-                  {isSubmitting ? 'Capture...' : 'Capturer ma position GPS'}
+                  {geolocation.isCapturing ? (
+                    <span className="flex items-center gap-2">
+                      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Capture...
+                    </span>
+                  ) : (
+                    'Capturer ma position GPS'
+                  )}
                 </button>
               </div>
-              {geolocation.latitude && geolocation.longitude && (
-                <p className="text-green-600 text-sm mt-1">📍 {geolocation.latitude.toFixed(6)}, {geolocation.longitude.toFixed(6)}</p>
-              )}
+              
+              {/* Affichage du statut GPS */}
+              <div className="mt-2 space-y-2">
+                {/* Coordonnées capturées */}
+                {geolocation.latitude && geolocation.longitude && (
+                  <div className="flex items-center gap-2 text-green-600 text-sm">
+                    <span>✅</span>
+                    <span className="font-medium">Position GPS capturée :</span>
+                    <span className="font-mono bg-green-100 px-2 py-1 rounded">
+                      {geolocation.latitude.toFixed(6)}, {geolocation.longitude.toFixed(6)}
+                    </span>
+                  </div>
+                )}
+                
+                {/* Précision GPS */}
+                {geolocation.accuracy && (
+                  <div className="flex items-center gap-2 text-blue-600 text-sm">
+                    <span>📏</span>
+                    <span>Précision : {Math.round(geolocation.accuracy)} mètres</span>
+                  </div>
+                )}
+                
+                {/* Heure de capture */}
+                {geolocation.timestamp && (
+                  <div className="flex items-center gap-2 text-gray-600 text-sm">
+                    <span>🕐</span>
+                    <span>Capturé le {new Date(geolocation.timestamp).toLocaleDateString('fr-FR')} à {new Date(geolocation.timestamp).toLocaleTimeString('fr-FR')}</span>
+                  </div>
+                )}
+                
+                {/* Erreur GPS */}
+                {geolocation.error && (
+                  <div className="flex items-center gap-2 text-red-600 text-sm">
+                    <span>❌</span>
+                    <span>{geolocation.error}</span>
+                  </div>
+                )}
+                
+                {/* Indicateur de disponibilité GPS */}
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <span>📡</span>
+                  <span>GPS disponible : {navigator.geolocation ? 'Oui' : 'Non'}</span>
+                  <span>•</span>
+                  <span>Mode hors ligne : {!navigator.onLine ? 'Oui' : 'Non'}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
