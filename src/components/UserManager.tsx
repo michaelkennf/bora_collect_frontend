@@ -16,6 +16,7 @@ interface NewUser {
   email: string;
   password: string;
   role: 'ADMIN' | 'CONTROLLER' | 'ANALYST';
+  gender: 'MALE' | 'FEMALE' | 'OTHER';
   contact: string;
 }
 
@@ -32,7 +33,8 @@ export default function UserManager({ onUserAdded }: UserManagerProps) {
     email: '',
     password: '',
     role: 'CONTROLLER',
-    contact: ''
+    gender: 'OTHER',
+    contact: '',
   });
   const [addError, setAddError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -84,7 +86,7 @@ export default function UserManager({ onUserAdded }: UserManagerProps) {
         throw new Error(data.message || 'Erreur lors de la création');
       }
       setShowAdd(false);
-      setNewUser({ name: '', email: '', password: '', role: 'CONTROLLER', contact: '' });
+      setNewUser({ name: '', email: '', password: '', role: 'CONTROLLER', gender: 'OTHER', contact: '' });
       fetchUsers();
       onUserAdded();
     } catch (err: any) {
@@ -284,17 +286,32 @@ export default function UserManager({ onUserAdded }: UserManagerProps) {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Rôle</label>
                 <select
                   value={newUser.role}
-                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value as User['role'] })}
+                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value as any })}
                   className="w-full border border-gray-300 rounded px-3 py-2"
+                  required
                 >
-                  {roles.map((role) => (
-                    <option key={role.value} value={role.value}>{role.label}</option>
-                  ))}
+                  <option value="CONTROLLER">Contrôleur</option>
+                  <option value="ANALYST">Analyste</option>
+                  <option value="ADMIN">Administrateur</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Contact (optionnel)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Sexe</label>
+                <select
+                  value={newUser.gender}
+                  onChange={(e) => setNewUser({ ...newUser, gender: e.target.value as any })}
+                  className="w-full border border-gray-300 rounded px-3 py-2"
+                  required
+                >
+                  <option value="OTHER">Autre</option>
+                  <option value="MALE">Masculin</option>
+                  <option value="FEMALE">Féminin</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Contact (téléphone)</label>
                 <input
                   type="text"
                   value={newUser.contact}

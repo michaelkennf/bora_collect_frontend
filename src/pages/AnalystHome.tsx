@@ -424,6 +424,102 @@ export default function AnalystHome() {
                   </div>
                 </div>
 
+                {/* NOUVEAU : Graphique en cercle pour la répartition par sexe */}
+                {cookingStats && (
+                  <div className="bg-white p-6 rounded-lg shadow-lg mb-8">
+                    <h3 className="text-lg font-bold mb-4 text-center">Répartition par Sexe des Personnes Enquêtées</h3>
+                    <div className="flex justify-center">
+                      <div style={{ width: '400px', height: '400px' }}>
+                        <Doughnut
+                          data={{
+                            labels: ['Homme', 'Femme', 'Autre'],
+                            datasets: [{
+                              data: [
+                                records.filter(r => r.formData?.household?.sexe === 'Homme').length,
+                                records.filter(r => r.formData?.household?.sexe === 'Femme').length,
+                                records.filter(r => r.formData?.household?.sexe === 'Autre').length
+                              ],
+                              backgroundColor: [
+                                'rgba(59, 130, 246, 0.8)',   // Bleu pour Homme
+                                'rgba(236, 72, 153, 0.8)',   // Rose pour Femme
+                                'rgba(34, 197, 94, 0.8)',    // Vert pour Autre
+                              ],
+                              borderColor: [
+                                'rgba(59, 130, 246, 1)',
+                                'rgba(236, 72, 153, 1)',
+                                'rgba(34, 197, 94, 1)',
+                              ],
+                              borderWidth: 2,
+                            }]
+                          }}
+                          options={{
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                              legend: {
+                                position: 'bottom' as const,
+                                labels: {
+                                  padding: 20,
+                                  usePointStyle: true,
+                                  font: {
+                                    size: 14
+                                  }
+                                }
+                              },
+                              tooltip: {
+                                callbacks: {
+                                  label: function(context) {
+                                    const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
+                                    const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                    return `${context.label}: ${context.parsed} (${percentage}%)`;
+                                  }
+                                }
+                              }
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* Statistiques détaillées sous le graphique */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-blue-600">
+                          {records.filter(r => r.formData?.household?.sexe === 'Homme').length}
+                        </div>
+                        <div className="text-blue-800 font-medium">Hommes</div>
+                        <div className="text-sm text-gray-600">
+                          {cookingStats.totalEnquetes > 0 
+                            ? `${((records.filter(r => r.formData?.household?.sexe === 'Homme').length / cookingStats.totalEnquetes) * 100).toFixed(1)}%`
+                            : '0%'}
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-pink-600">
+                          {records.filter(r => r.formData?.household?.sexe === 'Femme').length}
+                        </div>
+                        <div className="text-pink-800 font-medium">Femmes</div>
+                        <div className="text-sm text-gray-600">
+                          {cookingStats.totalEnquetes > 0 
+                            ? `${((records.filter(r => r.formData?.household?.sexe === 'Femme').length / cookingStats.totalEnquetes) * 100).toFixed(1)}%`
+                            : '0%'}
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-green-600">
+                          {records.filter(r => r.formData?.household?.sexe === 'Autre').length}
+                        </div>
+                        <div className="text-green-800 font-medium">Autre</div>
+                        <div className="text-sm text-gray-600">
+                          {cookingStats.totalEnquetes > 0 
+                            ? `${((records.filter(r => r.formData?.household?.sexe === 'Autre').length / cookingStats.totalEnquetes) * 100).toFixed(1)}%`
+                            : '0%'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Graphiques des solutions de cuisson */}
                 {chartData && (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
@@ -654,6 +750,53 @@ export default function AnalystHome() {
                 </button>
               </div>
             </div>
+
+            {/* NOUVEAU : Statistiques par sexe des enquêtes filtrées */}
+            {records.length > 0 && (
+              <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
+                <h4 className="text-lg font-semibold mb-4 text-center">Répartition par Sexe des Enquêtes Filtrées</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Hommes */}
+                  <div className="text-center p-4 bg-blue-50 rounded-lg">
+                    <div className="text-3xl font-bold text-blue-600 mb-2">
+                      {records.filter(r => r.formData?.household?.sexe === 'Homme').length}
+                    </div>
+                    <div className="text-blue-800 font-medium">Hommes</div>
+                    <div className="text-sm text-blue-600">
+                      {records.length > 0 
+                        ? `${((records.filter(r => r.formData?.household?.sexe === 'Homme').length / records.length) * 100).toFixed(1)}%`
+                        : '0%'}
+                    </div>
+                  </div>
+
+                  {/* Femmes */}
+                  <div className="text-center p-4 bg-pink-50 rounded-lg">
+                    <div className="text-3xl font-bold text-pink-600 mb-2">
+                      {records.filter(r => r.formData?.household?.sexe === 'Femme').length}
+                    </div>
+                    <div className="text-pink-800 font-medium">Femmes</div>
+                    <div className="text-sm text-pink-600">
+                      {records.length > 0 
+                        ? `${((records.filter(r => r.formData?.household?.sexe === 'Femme').length / records.length) * 100).toFixed(1)}%`
+                        : '0%'}
+                    </div>
+                  </div>
+
+                  {/* Autre */}
+                  <div className="text-center p-4 bg-green-50 rounded-lg">
+                    <div className="text-3xl font-bold text-green-600 mb-2">
+                      {records.filter(r => r.formData?.household?.sexe === 'Autre').length}
+                    </div>
+                    <div className="text-green-800 font-medium">Autre</div>
+                    <div className="text-sm text-green-600">
+                      {records.length > 0 
+                        ? `${((records.filter(r => r.formData?.household?.sexe === 'Autre').length / records.length) * 100).toFixed(1)}%`
+                        : '0%'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Affichage des erreurs */}
             {recordsError && (
@@ -1014,6 +1157,143 @@ export default function AnalystHome() {
                               </span>
                             </div>
                           ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* NOUVEAU : Graphique en cercle pour la répartition par sexe - Section statistiques détaillées */}
+                {cookingStats && (
+                  <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
+                    <h3 className="text-xl font-bold mb-6 text-center text-gray-800">
+                      Répartition par Sexe des Personnes Enquêtées - Vue Détaillée
+                    </h3>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                      {/* Graphique en cercle */}
+                      <div className="flex justify-center">
+                        <div style={{ width: '350px', height: '350px' }}>
+                          <Doughnut
+                            data={{
+                              labels: ['Homme', 'Femme', 'Autre'],
+                              datasets: [{
+                                data: [
+                                  records.filter(r => r.formData?.household?.sexe === 'Homme').length,
+                                  records.filter(r => r.formData?.household?.sexe === 'Femme').length,
+                                  records.filter(r => r.formData?.household?.sexe === 'Autre').length
+                                ],
+                                backgroundColor: [
+                                  'rgba(59, 130, 246, 0.8)',   // Bleu pour Homme
+                                  'rgba(236, 72, 153, 0.8)',   // Rose pour Femme
+                                  'rgba(34, 197, 94, 0.8)',    // Vert pour Autre
+                                ],
+                                borderColor: [
+                                  'rgba(59, 130, 246, 1)',
+                                  'rgba(236, 72, 153, 1)',
+                                  'rgba(34, 197, 94, 1)',
+                                ],
+                                borderWidth: 3,
+                              }]
+                            }}
+                            options={{
+                              responsive: true,
+                              maintainAspectRatio: false,
+                              plugins: {
+                                legend: {
+                                  position: 'bottom' as const,
+                                  labels: {
+                                    padding: 20,
+                                    usePointStyle: true,
+                                    font: {
+                                      size: 16
+                                    }
+                                  }
+                                },
+                                tooltip: {
+                                  callbacks: {
+                                    label: function(context) {
+                                      const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
+                                      const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                      return `${context.label}: ${context.parsed} (${percentage}%)`;
+                                    }
+                                  }
+                                }
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Tableau détaillé des statistiques par sexe */}
+                      <div className="space-y-4">
+                        <div className="bg-blue-50 p-4 rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center">
+                              <div className="w-4 h-4 bg-blue-500 rounded-full mr-3"></div>
+                              <span className="font-semibold text-blue-800">Hommes</span>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-2xl font-bold text-blue-600">
+                                {records.filter(r => r.formData?.household?.sexe === 'Homme').length}
+                              </div>
+                              <div className="text-sm text-blue-600">
+                                {cookingStats.totalEnquetes > 0 
+                                  ? `${((records.filter(r => r.formData?.household?.sexe === 'Homme').length / cookingStats.totalEnquetes) * 100).toFixed(1)}%`
+                                  : '0%'}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-pink-50 p-4 rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center">
+                              <div className="w-4 h-4 bg-pink-500 rounded-full mr-3"></div>
+                              <span className="font-semibold text-pink-800">Femmes</span>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-2xl font-bold text-pink-600">
+                                {records.filter(r => r.formData?.household?.sexe === 'Femme').length}
+                              </div>
+                              <div className="text-sm text-pink-600">
+                                {cookingStats.totalEnquetes > 0 
+                                  ? `${((records.filter(r => r.formData?.household?.sexe === 'Femme').length / cookingStats.totalEnquetes) * 100).toFixed(1)}%`
+                                  : '0%'}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-green-50 p-4 rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center">
+                              <div className="w-4 h-4 bg-green-500 rounded-full mr-3"></div>
+                              <span className="font-semibold text-green-800">Autre</span>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-2xl font-bold text-green-600">
+                                {records.filter(r => r.formData?.household?.sexe === 'Autre').length}
+                              </div>
+                              <div className="text-sm text-green-600">
+                                {cookingStats.totalEnquetes > 0 
+                                  ? `${((records.filter(r => r.formData?.household?.sexe === 'Autre').length / cookingStats.totalEnquetes) * 100).toFixed(1)}%`
+                                  : '0%'}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Résumé total */}
+                        <div className="bg-gray-50 p-4 rounded-lg border-2 border-gray-200">
+                          <div className="text-center">
+                            <div className="text-lg font-semibold text-gray-700 mb-2">Total des Enquêtes</div>
+                            <div className="text-3xl font-bold text-gray-800">
+                              {cookingStats.totalEnquetes}
+                            </div>
+                            <div className="text-sm text-gray-600 mt-1">
+                              Répartition par sexe des personnes enquêtées
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>

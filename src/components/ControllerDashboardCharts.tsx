@@ -7,11 +7,10 @@ import {
   Title,
   Tooltip,
   Legend,
-  ArcElement,
   PointElement,
   LineElement,
 } from 'chart.js';
-import { Bar, Doughnut } from 'react-chartjs-2';
+import { Bar } from 'react-chartjs-2';
 
 ChartJS.register(
   CategoryScale,
@@ -20,7 +19,6 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  ArcElement,
   PointElement,
   LineElement
 );
@@ -165,56 +163,6 @@ export default function ControllerDashboardCharts({ personalStats }: ControllerD
     ],
   };
 
-  // Données pour le graphique en anneau - Répartition des combustibles
-  const combustiblesChartData = {
-    labels: chartData.combustiblesData.map((item: any) => item.name),
-    datasets: [
-      {
-        data: chartData.combustiblesData.map((item: any) => item.count),
-        backgroundColor: [
-          'rgba(139, 69, 19, 0.8)',   // Marron pour le bois
-          'rgba(47, 79, 79, 0.8)',    // Gris foncé pour le charbon
-          'rgba(30, 144, 255, 0.8)',  // Bleu pour le gaz
-          'rgba(255, 215, 0, 0.8)',   // Or pour l'électricité
-          'rgba(160, 82, 45, 0.8)',   // Brun pour les briquettes
-        ],
-        borderColor: [
-          'rgba(139, 69, 19, 1)',
-          'rgba(47, 79, 79, 1)',
-          'rgba(30, 144, 255, 1)',
-          'rgba(255, 215, 0, 1)',
-          'rgba(160, 82, 45, 1)',
-        ],
-        borderWidth: 2,
-      },
-    ],
-  };
-
-  // Données pour le graphique en anneau - Répartition des équipements
-  const equipementsChartData = {
-    labels: chartData.equipementsData.map((item: any) => item.name),
-    datasets: [
-      {
-        data: chartData.equipementsData.map((item: any) => item.count),
-        backgroundColor: [
-          'rgba(16, 185, 129, 0.8)',  // Vert pour les foyers améliorés
-          'rgba(245, 158, 11, 0.8)',  // Orange pour les foyers classiques
-          'rgba(239, 68, 68, 0.8)',   // Rouge pour les foyers traditionnels
-          'rgba(147, 51, 234, 0.8)',  // Violet pour les réchauds à gaz
-          'rgba(59, 130, 246, 0.8)',  // Bleu pour les cuisinières électriques
-        ],
-        borderColor: [
-          'rgba(16, 185, 129, 1)',
-          'rgba(245, 158, 11, 1)',
-          'rgba(239, 68, 68, 1)',
-          'rgba(147, 51, 234, 1)',
-          'rgba(59, 130, 246, 1)',
-        ],
-        borderWidth: 2,
-      },
-    ],
-  };
-
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -248,20 +196,51 @@ export default function ControllerDashboardCharts({ personalStats }: ControllerD
         </div>
       </div>
 
-      {/* Graphiques en anneau côte à côte */}
+      {/* Graphiques en histogrammes côte à côte */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Répartition par type de combustible */}
+        {/* Répartition par type de combustible - HISTOGRAMME */}
         <div className="bg-white p-6 rounded-lg shadow-lg">
           <h3 className="text-lg font-semibold mb-4 text-center">Types de Combustibles Utilisés</h3>
-          <div className="h-80 flex items-center justify-center">
-            <Doughnut
-              data={combustiblesChartData}
+          <div className="h-80">
+            <Bar
+              data={{
+                labels: chartData.combustiblesData.map((item: any) => item.name),
+                datasets: [
+                  {
+                    label: 'Nombre d\'utilisations',
+                    data: chartData.combustiblesData.map((item: any) => item.count),
+                    backgroundColor: [
+                      'rgba(139, 69, 19, 0.8)',   // Marron pour le bois
+                      'rgba(47, 79, 79, 0.8)',    // Gris foncé pour le charbon
+                      'rgba(30, 144, 255, 0.8)',  // Bleu pour le gaz
+                      'rgba(255, 215, 0, 0.8)',   // Or pour l'électricité
+                      'rgba(160, 82, 45, 0.8)',   // Brun pour les briquettes
+                    ],
+                    borderColor: [
+                      'rgba(139, 69, 19, 1)',
+                      'rgba(47, 79, 79, 1)',
+                      'rgba(30, 144, 255, 1)',
+                      'rgba(255, 215, 0, 1)',
+                      'rgba(160, 82, 45, 1)',
+                    ],
+                    borderWidth: 2,
+                  },
+                ],
+              }}
               options={{
                 ...chartOptions,
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    ticks: {
+                      stepSize: 1,
+                    },
+                  },
+                },
                 plugins: {
                   ...chartOptions.plugins,
                   legend: {
-                    position: 'bottom' as const,
+                    display: false, // Pas de légende pour les histogrammes
                   },
                 },
               }}
@@ -269,18 +248,49 @@ export default function ControllerDashboardCharts({ personalStats }: ControllerD
           </div>
         </div>
 
-        {/* Répartition par type d'équipement */}
+        {/* Répartition par type d'équipement - HISTOGRAMME */}
         <div className="bg-white p-6 rounded-lg shadow-lg">
           <h3 className="text-lg font-semibold mb-4 text-center">Équipements de Cuisson Utilisés</h3>
-          <div className="h-80 flex items-center justify-center">
-            <Doughnut
-              data={equipementsChartData}
+          <div className="h-80">
+            <Bar
+              data={{
+                labels: chartData.equipementsData.map((item: any) => item.name),
+                datasets: [
+                  {
+                    label: 'Nombre d\'utilisations',
+                    data: chartData.equipementsData.map((item: any) => item.count),
+                    backgroundColor: [
+                      'rgba(16, 185, 129, 0.8)',  // Vert pour les foyers améliorés
+                      'rgba(245, 158, 11, 0.8)',  // Orange pour les foyers classiques
+                      'rgba(239, 68, 68, 0.8)',   // Rouge pour les foyers traditionnels
+                      'rgba(147, 51, 234, 0.8)',  // Violet pour les réchauds à gaz
+                      'rgba(59, 130, 246, 0.8)',  // Bleu pour les cuisinières électriques
+                    ],
+                    borderColor: [
+                      'rgba(16, 185, 129, 1)',
+                      'rgba(245, 158, 11, 1)',
+                      'rgba(239, 68, 68, 1)',
+                      'rgba(147, 51, 234, 1)',
+                      'rgba(59, 130, 246, 1)',
+                    ],
+                    borderWidth: 2,
+                  },
+                ],
+              }}
               options={{
                 ...chartOptions,
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    ticks: {
+                      stepSize: 1,
+                    },
+                  },
+                },
                 plugins: {
                   ...chartOptions.plugins,
                   legend: {
-                    position: 'bottom' as const,
+                    display: false, // Pas de légende pour les histogrammes
                   },
                 },
               }}

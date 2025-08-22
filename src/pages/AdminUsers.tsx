@@ -9,11 +9,19 @@ const roles = [
   { value: 'ANALYST', label: 'Analyste' },
 ];
 
+// Options pour le sexe
+const genderOptions = [
+  { value: 'MALE', label: 'Masculin' },
+  { value: 'FEMALE', label: 'Féminin' },
+  { value: 'OTHER', label: 'Autre' },
+];
+
 interface User {
   id: string;
   name: string;
   email: string;
   role: string;
+  gender?: string;
   profilePictureUrl?: string;
   status: string;
 }
@@ -25,7 +33,7 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showAdd, setShowAdd] = useState(false);
-  const [addForm, setAddForm] = useState<{ name: string; email: string; password: string; role: string; contact?: string }>({ name: '', email: '', password: '', role: 'CONTROLLER', contact: '' });
+  const [addForm, setAddForm] = useState<{ name: string; email: string; password: string; role: string; gender: string; contact?: string }>({ name: '', email: '', password: '', role: 'CONTROLLER', gender: 'OTHER', contact: '' });
   const [addError, setAddError] = useState('');
   const [saving, setSaving] = useState(false);
   const [editRoleId, setEditRoleId] = useState<string | null>(null);
@@ -68,7 +76,7 @@ export default function AdminUsers() {
     setSaving(true);
     try {
       const payload = { ...addForm };
-      const res = await fetch('http://localhost:3000/users', {
+              const res = await fetch('http://localhost:3000/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify(payload),
@@ -78,7 +86,7 @@ export default function AdminUsers() {
         throw new Error(data.message || 'Erreur lors de la création');
       }
       setShowAdd(false);
-      setAddForm({ name: '', email: '', password: '', role: 'CONTROLLER', contact: '' });
+      setAddForm({ name: '', email: '', password: '', role: 'CONTROLLER', gender: 'OTHER', contact: '' });
       fetchUsers();
     } catch (err: any) {
       setAddError(err.message || 'Erreur inconnue');
@@ -96,7 +104,7 @@ export default function AdminUsers() {
     if (!confirmDeleteId) return;
     setLoading(true);
     try {
-      const res = await fetch(`http://localhost:3000/users/${confirmDeleteId}`, {
+              const res = await fetch(`http://localhost:3000/users/${confirmDeleteId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
@@ -115,7 +123,7 @@ export default function AdminUsers() {
     if (!editRoleId) return;
     setRoleSaving(true);
     try {
-      const res = await fetch(`http://localhost:3000/users/${editRoleId}`, {
+              const res = await fetch(`http://localhost:3000/users/${editRoleId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify({ role: editRole }),
@@ -136,7 +144,7 @@ export default function AdminUsers() {
     setResetSaving(true);
     setResetError('');
     try {
-      const res = await fetch(`http://localhost:3000/users/${showReset}`, {
+              const res = await fetch(`http://localhost:3000/users/${showReset}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify({ password: resetPwd }),
@@ -164,7 +172,7 @@ export default function AdminUsers() {
   const handleReactivate = async (id: string) => {
     setLoading(true);
     try {
-      const res = await fetch(`http://localhost:3000/users/${id}`, {
+              const res = await fetch(`http://localhost:3000/users/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify({ status: 'ACTIVE' }),
@@ -184,6 +192,37 @@ export default function AdminUsers() {
         <h2 className="text-2xl font-bold">Gestion des utilisateurs</h2>
         <Link to="/admin/deleted-users" className="text-sm text-red-600 underline">Voir les utilisateurs supprimés</Link>
       </div>
+
+      {/* Statistiques rapides par sexe */}
+      {!loading && users.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-blue-50 p-4 rounded-lg text-center border border-blue-200">
+            <div className="text-2xl font-bold text-blue-600">
+              {users.filter(u => u.gender === 'MALE' && u.status === 'ACTIVE').length}
+            </div>
+            <div className="text-blue-800 text-sm">Masculin</div>
+          </div>
+          <div className="bg-pink-50 p-4 rounded-lg text-center border border-pink-200">
+            <div className="text-2xl font-bold text-pink-600">
+              {users.filter(u => u.gender === 'FEMALE' && u.status === 'ACTIVE').length}
+            </div>
+            <div className="text-pink-800 text-sm">Féminin</div>
+          </div>
+          <div className="bg-green-50 p-4 rounded-lg text-center border border-green-200">
+            <div className="text-2xl font-bold text-green-600">
+              {users.filter(u => u.gender === 'OTHER' && u.status === 'ACTIVE').length}
+            </div>
+            <div className="text-green-800 text-sm">Autre</div>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg text-center border border-gray-200">
+            <div className="text-2xl font-bold text-gray-600">
+              {users.filter(u => u.status === 'ACTIVE').length}
+            </div>
+            <div className="text-gray-800 text-sm">Total actifs</div>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row md:justify-between gap-4 mb-4">
         <input
           type="text"
@@ -206,6 +245,7 @@ export default function AdminUsers() {
               <th className="p-2">Nom</th>
               <th className="p-2">Email</th>
               <th className="p-2">Rôle</th>
+              <th className="p-2">Sexe</th>
               <th className="p-2">Statut</th>
               <th className="p-2">Actions</th>
             </tr>
@@ -237,6 +277,26 @@ export default function AdminUsers() {
                   ) : (
                     u.role
                   )}
+                </td>
+                <td className="p-2">
+                  <div className="flex items-center justify-center">
+                    {u.gender === 'MALE' ? (
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 flex items-center">
+                        <div className="w-2 h-2 rounded-full bg-blue-500 mr-1"></div>
+                        Masculin
+                      </span>
+                    ) : u.gender === 'FEMALE' ? (
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-pink-100 text-pink-800 flex items-center">
+                        <div className="w-2 h-2 rounded-full bg-pink-500 mr-1"></div>
+                        Féminin
+                      </span>
+                    ) : (
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 flex items-center">
+                        <div className="w-2 h-2 rounded-full bg-green-500 mr-1"></div>
+                        Autre
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="p-2">
                   <span className={`px-2 py-1 rounded text-xs font-bold ${u.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{u.status === 'ACTIVE' ? 'Activé' : 'Désactivé'}</span>
@@ -297,6 +357,12 @@ export default function AdminUsers() {
                 <label className="block font-semibold mb-1">Rôle</label>
                 <select value={addForm.role} onChange={e => setAddForm(f => ({ ...f, role: e.target.value }))} className="w-full border rounded p-2">
                   {roles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block font-semibold mb-1">Sexe</label>
+                <select value={addForm.gender} onChange={e => setAddForm(f => ({ ...f, gender: e.target.value }))} className="w-full border rounded p-2">
+                  {genderOptions.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
                 </select>
               </div>
               <div>

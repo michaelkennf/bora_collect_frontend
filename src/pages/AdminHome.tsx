@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import logo2 from '../assets/images/logo2.jpg';
 import AdminDashboardCharts from '../components/AdminDashboardCharts';
-import UserManager from '../components/UserManager';
+import AdminUsers from './AdminUsers';
 import FormBuilder from '../components/FormBuilder';
 import AdminParametres from './AdminParametres';
 import AdminSettings from '../components/AdminSettings';
@@ -188,7 +188,7 @@ export default function AdminLayout() {
       </nav>
       <main className="p-8">
         {view === 'dashboard' && <DashboardAdmin />}
-        {view === 'utilisateurs' && <UserManager onUserAdded={() => {}} />}
+        {view === 'utilisateurs' && <AdminUsers />}
         {view === 'formulaires' && <FormBuilder />}
         {view === 'statistiques' && <AdminDashboardCharts users={users} />}
         {view === 'parametres' && <AdminParametres />}

@@ -8,7 +8,7 @@ import { syncService } from '../services/syncService';
 interface HouseholdData {
   nomOuCode: string;
   age: string;
-  sexe: 'Homme' | 'Femme';
+  sexe: 'Homme' | 'Femme' | 'Autre';
   tailleMenage: string;
   communeQuartier: string;
   geolocalisation: string;
@@ -684,6 +684,16 @@ export default function SchoolForm() {
                     onChange={handleHouseholdChange}
                   />
                   Femme
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="sexe"
+                    value="Autre"
+                    checked={form.formData.household.sexe === 'Autre'}
+                    onChange={handleHouseholdChange}
+                  />
+                  Autre
                 </label>
               </div>
             </div>
