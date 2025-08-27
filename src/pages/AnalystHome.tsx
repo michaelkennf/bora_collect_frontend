@@ -2,6 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import logo2 from '../assets/images/logo2.jpg';
 import { Bar, Doughnut } from 'react-chartjs-2';
+import Settings from './Settings';
+import { exportEnquetesToExcel, exportStatsToExcel, exportStatsSexeToExcel } from '../utils/excelExport';
+import { Download } from 'lucide-react';
+import ExportNotification from '../components/ExportNotification';
+import PNUDFooter from '../components/PNUDFooter';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -37,7 +42,7 @@ const communesKinshasa = [
 
 export default function AnalystHome() {
   const [user, setUser] = useState<any>(null);
-  const [view, setView] = useState<'dashboard'|'enquetes'|'statistiques'>('dashboard');
+  const [view, setView] = useState<'dashboard'|'enquetes'|'statistiques'|'parametres'>('dashboard');
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [dashboardError, setDashboardError] = useState('');
   const [records, setRecords] = useState<any[]>([]);
@@ -47,7 +52,17 @@ export default function AnalystHome() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [search, setSearch] = useState('');
   const [communeFilter, setCommuneFilter] = useState('');
+  const [exportNotification, setExportNotification] = useState<{
+    isVisible: boolean;
+    isSuccess: boolean;
+    message: string;
+  }>({
+    isVisible: false,
+    isSuccess: false,
+    message: ''
+  });
   const navigate = useNavigate();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const u = localStorage.getItem('user');
@@ -77,6 +92,52 @@ export default function AnalystHome() {
     fetchRecords();
   }, []); // Chargement automatique au montage du composant
 
+  // Fonction pour récupérer les informations d'un utilisateur
+  const fetchUserInfo = async (userId: string): Promise<string> => {
+    try {
+      console.log(`🔍 Tentative de récupération de l'utilisateur: ${userId}`);
+      
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.warn('⚠️ Aucun token trouvé dans le localStorage');
+        return 'Token manquant';
+      }
+
+      const userRes = await fetch(`http://localhost:3000/users/${userId}`, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+      });
+      
+      console.log(`📡 Réponse du serveur: ${userRes.status} ${userRes.statusText}`);
+      
+      if (userRes.ok) {
+        const userData = await userRes.json();
+        console.log(`✅ Données utilisateur récupérées:`, userData);
+        
+        // Retourner le nom complet, sinon l'email, sinon un message par défaut
+        const displayName = userData.name || userData.email || 'Utilisateur inconnu';
+        console.log(`📝 Nom d'affichage: ${displayName}`);
+        return displayName;
+      } else {
+        const errorText = await userRes.text();
+        console.warn(`❌ Erreur HTTP ${userRes.status} pour l'utilisateur ${userId}:`, errorText);
+        
+        if (userRes.status === 404) {
+          return `Utilisateur ${userId} non trouvé`;
+        } else if (userRes.status === 403) {
+          return 'Accès refusé';
+        } else {
+          return `Erreur ${userRes.status}`;
+        }
+      }
+    } catch (error) {
+      console.error(`💥 Erreur lors de la récupération de l'utilisateur ${userId}:`, error);
+      return 'Erreur de récupération';
+    }
+  };
+
   // Récupérer les enquêtes
   const fetchRecords = async () => {
     setRecordsLoading(true);
@@ -94,34 +155,33 @@ export default function AnalystHome() {
       if (!res.ok) throw new Error('Erreur lors du chargement');
       const data = await res.json();
       
-      // Enrichir les records avec les informations des utilisateurs
-      const enrichedRecords = await Promise.all(
-        data.map(async (record: any) => {
-          if (record.authorId) {
-            try {
-              const userRes = await fetch(`http://localhost:3000/users/${record.authorId}`, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-              });
-              if (userRes.ok) {
-                const userData = await userRes.json();
-                return {
-                  ...record,
-                  authorName: userData.name || userData.email || 'Utilisateur inconnu'
-                };
-              }
-            } catch (error) {
-              console.warn(`Impossible de récupérer les informations de l'utilisateur ${record.authorId}:`, error);
-            }
-          }
-          return {
-            ...record,
-            authorName: record.authorId || 'N/A'
-          };
-        })
-      );
+      console.log('📊 Récupération des enquêtes:', data.length, 'enregistrements trouvés');
       
+             // Enrichir les records avec les informations des utilisateurs
+       const enrichedRecords = await Promise.all(
+         data.map(async (record: any) => {
+           let authorName = 'N/A';
+           
+           if (record.authorId) {
+             console.log(`🔍 Récupération des informations pour l'utilisateur: ${record.authorId}`);
+             authorName = await fetchUserInfo(record.authorId);
+             console.log(`✅ Nom de l'enquêteur récupéré: ${authorName}`);
+           } else {
+             console.warn('⚠️ Pas d\'authorId pour l\'enregistrement:', record.id);
+             authorName = 'Auteur non spécifié';
+           }
+           
+           return {
+             ...record,
+             authorName: authorName
+           };
+         })
+       );
+      
+      console.log('✅ Enrichissement des enregistrements terminé');
       setRecords(enrichedRecords);
     } catch (err: any) {
+      console.error('❌ Erreur lors de la récupération des enquêtes:', err);
       setRecordsError(err.message || 'Erreur inconnue');
     } finally {
       setRecordsLoading(false);
@@ -134,6 +194,105 @@ export default function AnalystHome() {
       fetchRecords();
     }
   }, [view, search, communeFilter]);
+
+  // Fonction pour afficher les notifications d'export
+  const showExportNotification = (isSuccess: boolean, message: string) => {
+    setExportNotification({
+      isVisible: true,
+      isSuccess,
+      message
+    });
+    
+    // Masquer automatiquement après 5 secondes
+    setTimeout(() => {
+      setExportNotification(prev => ({ ...prev, isVisible: false }));
+    }, 5000);
+  };
+
+  // Fonction pour fermer la notification
+  const closeExportNotification = () => {
+    setExportNotification(prev => ({ ...prev, isVisible: false }));
+  };
+
+  // Fonction d'export des enquêtes avec gestion d'erreur
+  const handleExportEnquetes = () => {
+    try {
+      if (records.length > 0) {
+        const success = exportEnquetesToExcel(records, 'enquetes_analyste');
+        if (success) {
+          showExportNotification(true, 'Export des enquêtes réussi !');
+        } else {
+          showExportNotification(false, 'Erreur lors de l\'export des enquêtes');
+        }
+      }
+    } catch (error) {
+      showExportNotification(false, 'Erreur lors de l\'export des enquêtes');
+    }
+  };
+
+  // Fonction d'export des statistiques avec gestion d'erreur
+  const handleExportStats = () => {
+    try {
+      if (cookingStats) {
+        // Préparer les données pour l'export
+        const statsCommune = Object.entries(cookingStats.communes).map(([commune, count]) => {
+          const totalEnquetes = cookingStats.totalEnquetes;
+          const pourcentage = totalEnquetes > 0 ? ((count / totalEnquetes) * 100).toFixed(1) : '0.0';
+          return {
+            commune,
+            nombreEnquetes: count,
+            typesCombustibles: Object.keys(cookingStats.combustiblesParCommune[commune] || {}).length,
+            typesEquipements: Object.keys(cookingStats.equipementsParCommune[commune] || {}).length,
+            pourcentageTotal: `${pourcentage}%`
+          };
+        });
+        
+        const statsCombustibles = Object.entries(cookingStats.combustibles).map(([combustible, count]) => ({
+          combustible,
+          nombreEnquetes: count
+        }));
+        
+        const statsEquipements = Object.entries(cookingStats.equipements).map(([equipement, count]) => ({
+          combustible: equipement, // Réutiliser la même interface
+          nombreEnquetes: count
+        }));
+        
+        const success = exportStatsToExcel(statsCommune, statsCombustibles, statsEquipements, 'statistiques_detaillees_analyste');
+        if (success) {
+          showExportNotification(true, 'Export des statistiques réussi !');
+        } else {
+          showExportNotification(false, 'Erreur lors de l\'export des statistiques');
+        }
+      }
+    } catch (error) {
+      showExportNotification(false, 'Erreur lors de l\'export des statistiques');
+    }
+  };
+
+  // Fonction d'export des statistiques par sexe avec gestion d'erreur
+  const handleExportStatsSexe = (filename: string = 'statistiques_sexe_analyste') => {
+    try {
+      const statsHommes = records.filter(r => r.formData?.household?.sexe === 'Homme').length;
+      const statsFemmes = records.filter(r => r.formData?.household?.sexe === 'Femme').length;
+      const statsAutre = records.filter(r => r.formData?.household?.sexe === 'Autre').length;
+      
+      const success = exportStatsSexeToExcel(
+        statsHommes,
+        statsFemmes,
+        statsAutre,
+        cookingStats?.totalEnquetes || 0,
+        filename
+      );
+      
+      if (success) {
+        showExportNotification(true, 'Export des statistiques par sexe réussi !');
+      } else {
+        showExportNotification(false, 'Erreur lors de l\'export des statistiques par sexe');
+      }
+    } catch (error) {
+      showExportNotification(false, 'Erreur lors de l\'export des statistiques par sexe');
+    }
+  };
 
   // Calcul des statistiques des solutions de cuisson (version améliorée avec répartition par commune)
   const calculateCookingStats = () => {
@@ -315,59 +474,133 @@ export default function AnalystHome() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Navigation */}
-      <nav className="bg-blue-900 text-white p-4 flex justify-between items-center">
-        <div className="flex items-center gap-2 min-w-0">
-          <img src={logo2} alt="Logo 2" className="h-12 w-auto object-contain bg-white rounded shadow" />
-          <span className="font-bold text-lg ml-2 truncate" style={{maxWidth: 120}}>Analyste</span>
-        </div>
-        <div className="flex items-center gap-1 flex-shrink min-w-0">
+      {/* Navigation responsive avec couleur bleue d'origine */}
+      <nav className="bg-blue-900 text-white p-4">
+        <div className="flex justify-between items-center">
+          {/* Logo et titre */}
+          <div className="flex items-center gap-2 min-w-0">
+            <img src={logo2} alt="Logo 2" className="h-10 sm:h-12 w-auto object-contain bg-white rounded shadow" />
+            <span className="font-bold text-base sm:text-lg ml-2 truncate" style={{maxWidth: 120}}>Analyste</span>
+          </div>
+          
+          {/* Bouton menu mobile */}
           <button 
-            onClick={() => setView('dashboard')} 
-            className={`px-3 py-2 rounded font-semibold ${view==='dashboard' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white text-sm`}
+            className="md:hidden p-2 rounded hover:bg-blue-800 transition-colors"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            aria-label="Menu"
           >
-            Tableau de bord
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
           </button>
-          <button 
-            onClick={() => setView('enquetes')} 
-            className={`px-3 py-2 rounded font-semibold ${view==='enquetes' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white text-sm`}
-          >
-            Les enquêtes
-          </button>
-          <button 
-            onClick={() => setView('statistiques')} 
-            className={`px-3 py-2 rounded font-semibold ${view==='statistiques' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white text-sm`}
-          >
-            Statistiques Détaillées
-          </button>
-          {user && (
-            <div className="w-8 h-8 rounded-full bg-white text-blue-900 flex items-center justify-center font-bold ml-2">
-              {user.name?.[0]?.toUpperCase() || '?'}
+          
+          {/* Menu desktop */}
+          <div className="hidden md:flex items-center gap-2">
+            <button 
+              onClick={() => setView('dashboard')} 
+              className={`px-3 py-2 rounded font-semibold text-sm ${view==='dashboard' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white transition-colors`}
+            >
+              Tableau de bord
+            </button>
+            <button 
+              onClick={() => setView('enquetes')} 
+              className={`px-3 py-2 rounded font-semibold text-sm ${view==='enquetes' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white transition-colors`}
+            >
+              Les enquêtes
+            </button>
+            <button 
+              onClick={() => setView('statistiques')} 
+              className={`px-3 py-2 rounded font-semibold text-sm ${view==='statistiques' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white transition-colors`}
+            >
+              Statistiques Détaillées
+            </button>
+            <button 
+              onClick={() => setView('parametres')} 
+              className={`px-3 py-2 rounded font-semibold text-sm ${view === 'parametres' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white transition-colors`}
+            >
+              Paramètres
+            </button>
+            
+            {/* Profil utilisateur et déconnexion */}
+            <div className="flex items-center gap-2 ml-2">
+              {user && (
+                <div className="w-8 h-8 rounded-full bg-white text-blue-900 flex items-center justify-center font-bold">
+                  {user.name?.[0]?.toUpperCase() || '?'}
+                </div>
+              )}
+              <button 
+                onClick={() => { localStorage.clear(); navigate('/login'); }} 
+                className="bg-white text-blue-900 px-3 py-1 rounded font-semibold text-sm hover:bg-gray-100 transition-colors"
+              >
+                Déconnexion
+              </button>
             </div>
-          )}
-          <button 
-            onClick={() => { localStorage.clear(); navigate('/login'); }} 
-            className="ml-2 bg-white text-blue-900 px-3 py-1 rounded font-semibold text-sm"
-          >
-            Déconnexion
-          </button>
+          </div>
         </div>
+        
+        {/* Menu mobile */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden mt-4 space-y-2 border-t border-blue-800 pt-4">
+            <button 
+              onClick={() => setView('dashboard')} 
+              className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'dashboard' ? 'bg-blue-800' : 'hover:bg-blue-800'} text-white`}
+            >
+              Tableau de bord
+            </button>
+            <button 
+              onClick={() => setView('enquetes')} 
+              className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'enquetes' ? 'bg-blue-800' : 'hover:bg-blue-800'} text-white`}
+            >
+              Les enquêtes
+            </button>
+            <button 
+              onClick={() => setView('statistiques')} 
+              className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'statistiques' ? 'bg-blue-800' : 'hover:bg-blue-800'} text-white`}
+            >
+              Statistiques Détaillées
+            </button>
+            <button 
+              onClick={() => setView('parametres')} 
+              className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'parametres' ? 'bg-blue-800' : 'hover:bg-blue-800'} text-white`}
+            >
+              Paramètres
+            </button>
+            
+            {/* Profil et déconnexion mobile */}
+            <div className="flex items-center justify-between pt-2 border-t border-blue-800">
+              {user && (
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-white text-blue-900 flex items-center justify-center font-bold">
+                    {user.name?.[0]?.toUpperCase() || '?'}
+                  </div>
+                  <span className="text-sm">{user.name || 'Analyste'}</span>
+                </div>
+              )}
+              <button 
+                onClick={() => { localStorage.clear(); navigate('/login'); }} 
+                className="bg-white text-blue-900 px-3 py-1 rounded font-semibold text-sm hover:bg-gray-100 transition-colors"
+              >
+                Déconnexion
+              </button>
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* Contenu principal */}
-      <main className="p-8">
+      <main className="p-4 sm:p-8">
         {/* Tableau de bord */}
         {view === 'dashboard' && (
           <div>
-            <h1 className="text-3xl font-bold mb-6 text-center">Tableau de Bord - Interface Analyste</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6 text-center">Tableau de Bord - Interface Analyste</h1>
             
             {/* Message de bienvenue */}
-            <div className="max-w-2xl mx-auto bg-blue-50 rounded-xl shadow p-6 mb-8">
-              <p className="text-lg text-gray-800 mb-4 text-center">
+            <div className="max-w-2xl mx-auto bg-blue-50 rounded-xl shadow p-4 sm:p-6 mb-6 sm:mb-8">
+              <p className="text-base sm:text-lg text-gray-800 mb-3 sm:mb-4 text-center">
                 Bienvenue sur le tableau de bord analyste.<br/>
                 Ici, vous pouvez analyser les données des solutions de cuisson propre collectées dans le système.
               </p>
-              <ul className="list-disc ml-8 text-gray-700 mb-4">
+              <ul className="list-disc ml-4 sm:ml-8 text-gray-700 mb-3 sm:mb-4 text-sm sm:text-base">
                 <li>Voir le nombre total d'enquêtes enregistrées</li>
                 <li>Analyser les statistiques par combustible et équipement</li>
                 <li>Consulter la répartition par commune</li>
@@ -391,45 +624,45 @@ export default function AnalystHome() {
             ) : (
               <>
                 {/* Statistiques globales */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-                  <div className="bg-white p-6 rounded-lg shadow-lg text-center">
-                    <div className="text-3xl font-bold text-blue-600 mb-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6 mb-6 sm:mb-8">
+                  <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg text-center">
+                    <div className="text-2xl sm:text-3xl font-bold text-blue-600 mb-2">
                       {cookingStats?.totalEnquetes || 0}
                     </div>
-                    <div className="text-gray-600">Total des enquêtes</div>
+                    <div className="text-sm sm:text-base text-gray-600">Total des enquêtes</div>
                   </div>
-                  <div className="bg-white p-6 rounded-lg shadow-lg text-center">
-                    <div className="text-3xl font-bold text-indigo-600 mb-2">
+                  <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg text-center">
+                    <div className="text-2xl sm:text-3xl font-bold text-indigo-600 mb-2">
                       {cookingStats?.totalEnqueteurs || 0}
                     </div>
-                    <div className="text-gray-600">Total des enquêteurs</div>
+                    <div className="text-sm sm:text-base text-gray-600">Total des enquêteurs</div>
                   </div>
-                  <div className="bg-white p-6 rounded-lg shadow-lg text-center">
-                    <div className="text-3xl font-bold text-green-600 mb-2">
+                  <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg text-center">
+                    <div className="text-2xl sm:text-3xl font-bold text-green-600 mb-2">
                       {Object.keys(cookingStats?.combustibles || {}).length || 0}
                     </div>
-                    <div className="text-gray-600">Types de combustibles</div>
+                    <div className="text-sm sm:text-base text-gray-600">Types de combustibles</div>
                   </div>
-                  <div className="bg-white p-6 rounded-lg shadow-lg text-center">
-                    <div className="text-3xl font-bold text-purple-600 mb-2">
+                  <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg text-center">
+                    <div className="text-2xl sm:text-3xl font-bold text-purple-600 mb-2">
                       {Object.keys(cookingStats?.equipements || {}).length || 0}
                     </div>
-                    <div className="text-gray-600">Types d'équipements</div>
+                    <div className="text-sm sm:text-base text-gray-600">Types d'équipements</div>
                   </div>
-                  <div className="bg-white p-6 rounded-lg shadow-lg text-center">
-                    <div className="text-3xl font-bold text-orange-600 mb-2">
+                  <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg text-center">
+                    <div className="text-2xl sm:text-3xl font-bold text-orange-600 mb-2">
                       {Object.keys(cookingStats?.communes || {}).length || 0}
                     </div>
-                    <div className="text-gray-600">Communes couvertes</div>
+                    <div className="text-sm sm:text-base text-gray-600">Communes couvertes</div>
                   </div>
                 </div>
 
                 {/* NOUVEAU : Graphique en cercle pour la répartition par sexe */}
                 {cookingStats && (
-                  <div className="bg-white p-6 rounded-lg shadow-lg mb-8">
-                    <h3 className="text-lg font-bold mb-4 text-center">Répartition par Sexe des Personnes Enquêtées</h3>
+                  <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg mb-6 sm:mb-8">
+                    <h3 className="text-base sm:text-lg font-bold mb-3 sm:mb-4 text-center">Répartition par Sexe des Personnes Enquêtées</h3>
                     <div className="flex justify-center">
-                      <div style={{ width: '400px', height: '400px' }}>
+                      <div style={{ width: '300px', height: '300px' }} className="sm:w-96 sm:h-96">
                         <Doughnut
                           data={{
                             labels: ['Homme', 'Femme', 'Autre'],
@@ -482,35 +715,35 @@ export default function AnalystHome() {
                     </div>
                     
                     {/* Statistiques détaillées sous le graphique */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 mt-4 sm:mt-6">
                       <div className="text-center">
-                        <div className="text-2xl font-bold text-blue-600">
+                        <div className="text-xl sm:text-2xl font-bold text-blue-600">
                           {records.filter(r => r.formData?.household?.sexe === 'Homme').length}
                         </div>
-                        <div className="text-blue-800 font-medium">Hommes</div>
-                        <div className="text-sm text-gray-600">
+                        <div className="text-blue-800 font-medium text-sm sm:text-base">Hommes</div>
+                        <div className="text-xs sm:text-sm text-gray-600">
                           {cookingStats.totalEnquetes > 0 
                             ? `${((records.filter(r => r.formData?.household?.sexe === 'Homme').length / cookingStats.totalEnquetes) * 100).toFixed(1)}%`
                             : '0%'}
                         </div>
                       </div>
                       <div className="text-center">
-                        <div className="text-2xl font-bold text-pink-600">
+                        <div className="text-xl sm:text-2xl font-bold text-pink-600">
                           {records.filter(r => r.formData?.household?.sexe === 'Femme').length}
                         </div>
-                        <div className="text-pink-800 font-medium">Femmes</div>
-                        <div className="text-sm text-gray-600">
+                        <div className="text-pink-800 font-medium text-sm sm:text-base">Femmes</div>
+                        <div className="text-xs sm:text-sm text-gray-600">
                           {cookingStats.totalEnquetes > 0 
                             ? `${((records.filter(r => r.formData?.household?.sexe === 'Femme').length / cookingStats.totalEnquetes) * 100).toFixed(1)}%`
                             : '0%'}
                         </div>
                       </div>
                       <div className="text-center">
-                        <div className="text-2xl font-bold text-green-600">
+                        <div className="text-xl sm:text-2xl font-bold text-green-600">
                           {records.filter(r => r.formData?.household?.sexe === 'Autre').length}
                         </div>
-                        <div className="text-green-800 font-medium">Autre</div>
-                        <div className="text-sm text-gray-600">
+                        <div className="text-green-800 font-medium text-sm sm:text-base">Autre</div>
+                        <div className="text-xs sm:text-sm text-gray-600">
                           {cookingStats.totalEnquetes > 0 
                             ? `${((records.filter(r => r.formData?.household?.sexe === 'Autre').length / cookingStats.totalEnquetes) * 100).toFixed(1)}%`
                             : '0%'}
@@ -522,11 +755,11 @@ export default function AnalystHome() {
 
                 {/* Graphiques des solutions de cuisson */}
                 {chartData && (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
                     {/* Graphique des combustibles */}
-                    <div className="bg-white p-6 rounded-lg shadow-lg">
-                      <h3 className="text-lg font-bold mb-4 text-center">Répartition par Type de Combustible</h3>
-                      <div style={{ height: '300px' }}>
+                    <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg">
+                      <h3 className="text-base sm:text-lg font-bold mb-3 sm:mb-4 text-center">Répartition par Type de Combustible</h3>
+                      <div style={{ height: '250px' }} className="sm:h-80">
                         <Bar
                           data={chartData.combustibles}
                           options={{
@@ -546,9 +779,9 @@ export default function AnalystHome() {
                     </div>
 
                     {/* Graphique des équipements */}
-                    <div className="bg-white p-6 rounded-lg shadow-lg">
-                      <h3 className="text-lg font-bold mb-4 text-center">Répartition par Type d'Équipement</h3>
-                      <div style={{ height: '300px' }}>
+                    <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg">
+                      <h3 className="text-base sm:text-lg font-bold mb-3 sm:mb-4 text-center">Répartition par Type d'Équipement</h3>
+                      <div style={{ height: '250px' }} className="sm:h-80">
                         <Bar
                           data={chartData.equipements}
                           options={{
@@ -571,9 +804,9 @@ export default function AnalystHome() {
 
                 {/* Graphique des communes */}
                 {chartData && (
-                  <div className="bg-white p-6 rounded-lg shadow-lg mb-8">
-                    <h3 className="text-lg font-bold mb-4 text-center">Répartition par Commune - Toutes les Communes de Kinshasa</h3>
-                    <div style={{ height: '500px', width: '100%' }}>
+                  <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg mb-6 sm:mb-8">
+                    <h3 className="text-base sm:text-lg font-bold mb-3 sm:mb-4 text-center">Répartition par Commune - Toutes les Communes de Kinshasa</h3>
+                    <div style={{ height: '400px', width: '100%' }} className="sm:h-96">
                       <Bar
                         data={chartData.communes}
                         options={{
@@ -697,7 +930,7 @@ export default function AnalystHome() {
                 <div className="text-center">
                   <button
                     onClick={() => setView('enquetes')}
-                    className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold"
+                    className="bg-blue-600 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold text-sm sm:text-base"
                   >
                     Voir toutes les enquêtes
                   </button>
@@ -710,12 +943,12 @@ export default function AnalystHome() {
         {/* Page des enquêtes */}
         {view === 'enquetes' && (
           <div>
-            <h1 className="text-3xl font-bold mb-6 text-center">Liste des Enquêtes</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6 text-center">Liste des Enquêtes</h1>
             
             {/* Filtres */}
-            <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
-              <h4 className="text-lg font-semibold mb-4">Filtres de recherche</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg mb-4 sm:mb-6">
+              <h4 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Filtres de recherche</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <label className="block font-semibold mb-2 text-sm text-gray-700">Recherche par nom du ménage</label>
                   <input
@@ -738,31 +971,41 @@ export default function AnalystHome() {
                   </select>
                 </div>
               </div>
-              <div className="mt-4 flex justify-end">
-                <button
-                  onClick={() => {
-                    setSearch('');
-                    setCommuneFilter('');
-                  }}
-                  className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors"
-                >
-                  Réinitialiser les filtres
-                </button>
-              </div>
+                             <div className="mt-4 flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-0">
+                 <button
+                   onClick={() => {
+                     setSearch('');
+                     setCommuneFilter('');
+                   }}
+                   className="bg-gray-500 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors text-sm sm:text-base"
+                 >
+                   Réinitialiser les filtres
+                 </button>
+                 
+                 {/* Bouton d'export Excel */}
+                 <button
+                   onClick={handleExportEnquetes}
+                   disabled={records.length === 0}
+                   className="bg-green-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm sm:text-base"
+                 >
+                   <Download className="h-4 w-4" />
+                   Exporter en Excel
+                 </button>
+               </div>
             </div>
 
             {/* NOUVEAU : Statistiques par sexe des enquêtes filtrées */}
             {records.length > 0 && (
-              <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
-                <h4 className="text-lg font-semibold mb-4 text-center">Répartition par Sexe des Enquêtes Filtrées</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg mb-4 sm:mb-6">
+                <h4 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-center">Répartition par Sexe des Enquêtes Filtrées</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
                   {/* Hommes */}
-                  <div className="text-center p-4 bg-blue-50 rounded-lg">
-                    <div className="text-3xl font-bold text-blue-600 mb-2">
+                  <div className="text-center p-3 sm:p-4 bg-blue-50 rounded-lg">
+                    <div className="text-2xl sm:text-3xl font-bold text-blue-600 mb-2">
                       {records.filter(r => r.formData?.household?.sexe === 'Homme').length}
                     </div>
-                    <div className="text-blue-800 font-medium">Hommes</div>
-                    <div className="text-sm text-blue-600">
+                    <div className="text-blue-800 font-medium text-sm sm:text-base">Hommes</div>
+                    <div className="text-xs sm:text-sm text-blue-600">
                       {records.length > 0 
                         ? `${((records.filter(r => r.formData?.household?.sexe === 'Homme').length / records.length) * 100).toFixed(1)}%`
                         : '0%'}
@@ -770,12 +1013,12 @@ export default function AnalystHome() {
                   </div>
 
                   {/* Femmes */}
-                  <div className="text-center p-4 bg-pink-50 rounded-lg">
-                    <div className="text-3xl font-bold text-pink-600 mb-2">
+                  <div className="text-center p-3 sm:p-4 bg-pink-50 rounded-lg">
+                    <div className="text-2xl sm:text-3xl font-bold text-pink-600 mb-2">
                       {records.filter(r => r.formData?.household?.sexe === 'Femme').length}
                     </div>
-                    <div className="text-pink-800 font-medium">Femmes</div>
-                    <div className="text-sm text-pink-600">
+                    <div className="text-pink-800 font-medium text-sm sm:text-base">Femmes</div>
+                    <div className="text-xs sm:text-sm text-pink-600">
                       {records.length > 0 
                         ? `${((records.filter(r => r.formData?.household?.sexe === 'Femme').length / records.length) * 100).toFixed(1)}%`
                         : '0%'}
@@ -783,12 +1026,12 @@ export default function AnalystHome() {
                   </div>
 
                   {/* Autre */}
-                  <div className="text-center p-4 bg-green-50 rounded-lg">
-                    <div className="text-3xl font-bold text-green-600 mb-2">
+                  <div className="text-center p-3 sm:p-4 bg-green-50 rounded-lg">
+                    <div className="text-2xl sm:text-3xl font-bold text-green-600 mb-2">
                       {records.filter(r => r.formData?.household?.sexe === 'Autre').length}
                     </div>
-                    <div className="text-green-800 font-medium">Autre</div>
-                    <div className="text-sm text-green-600">
+                    <div className="text-green-800 font-medium text-sm sm:text-base">Autre</div>
+                    <div className="text-xs sm:text-sm text-green-600">
                       {records.length > 0 
                         ? `${((records.filter(r => r.formData?.household?.sexe === 'Autre').length / records.length) * 100).toFixed(1)}%`
                         : '0%'}
@@ -814,8 +1057,8 @@ export default function AnalystHome() {
             ) : (
               /* Liste des enquêtes */
               <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-                <div className="px-6 py-4 bg-gray-50 border-b">
-                  <h3 className="text-lg font-semibold text-gray-800">
+                <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-b">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-800">
                     Enquêtes trouvées : {records.length}
                   </h3>
                 </div>
@@ -828,47 +1071,58 @@ export default function AnalystHome() {
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Ménage
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Commune/Quartier
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            GPS
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Date de création
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Statut
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Actions
-                          </th>
-                        </tr>
+                                                 <tr>
+                           <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                             Ménage
+                           </th>
+                           <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                             Enquêteur
+                           </th>
+                           <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                             Commune/Quartier
+                           </th>
+                           <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                             GPS
+                           </th>
+                           <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                             Date de création
+                           </th>
+                           <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                             Statut
+                           </th>
+                           <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                             Actions
+                           </th>
+                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
                         {records.map((record, index) => (
-                          <tr key={record.id || index} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                              {record.formData?.household?.nomOuCode || 'N/A'}
-                              <br />
-                              <span className="text-xs text-gray-500">
-                                {record.formData?.household?.age || 'N/A'} • {record.formData?.household?.sexe || 'N/A'} • {record.formData?.household?.tailleMenage || 'N/A'} personnes
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {record.formData?.household?.communeQuartier || 'N/A'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                     <tr key={record.id || index} className="hover:bg-gray-50">
+                             <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                               {record.formData?.household?.nomOuCode || 'N/A'}
+                               <br />
+                               <span className="text-xs text-gray-500">
+                                 {record.formData?.household?.age || 'N/A'} • {record.formData?.household?.sexe || 'N/A'} • {record.formData?.household?.tailleMenage || 'N/A'} personnes
+                               </span>
+                             </td>
+                             <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-500">
+                               <div className="font-medium text-gray-900">
+                                 {record.authorName || 'N/A'}
+                               </div>
+                               <div className="text-xs text-gray-500">
+                                 ID: {record.authorId || 'N/A'}
+                               </div>
+                             </td>
+                             <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-500">
+                               {record.formData?.household?.communeQuartier || 'N/A'}
+                             </td>
+                            <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-500">
                               {record.formData?.household?.geolocalisation || 'N/A'}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-500">
                               {record.createdAt ? new Date(record.createdAt).toLocaleDateString('fr-FR') : 'N/A'}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
+                            <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
                               <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                                 record.status === 'VALIDATED' ? 'bg-green-100 text-green-800' :
                                 record.status === 'SENT' ? 'bg-blue-100 text-blue-800' :
@@ -885,13 +1139,13 @@ export default function AnalystHome() {
                                  'Synchronisé'}
                               </span>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm font-medium">
                               <button
                                 onClick={() => {
                                   setSelectedRecord(record);
                                   setShowDetailModal(true);
                                 }}
-                                className="text-blue-600 hover:text-blue-900 font-semibold"
+                                className="text-blue-600 hover:text-blue-900 font-semibold text-xs sm:text-sm"
                               >
                                 Voir détails
                               </button>
@@ -912,13 +1166,25 @@ export default function AnalystHome() {
           <div>
             <h1 className="text-3xl font-bold mb-6 text-center">Statistiques Détaillées - Toutes les Communes</h1>
             
-            {/* Message d'information */}
-            <div className="max-w-4xl mx-auto bg-blue-50 rounded-xl shadow p-6 mb-8">
-              <p className="text-lg text-gray-800 mb-4 text-center">
-                Tableaux récapitulatifs détaillés des données collectées dans toutes les communes de Kinshasa.<br/>
-                Visualisez les statistiques numériques précises pour chaque zone géographique.
-              </p>
-            </div>
+                         {/* Message d'information et bouton d'export */}
+             <div className="max-w-4xl mx-auto bg-blue-50 rounded-xl shadow p-6 mb-8">
+               <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                 <p className="text-lg text-gray-800 text-center md:text-left">
+                   Tableaux récapitulatifs détaillés des données collectées dans toutes les communes de Kinshasa.<br/>
+                   Visualisez les statistiques numériques précises pour chaque zone géographique.
+                 </p>
+                 
+                                    {/* Bouton d'export Excel des statistiques */}
+                   <button
+                     onClick={handleExportStats}
+                     disabled={!cookingStats}
+                     className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-semibold"
+                   >
+                     <Download className="h-5 w-5" />
+                     Exporter Statistiques en Excel
+                   </button>
+               </div>
+             </div>
 
             {/* Chargement */}
             {dashboardLoading ? (
@@ -1282,18 +1548,27 @@ export default function AnalystHome() {
                           </div>
                         </div>
 
-                        {/* Résumé total */}
-                        <div className="bg-gray-50 p-4 rounded-lg border-2 border-gray-200">
-                          <div className="text-center">
-                            <div className="text-lg font-semibold text-gray-700 mb-2">Total des Enquêtes</div>
-                            <div className="text-3xl font-bold text-gray-800">
-                              {cookingStats.totalEnquetes}
-                            </div>
-                            <div className="text-sm text-gray-600 mt-1">
-                              Répartition par sexe des personnes enquêtées
-                            </div>
-                          </div>
-                        </div>
+                                                 {/* Résumé total et bouton d'export */}
+                         <div className="bg-gray-50 p-4 rounded-lg border-2 border-gray-200">
+                           <div className="text-center">
+                             <div className="text-lg font-semibold text-gray-700 mb-2">Total des Enquêtes</div>
+                             <div className="text-3xl font-bold text-gray-800">
+                               {cookingStats.totalEnquetes}
+                             </div>
+                             <div className="text-sm text-gray-600 mt-1">
+                               Répartition par sexe des personnes enquêtées
+                             </div>
+                             
+                             {/* Bouton d'export Excel des statistiques par sexe */}
+                             <button
+                               onClick={() => handleExportStatsSexe('statistiques_sexe_analyste')}
+                               className="mt-3 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 mx-auto"
+                             >
+                               <Download className="h-4 w-4" />
+                               Exporter Stats Sexe
+                             </button>
+                           </div>
+                         </div>
                       </div>
                     </div>
                   </div>
@@ -1302,7 +1577,23 @@ export default function AnalystHome() {
             )}
           </div>
         )}
+
+        {/* Page des paramètres */}
+        {view === 'parametres' && (
+          <div>
+            <h1 className="text-3xl font-bold mb-6 text-center">Paramètres du Compte Analyste</h1>
+            <Settings />
+          </div>
+        )}
       </main>
+
+      {/* Notification d'export */}
+      <ExportNotification
+        show={exportNotification.isVisible}
+        message={exportNotification.message}
+        type={exportNotification.isSuccess ? 'success' : 'error'}
+        onClose={closeExportNotification}
+      />
 
       {/* Modal de détails de l'enquête */}
       {showDetailModal && selectedRecord && (
@@ -1488,6 +1779,8 @@ export default function AnalystHome() {
           </div>
         </div>
       )}
+      
+      <PNUDFooter />
     </div>
   );
 } 

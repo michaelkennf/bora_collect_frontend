@@ -39,6 +39,15 @@ interface AdoptionData {
   pretAcheterGPL: 'Oui' | 'Non';
 }
 
+// Interface pour les enquêtes
+interface Survey {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  publishedAt: string;
+}
+
 // Types pour le formulaire principal
 interface FormState {
   formData: {
@@ -477,9 +486,15 @@ export default function SchoolForm() {
     setIsSubmitting(true);
 
     try {
+      // ÉTAPE 0: VALIDATION OBLIGATOIRE (même hors ligne)
+      if (!validate()) {
+        setIsSubmitting(false);
+        return;
+      }
+
       // ÉTAPE 1: TOUJOURS sauvegarder en local d'abord (sécurité)
       const localId = await localStorageService.saveRecord(form);
-      console.log('✅ Enregistrement sauvegardé en local avec ID:', localId);
+      console.log('✅ Enregistrement système sauvegardé en local avec ID:', localId);
 
       // ÉTAPE 2: Vérifier la connectivité
       if (!isOnline) {
@@ -515,9 +530,9 @@ export default function SchoolForm() {
         return;
       }
 
-      // ÉTAPE 4: Tentative d'envoi au serveur
-      console.log('🌐 Tentative d\'envoi du formulaire au serveur...');
-      const response = await fetch('http://localhost:3000/records', {
+      // ÉTAPE 4: Tentative d'envoi au serveur (endpoint système)
+      console.log('🌐 Tentative d\'envoi du formulaire système au serveur...');
+      const response = await fetch('http://localhost:3000/records/system', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -598,22 +613,22 @@ export default function SchoolForm() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-lg mt-8">
+    <div className="max-w-4xl mx-auto bg-white p-4 sm:p-8 rounded-xl shadow-lg mt-4 sm:mt-8 mx-4">
       <form onSubmit={handleSubmit}>
-        <h2 className="text-2xl font-bold text-center mb-6">SOLUTIONS DE CUISSON PROPRE</h2>
-        <p className="text-center text-gray-600 mb-6">Enquête sur l'adoption des solutions de cuisson propre en RDC</p>
+        <h2 className="text-xl sm:text-2xl font-bold text-center mb-4 sm:mb-6">SOLUTIONS DE CUISSON PROPRE</h2>
+        <p className="text-center text-gray-600 mb-4 sm:mb-6 text-sm sm:text-base">Enquête sur l'adoption des solutions de cuisson propre en RDC</p>
         
-        {/* Bannière d'information GPS */}
-        <div className="mb-6 p-4 bg-blue-100 border border-blue-300 rounded-lg">
-          <div className="flex items-start gap-3">
+        {/* Bannière d'information GPS - Responsive */}
+        <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-blue-100 border border-blue-300 rounded-lg">
+          <div className="flex flex-col sm:flex-row items-start gap-3">
             <div className="flex-shrink-0">
-              <svg className="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
             <div className="flex-1">
-              <h4 className="font-semibold text-blue-800 mb-2">📍 Géolocalisation GPS Obligatoire (Fonctionne Hors Ligne)</h4>
-              <p className="text-blue-700 text-sm mb-2">
+              <h4 className="font-semibold text-blue-800 mb-2 text-sm sm:text-base">📍 Géolocalisation GPS Obligatoire (Fonctionne Hors Ligne)</h4>
+              <p className="text-blue-700 text-xs sm:text-sm mb-2">
                 <strong>✅ IMPORTANT :</strong> La capture GPS fonctionne <strong>SANS INTERNET</strong> ! 
                 Le GPS utilise le récepteur intégré de votre appareil et ne nécessite aucune connexion.
               </p>
@@ -633,38 +648,38 @@ export default function SchoolForm() {
           </div>
         </div>
         
-        {/* Section 1: Identification du ménage */}
-        <div className="mb-8 bg-blue-50 p-6 rounded-xl">
-          <h3 className="text-xl font-bold mb-4 text-blue-800">1. Identification du ménage</h3>
+        {/* Section 1: Identification du ménage - Responsive */}
+        <div className="mb-6 sm:mb-8 bg-blue-50 p-4 sm:p-6 rounded-xl">
+          <h3 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4 text-blue-800">1. Identification du ménage</h3>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
-              <label className="block font-semibold mb-2">Nom ou code du ménage *</label>
+              <label className="block font-semibold mb-2 text-sm sm:text-base">Nom ou code du ménage *</label>
               <input
                 type="text"
                 name="nomOuCode"
                 value={form.formData.household.nomOuCode}
                 onChange={handleHouseholdChange}
-                className="w-full border rounded p-2"
+                className="w-full border rounded p-2 text-sm sm:text-base"
                 required
               />
             </div>
             
             <div>
-              <label className="block font-semibold mb-2">Age *</label>
+              <label className="block font-semibold mb-2 text-sm sm:text-base">Age *</label>
               <input
                 type="text"
                 name="age"
                 value={form.formData.household.age}
                 onChange={handleHouseholdChange}
-                className="w-full border rounded p-2"
+                className="w-full border rounded p-2 text-sm sm:text-base"
                 required
               />
             </div>
             
             <div>
-              <label className="block font-semibold mb-2">Sexe *</label>
-              <div className="flex gap-4">
+              <label className="block font-semibold mb-2 text-sm sm:text-base">Sexe *</label>
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
                 <label className="flex items-center gap-2">
                   <input
                     type="radio"
@@ -673,7 +688,7 @@ export default function SchoolForm() {
                     checked={form.formData.household.sexe === 'Homme'}
                     onChange={handleHouseholdChange}
                   />
-                  Homme
+                  <span className="text-sm sm:text-base">Homme</span>
                 </label>
                 <label className="flex items-center gap-2">
                   <input
@@ -683,7 +698,7 @@ export default function SchoolForm() {
                     checked={form.formData.household.sexe === 'Femme'}
                     onChange={handleHouseholdChange}
                   />
-                  Femme
+                  <span className="text-sm sm:text-base">Femme</span>
                 </label>
                 <label className="flex items-center gap-2">
                   <input
@@ -693,31 +708,31 @@ export default function SchoolForm() {
                     checked={form.formData.household.sexe === 'Autre'}
                     onChange={handleHouseholdChange}
                   />
-                  Autre
+                  <span className="text-sm sm:text-base">Autre</span>
                 </label>
               </div>
             </div>
             
             <div>
-              <label className="block font-semibold mb-2">Taille du ménage *</label>
+              <label className="block font-semibold mb-2 text-sm sm:text-base">Taille du ménage *</label>
               <input
                 type="text"
                 name="tailleMenage"
                 value={form.formData.household.tailleMenage}
                 onChange={handleHouseholdChange}
-                className="w-full border rounded p-2"
+                className="w-full border rounded p-2 text-sm sm:text-base"
                 placeholder="ex: 5-8 personnes"
                 required
               />
             </div>
             
             <div>
-              <label className="block font-semibold mb-2">Commune/Quartier *</label>
+              <label className="block font-semibold mb-2 text-sm sm:text-base">Commune/Quartier *</label>
               <select
                 name="communeQuartier"
                 value={form.formData.household.communeQuartier}
                 onChange={handleHouseholdChange}
-                className="w-full border rounded p-2"
+                className="w-full border rounded p-2 text-sm sm:text-base"
                 required
               >
                 <option value="">Sélectionnez une commune</option>
@@ -748,15 +763,15 @@ export default function SchoolForm() {
               </select>
             </div>
             
-            <div className="md:col-span-2">
-              <label className="block font-semibold mb-2">Géolocalisation GPS *</label>
-              <div className="flex gap-2">
+            <div className="sm:col-span-2">
+              <label className="block font-semibold mb-2 text-sm sm:text-base">Géolocalisation GPS *</label>
+              <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="text"
                   name="geolocalisation"
                   value={form.formData.household.geolocalisation}
                   onChange={handleHouseholdChange}
-                  className="flex-1 border rounded p-2"
+                  className="flex-1 border rounded p-2 text-sm sm:text-base"
                   placeholder="Cliquez sur 'Capturer ma position GPS' pour obtenir automatiquement vos coordonnées"
                   readOnly
                   required
@@ -765,7 +780,7 @@ export default function SchoolForm() {
                   type="button"
                   onClick={captureGeolocation}
                   disabled={isSubmitting || geolocation.isCapturing}
-                  className={`px-4 py-2 rounded transition-colors ${
+                  className={`px-3 sm:px-4 py-2 rounded transition-colors text-sm sm:text-base whitespace-nowrap ${
                     geolocation.isCapturing 
                       ? 'bg-yellow-600 text-white cursor-wait' 
                       : 'bg-blue-600 text-white hover:bg-blue-700'
@@ -785,14 +800,14 @@ export default function SchoolForm() {
                 </button>
               </div>
               
-              {/* Affichage du statut GPS */}
+              {/* Affichage du statut GPS - Responsive */}
               <div className="mt-2 space-y-2">
                 {/* Coordonnées capturées */}
                 {geolocation.latitude && geolocation.longitude && (
-                  <div className="flex items-center gap-2 text-green-600 text-sm">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 text-green-600 text-xs sm:text-sm">
                     <span>✅</span>
                     <span className="font-medium">Position GPS capturée :</span>
-                    <span className="font-mono bg-green-100 px-2 py-1 rounded">
+                    <span className="font-mono bg-green-100 px-2 py-1 rounded text-xs">
                       {geolocation.latitude.toFixed(6)}, {geolocation.longitude.toFixed(6)}
                     </span>
                   </div>
@@ -800,7 +815,7 @@ export default function SchoolForm() {
                 
                 {/* Précision GPS */}
                 {geolocation.accuracy && (
-                  <div className="flex items-center gap-2 text-blue-600 text-sm">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 text-blue-600 text-xs sm:text-sm">
                     <span>📏</span>
                     <span>Précision : {Math.round(geolocation.accuracy)} mètres</span>
                   </div>
@@ -808,7 +823,7 @@ export default function SchoolForm() {
                 
                 {/* Heure de capture */}
                 {geolocation.timestamp && (
-                  <div className="flex items-center gap-2 text-gray-600 text-sm">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 text-gray-600 text-xs sm:text-sm">
                     <span>🕐</span>
                     <span>Capturé le {new Date(geolocation.timestamp).toLocaleDateString('fr-FR')} à {new Date(geolocation.timestamp).toLocaleTimeString('fr-FR')}</span>
                   </div>
@@ -816,17 +831,17 @@ export default function SchoolForm() {
                 
                 {/* Erreur GPS */}
                 {geolocation.error && (
-                  <div className="flex items-center gap-2 text-red-600 text-sm">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 text-red-600 text-xs sm:text-sm">
                     <span>❌</span>
                     <span>{geolocation.error}</span>
                   </div>
                 )}
                 
                 {/* Indicateur de disponibilité GPS */}
-                <div className="flex items-center gap-2 text-xs text-gray-500">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 text-xs text-gray-500">
                   <span>📡</span>
                   <span>GPS disponible : {navigator.geolocation ? 'Oui' : 'Non'}</span>
-                  <span>•</span>
+                  <span className="hidden sm:inline">•</span>
                   <span>Mode hors ligne : {!navigator.onLine ? 'Oui' : 'Non'}</span>
                 </div>
               </div>
@@ -834,13 +849,13 @@ export default function SchoolForm() {
           </div>
         </div>
 
-        {/* Section 2: Mode de cuisson actuelle */}
-        <div className="mb-8 bg-green-50 p-6 rounded-xl">
-          <h3 className="text-xl font-bold mb-4 text-green-800">2. Mode de cuisson actuelle</h3>
+        {/* Section 2: Mode de cuisson actuelle - Responsive */}
+        <div className="mb-6 sm:mb-8 bg-green-50 p-4 sm:p-6 rounded-xl">
+          <h3 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4 text-green-800">2. Mode de cuisson actuelle</h3>
           
-          <div className="mb-6">
-            <h4 className="font-semibold mb-3">2.1.1. Quels types de combustibles utilisez-vous principalement pour la cuisson ? *</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="mb-4 sm:mb-6">
+            <h4 className="font-semibold mb-3 text-sm sm:text-base">2.1.1. Quels types de combustibles utilisez-vous principalement pour la cuisson ? *</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
               {combustibles.map(combustible => (
                 <label key={combustible} className="flex items-center gap-2">
                   <input
@@ -848,25 +863,25 @@ export default function SchoolForm() {
                     checked={form.formData.cooking.combustibles.includes(combustible)}
                     onChange={(e) => handleCombustiblesChange(combustible, e.target.checked)}
                   />
-                  {combustible}
+                  <span className="text-sm sm:text-base">{combustible}</span>
                 </label>
               ))}
             </div>
             <div className="mt-3">
-              <label className="block font-semibold mb-2">Autres (précisez):</label>
+              <label className="block font-semibold mb-2 text-sm sm:text-base">Autres (précisez):</label>
               <input
                 type="text"
                 value={form.formData.cooking.autresCombustibles || ''}
                 onChange={(e) => handleOtherChange('cooking', 'autresCombustibles', e.target.value)}
-                className="w-full border rounded p-2"
+                className="w-full border rounded p-2 text-sm sm:text-base"
                 placeholder="Précisez les autres combustibles"
               />
             </div>
           </div>
           
           <div>
-            <h4 className="font-semibold mb-3">2.1.2. Quel est l'équipement de cuisson actuel ? (Plusieurs choix possibles) *</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <h4 className="font-semibold mb-3 text-sm sm:text-base">2.1.2. Quel est l'équipement de cuisson actuel ? (Plusieurs choix possibles) *</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
               {equipements.map(equipement => (
                 <label key={equipement} className="flex items-center gap-2">
                   <input
@@ -874,30 +889,30 @@ export default function SchoolForm() {
                     checked={form.formData.cooking.equipements.includes(equipement)}
                     onChange={(e) => handleEquipementsChange(equipement, e.target.checked)}
                   />
-                  {equipement}
+                  <span className="text-sm sm:text-base">{equipement}</span>
                 </label>
               ))}
             </div>
             <div className="mt-3">
-              <label className="block font-semibold mb-2">Autres (précisez):</label>
+              <label className="block font-semibold mb-2 text-sm sm:text-base">Autres (précisez):</label>
               <input
                 type="text"
                 value={form.formData.cooking.autresEquipements || ''}
                 onChange={(e) => handleOtherChange('cooking', 'autresEquipements', e.target.value)}
-                className="w-full border rounded p-2"
+                className="w-full border rounded p-2 text-sm sm:text-base"
                 placeholder="Précisez les autres équipements"
               />
             </div>
           </div>
         </div>
 
-        {/* Section 3: Connaissance des solutions de cuisson propres */}
-        <div className="mb-8 bg-yellow-50 p-6 rounded-xl">
-          <h3 className="text-xl font-bold mb-4 text-yellow-800">3. Connaissance des solutions de cuisson propres</h3>
+        {/* Section 3: Connaissance des solutions de cuisson propres - Responsive */}
+        <div className="mb-6 sm:mb-8 bg-yellow-50 p-4 sm:p-6 rounded-xl">
+          <h3 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4 text-yellow-800">3. Connaissance des solutions de cuisson propres</h3>
           
-          <div className="mb-6">
-            <h4 className="font-semibold mb-3">3.1. Avez-vous déjà entendu parler des solutions de cuisson dites « propres » ?</h4>
-            <div className="flex gap-4 mb-3">
+          <div className="mb-4 sm:mb-6">
+            <h4 className="font-semibold mb-3 text-sm sm:text-base">3.1. Avez-vous déjà entendu parler des solutions de cuisson dites « propres » ?</h4>
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-3">
               <label className="flex items-center gap-2">
                 <input
                   type="radio"
@@ -906,7 +921,7 @@ export default function SchoolForm() {
                   checked={form.formData.knowledge.connaissanceSolutions === 'Oui'}
                   onChange={(e) => handleOtherChange('knowledge', 'connaissanceSolutions', e.target.value)}
                 />
-                Oui
+                <span className="text-sm sm:text-base">Oui</span>
               </label>
               <label className="flex items-center gap-2">
                 <input
@@ -916,17 +931,17 @@ export default function SchoolForm() {
                   checked={form.formData.knowledge.connaissanceSolutions === 'Non'}
                   onChange={(e) => handleOtherChange('knowledge', 'connaissanceSolutions', e.target.value)}
                 />
-                Non
+                <span className="text-sm sm:text-base">Non</span>
               </label>
             </div>
             {form.formData.knowledge.connaissanceSolutions === 'Oui' && (
               <div>
-                <label className="block font-semibold mb-2">Si oui, lesquelles ?</label>
+                <label className="block font-semibold mb-2 text-sm sm:text-base">Si oui, lesquelles ?</label>
                 <input
                   type="text"
                   value={form.formData.knowledge.solutionsConnaissances || ''}
                   onChange={(e) => handleOtherChange('knowledge', 'solutionsConnaissances', e.target.value)}
-                  className="w-full border rounded p-2"
+                  className="w-full border rounded p-2 text-sm sm:text-base"
                   placeholder="Précisez les solutions connues"
                 />
               </div>
@@ -934,81 +949,83 @@ export default function SchoolForm() {
           </div>
           
           <div>
-            <h4 className="font-semibold mb-3">3.2. Selon vous, quels sont les avantages potentiels des solutions de cuisson propre ? (plusieurs réponses possibles)</h4>
-            <div className="grid grid-cols-1 gap-3">
+            <h4 className="font-semibold mb-3 text-sm sm:text-base">3.2. Selon vous, quels sont les avantages potentiels des solutions de cuisson propre ? (plusieurs réponses possibles)</h4>
+            <div className="grid grid-cols-1 gap-2 sm:gap-3">
               {avantages.map(avantage => (
-                <label key={avantage} className="flex items-center gap-2">
+                <label key={avantage} className="flex items-start gap-2">
                   <input
                     type="checkbox"
                     checked={form.formData.knowledge.avantages.includes(avantage)}
                     onChange={(e) => handleAvantagesChange(avantage, e.target.checked)}
+                    className="mt-1"
                   />
-                  {avantage}
+                  <span className="text-sm sm:text-base">{avantage}</span>
                 </label>
               ))}
             </div>
             <div className="mt-3">
-              <label className="block font-semibold mb-2">Autres :</label>
+              <label className="block font-semibold mb-2 text-sm sm:text-base">Autres :</label>
               <input
                 type="text"
                 value={form.formData.knowledge.autresAvantages || ''}
                 onChange={(e) => handleOtherChange('knowledge', 'autresAvantages', e.target.value)}
-                className="w-full border rounded p-2"
+                className="w-full border rounded p-2 text-sm sm:text-base"
                 placeholder="Précisez les autres avantages"
               />
             </div>
           </div>
         </div>
 
-        {/* Section 4: Perceptions et contraintes */}
-        <div className="mb-8 bg-red-50 p-6 rounded-xl">
-          <h3 className="text-xl font-bold mb-4 text-red-800">4. Perceptions et contraintes</h3>
+        {/* Section 4: Perceptions et contraintes - Responsive */}
+        <div className="mb-6 sm:mb-8 bg-red-50 p-4 sm:p-6 rounded-xl">
+          <h3 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4 text-red-800">4. Perceptions et contraintes</h3>
           
-          <div className="mb-6">
-            <h4 className="font-semibold mb-3">4.1. Quels sont les principaux obstacles à l'adoption d'une solution de cuisson propre dans votre foyer ? (plusieurs réponses possibles)</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="mb-4 sm:mb-6">
+            <h4 className="font-semibold mb-3 text-sm sm:text-base">4.1. Quels sont les principaux obstacles à l'adoption d'une solution de cuisson propre dans votre foyer ? (plusieurs réponses possibles)</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
               {obstacles.map(obstacle => (
-                <label key={obstacle} className="flex items-center gap-2">
+                <label key={obstacle} className="flex items-start gap-2">
                   <input
                     type="checkbox"
                     checked={form.formData.constraints.obstacles.includes(obstacle)}
                     onChange={(e) => handleObstaclesChange(obstacle, e.target.checked)}
+                    className="mt-1"
                   />
-                  {obstacle}
+                  <span className="text-sm sm:text-base">{obstacle}</span>
                 </label>
               ))}
             </div>
             <div className="mt-3">
-              <label className="block font-semibold mb-2">Autres :</label>
+              <label className="block font-semibold mb-2 text-sm sm:text-base">Autres :</label>
               <input
                 type="text"
                 value={form.formData.constraints.autresObstacles || ''}
                 onChange={(e) => handleOtherChange('constraints', 'autresObstacles', e.target.value)}
-                className="w-full border rounded p-2"
+                className="w-full border rounded p-2 text-sm sm:text-base"
                 placeholder="Précisez les autres obstacles"
               />
             </div>
           </div>
           
           <div>
-            <label className="block font-semibold mb-2">Je suis prêt(e) à :</label>
+            <label className="block font-semibold mb-2 text-sm sm:text-base">Je suis prêt(e) à :</label>
             <input
               type="text"
               value={form.formData.constraints.pretA || ''}
               onChange={(e) => handleOtherChange('constraints', 'pretA', e.target.value)}
-              className="w-full border rounded p-2"
+              className="w-full border rounded p-2 text-sm sm:text-base"
               placeholder="Précisez ce que vous êtes prêt(e) à faire"
             />
           </div>
         </div>
 
-        {/* Section 5: Intention d'adoption */}
-        <div className="mb-8 bg-purple-50 p-6 rounded-xl">
-          <h3 className="text-xl font-bold mb-4 text-purple-800">5. Intention d'adoption</h3>
+        {/* Section 5: Intention d'adoption - Responsive */}
+        <div className="mb-6 sm:mb-8 bg-purple-50 p-4 sm:p-6 rounded-xl">
+          <h3 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4 text-purple-800">5. Intention d'adoption</h3>
           
-          <div className="mb-6">
-            <h4 className="font-semibold mb-3">5.1. Seriez-vous prêt(e) à acheter et remplacer votre mode actuel par une solution propre (soit foyer amélioré) ?</h4>
-            <div className="flex gap-4">
+          <div className="mb-4 sm:mb-6">
+            <h4 className="font-semibold mb-3 text-sm sm:text-base">5.1. Seriez-vous prêt(e) à acheter et remplacer votre mode actuel par une solution propre (soit foyer amélioré) ?</h4>
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
               <label className="flex items-center gap-2">
                 <input
                   type="radio"
@@ -1017,7 +1034,7 @@ export default function SchoolForm() {
                   checked={form.formData.adoption.pretAcheterFoyer === 'Oui'}
                   onChange={(e) => handleOtherChange('adoption', 'pretAcheterFoyer', e.target.value)}
                 />
-                Oui
+                <span className="text-sm sm:text-base">Oui</span>
               </label>
               <label className="flex items-center gap-2">
                 <input
@@ -1027,14 +1044,14 @@ export default function SchoolForm() {
                   checked={form.formData.adoption.pretAcheterFoyer === 'Non'}
                   onChange={(e) => handleOtherChange('adoption', 'pretAcheterFoyer', e.target.value)}
                 />
-                Non
+                <span className="text-sm sm:text-base">Non</span>
               </label>
             </div>
           </div>
           
           <div>
-            <h4 className="font-semibold mb-3">5.2. Seriez-vous prêt(e) à acheter/utiliser un réchaud GPL dans les 6 prochains mois ?</h4>
-            <div className="flex gap-4">
+            <h4 className="font-semibold mb-3 text-sm sm:text-base">5.2. Seriez-vous prêt(e) à acheter/utiliser un réchaud GPL dans les 6 prochains mois ?</h4>
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
               <label className="flex items-center gap-2">
                 <input
                   type="radio"
@@ -1043,7 +1060,7 @@ export default function SchoolForm() {
                   checked={form.formData.adoption.pretAcheterGPL === 'Oui'}
                   onChange={(e) => handleOtherChange('adoption', 'pretAcheterGPL', e.target.value)}
                 />
-                Oui
+                <span className="text-sm sm:text-base">Oui</span>
               </label>
               <label className="flex items-center gap-2">
                 <input
@@ -1053,13 +1070,13 @@ export default function SchoolForm() {
                   checked={form.formData.adoption.pretAcheterGPL === 'Non'}
                   onChange={(e) => handleOtherChange('adoption', 'pretAcheterGPL', e.target.value)}
                 />
-                Non
+                <span className="text-sm sm:text-base">Non</span>
               </label>
             </div>
           </div>
         </div>
 
-        <button type="submit" className="w-full py-3 rounded-xl text-lg font-bold shadow-lg bg-blue-600 hover:bg-blue-700 text-white" disabled={isSubmitting}>
+        <button type="submit" className="w-full py-3 rounded-xl text-base sm:text-lg font-bold shadow-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors" disabled={isSubmitting}>
           {isSubmitting ? 'Enregistrement...' : 'Soumettre'}
         </button>
       </form>

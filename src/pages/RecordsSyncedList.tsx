@@ -11,7 +11,18 @@ export default function RecordsSyncedList() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('http://localhost:3000/records?status=SENT', {
+      // Déterminer l'URL selon le rôle
+      const user = localStorage.getItem('user');
+      let apiUrl = 'http://localhost:3000/records?status=SENT';
+      
+      if (user) {
+        const userData = JSON.parse(user);
+        if (userData.role === 'CONTROLLER') {
+          apiUrl = 'http://localhost:3000/records/controller?status=SENT';
+        }
+      }
+      
+      const res = await fetch(apiUrl, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) throw new Error('Erreur lors du chargement');

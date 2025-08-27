@@ -38,8 +38,8 @@ export default function ControllerDashboardCharts({ personalStats }: ControllerD
         const token = localStorage.getItem('token');
         if (!token) return;
 
-        // Récupérer les statistiques des enregistrements
-        const recordsResponse = await fetch('http://localhost:3000/records', {
+        // Récupérer les statistiques des enregistrements (route spécifique contrôleur)
+        const recordsResponse = await fetch('http://localhost:3000/records/controller', {
           headers: { 
             Authorization: `Bearer ${token}`,
             'Cache-Control': 'no-cache',

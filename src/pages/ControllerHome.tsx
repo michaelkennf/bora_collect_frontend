@@ -4,6 +4,9 @@ import logo2 from '../assets/images/logo2.jpg';
 import ControllerDashboardCharts from '../components/ControllerDashboardCharts';
 import SchoolForm from './SchoolForm';
 import RecordsList from './RecordsList';
+import ControllerAvailableSurveys from './ControllerAvailableSurveys';
+import Settings from './Settings';
+import PNUDFooter from '../components/PNUDFooter';
 
 export function DashboardController({ setView }: { setView: (view: string) => void }) {
   const [user, setUser] = useState<any>(null);
@@ -23,7 +26,7 @@ export function DashboardController({ setView }: { setView: (view: string) => vo
       }
 
       // Forcer la récupération des vraies données sans cache
-      const res = await fetch('http://localhost:3000/records', {
+      const res = await fetch('http://localhost:3000/records/controller', {
         headers: { 
           Authorization: `Bearer ${token}`,
           'Cache-Control': 'no-cache',
@@ -101,85 +104,98 @@ export function DashboardController({ setView }: { setView: (view: string) => vo
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-center mb-6">Tableau de bord Contrôleur - FikiriCollect</h1>
-        
-        {/* Informations utilisateur */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold text-blue-900">Bienvenue, {user.name} !</h2>
-              <p className="text-blue-700">Rôle: Contrôleur - Enregistrement des enquêtes</p>
+    <div className="space-y-6">
+      {/* En-tête avec informations utilisateur */}
+      <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">
+              Bienvenue, {user.name || 'Contrôleur'} !
+            </h2>
+            <p className="text-gray-600 text-sm sm:text-base">
+              Interface de contrôle et de collecte de données
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-lg">
+              {user.name?.[0]?.toUpperCase() || 'C'}
             </div>
             <div className="text-right">
-              <p className="text-sm text-blue-600">Dernière connexion: {new Date().toLocaleDateString('fr-FR')}</p>
+              <div className="font-semibold text-gray-800">{user.name || 'Contrôleur'}</div>
+              <div className="text-sm text-gray-500">{user.email}</div>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Statistiques personnelles */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-lg shadow-lg text-center">
-            <div className="text-4xl font-bold text-blue-600 mb-2">
-              {personalStats?.totalRecords || 0}
-            </div>
-            <div className="text-gray-600">Total des enquêtes</div>
+      {/* Statistiques personnelles */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 text-center">
+          <div className="text-2xl sm:text-3xl font-bold text-blue-600 mb-2">
+            {statsLoading ? '...' : personalStats?.totalRecords || 0}
           </div>
-          <div className="bg-white p-6 rounded-lg shadow-lg text-center">
-            <div className="text-4xl font-bold text-green-600 mb-2">
-              {personalStats?.syncedRecords || 0}
-            </div>
-            <div className="text-gray-600">Enquêtes synchronisées</div>
-          </div>
+          <div className="text-sm sm:text-base text-gray-600">Total des enquêtes</div>
         </div>
-
-        {/* Graphiques */}
-        {statsLoading ? (
-          <div className="text-center py-8">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className="mt-2 text-gray-600">Chargement des graphiques...</p>
+        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 text-center">
+          <div className="text-2xl sm:text-3xl font-bold text-green-600 mb-2">
+            {statsLoading ? '...' : personalStats?.syncedRecords || 0}
           </div>
-        ) : (
+          <div className="text-sm sm:text-base text-gray-600">Enquêtes synchronisées</div>
+        </div>
+      </div>
+
+      {/* Graphiques */}
+      {!statsLoading && personalStats && (
+        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
+          <h3 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4">Statistiques personnelles</h3>
           <ControllerDashboardCharts personalStats={personalStats} />
-        )}
+        </div>
+      )}
 
-        {/* Informations sur le système */}
-        <div className="max-w-4xl mx-auto bg-blue-50 rounded-xl shadow p-6 mb-8">
-          <p className="text-lg text-gray-800 mb-4 text-center">
-            Bienvenue sur le tableau de bord contrôleur de FikiriCollect.<br/>
-            Ici, vous pouvez :
-          </p>
-          <ul className="list-disc ml-8 text-gray-700 mb-4">
-            <li>Créer de nouvelles enquêtes sur les solutions de cuisson propre</li>
-            <li>Consulter vos statistiques personnelles</li>
-            <li>Visualiser l'évolution de vos enquêtes</li>
-            <li>Suivre la synchronisation de vos données</li>
-          </ul>
-          <div className="text-center">
-            <button
-              onClick={() => setView('form')}
-              className="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors text-lg font-semibold"
-            >
-              Commencer une nouvelle enquête
-            </button>
-          </div>
+      {/* Actions rapides */}
+      <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
+        <h3 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4">Actions rapides</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <button
+            onClick={() => setView('formulaire')}
+            className="bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-lg text-center transition-colors"
+          >
+            <div className="text-2xl mb-2">📝</div>
+            <div className="font-semibold">Nouvelle enquête</div>
+            <div className="text-sm opacity-90">Créer un formulaire</div>
+          </button>
+          <button
+            onClick={() => setView('enquetes')}
+            className="bg-green-600 hover:bg-green-700 text-white p-4 rounded-lg text-center transition-colors"
+          >
+            <div className="text-2xl mb-2">📊</div>
+            <div className="font-semibold">Mes enquêtes</div>
+            <div className="text-sm opacity-90">Voir mes données</div>
+          </button>
+          <button
+            onClick={() => setView('surveys')}
+            className="bg-purple-600 hover:bg-purple-700 text-white p-4 rounded-lg text-center transition-colors"
+          >
+            <div className="text-2xl mb-2">🔍</div>
+            <div className="font-semibold">Enquêtes disponibles</div>
+            <div className="text-sm opacity-90">Postuler aux enquêtes</div>
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
-export default function ControllerLayout() {
+export default function ControllerHome() {
   const [user, setUser] = useState<any>(null);
-  const location = useLocation();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
-  const [view, setView] = useState('dashboard'); // 'dashboard', 'form', 'records'
+  const [view, setView] = useState('dashboard'); // 'dashboard', 'formulaire', 'enquetes', 'surveys', 'parametres'
 
   useEffect(() => {
     const u = localStorage.getItem('user');
     if (u) setUser(JSON.parse(u));
-  }, [location.pathname]);
+  }, []);
 
   useEffect(() => {
     const handler = () => {
@@ -190,59 +206,158 @@ export default function ControllerLayout() {
     return () => window.removeEventListener('userProfileUpdated', handler);
   }, []);
 
+  // Fermer le menu mobile lors du changement de vue
+  const handleViewChange = (newView: string) => {
+    setView(newView);
+    setIsMobileMenuOpen(false);
+  };
+
   if (!user) {
     return (
       <div className="text-center py-8">
         <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <p className="mt-2 text-gray-600">Chargement...</p>
+        <p className="mt-2 text-gray-600">Chargement de l'utilisateur...</p>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <nav className="bg-blue-900 text-white p-4 flex justify-between items-center">
-        <div className="flex items-center gap-2 min-w-0">
-          <img src={logo2} alt="Logo 2" className="h-12 w-auto object-contain bg-white rounded shadow" />
-          <span className="font-bold text-lg ml-2 truncate" style={{maxWidth: 120}}>Contrôleur</span>
-        </div>
-        <div className="flex items-center gap-1 flex-shrink min-w-0">
+      {/* Navigation responsive */}
+      <nav className="bg-blue-800 text-white p-4">
+        <div className="flex justify-between items-center">
+          {/* Logo et titre */}
+          <div className="flex items-center gap-2 min-w-0">
+            <img src={logo2} alt="Logo 2" className="h-10 sm:h-12 w-auto object-contain bg-white rounded shadow" />
+            <span className="font-bold text-base sm:text-lg ml-2 truncate" style={{maxWidth: 120}}>Contrôleur</span>
+          </div>
+          
+          {/* Bouton menu mobile */}
           <button 
-            onClick={() => setView('dashboard')} 
-            className={`px-3 py-2 rounded font-semibold ${view === 'dashboard' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white text-sm`}
+            className="md:hidden p-2 rounded hover:bg-blue-700 transition-colors"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            aria-label="Menu"
           >
-            Dashboard
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
           </button>
-          <button 
-            onClick={() => setView('form')} 
-            className={`px-3 py-2 rounded font-semibold text-white text-sm ${view === 'form' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'}`}
-          >
-            Nouvelle Enquête
-          </button>
-          <button 
-            onClick={() => setView('records')} 
-            className={`px-3 py-2 rounded font-semibold ${view === 'records' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white text-sm`}
-          >
-            Mes Enquêtes
-          </button>
-          {user && (
-            <div className="w-8 h-8 rounded-full bg-white text-blue-900 flex items-center justify-center font-bold ml-2">
-              {user.name?.[0]?.toUpperCase() || '?'}
+          
+          {/* Menu desktop */}
+          <div className="hidden md:flex items-center gap-2">
+            <button 
+              onClick={() => handleViewChange('dashboard')} 
+              className={`px-3 py-2 rounded font-semibold text-sm ${view === 'dashboard' ? 'bg-blue-700 shadow' : 'hover:bg-blue-700'} text-white transition-colors`}
+            >
+              Dashboard
+            </button>
+            <button 
+              onClick={() => handleViewChange('formulaire')} 
+              className={`px-3 py-2 rounded font-semibold text-sm ${view === 'formulaire' ? 'bg-blue-700 shadow' : 'hover:bg-blue-700'} text-white transition-colors`}
+            >
+              Nouvelle enquête
+            </button>
+            <button 
+              onClick={() => handleViewChange('enquetes')} 
+              className={`px-3 py-2 rounded font-semibold text-sm ${view === 'enquetes' ? 'bg-blue-700 shadow' : 'hover:bg-blue-700'} text-white transition-colors`}
+            >
+              Mes enquêtes
+            </button>
+            <button 
+              onClick={() => handleViewChange('surveys')} 
+              className={`px-3 py-2 rounded font-semibold text-sm ${view === 'surveys' ? 'bg-blue-700 shadow' : 'hover:bg-blue-700'} text-white transition-colors`}
+            >
+              Enquêtes disponibles
+            </button>
+            <button 
+              onClick={() => handleViewChange('parametres')} 
+              className={`px-3 py-2 rounded font-semibold text-sm ${view === 'parametres' ? 'bg-blue-700 shadow' : 'hover:bg-blue-700'} text-white transition-colors`}
+            >
+              Paramètres
+            </button>
+            
+            {/* Profil utilisateur et déconnexion */}
+            <div className="flex items-center gap-2 ml-2">
+              {user && (
+                <div className="w-8 h-8 rounded-full bg-white text-blue-800 flex items-center justify-center font-bold">
+                  {user.name?.[0]?.toUpperCase() || '?'}
+                </div>
+              )}
+              <button 
+                onClick={() => { localStorage.clear(); navigate('/login'); }} 
+                className="bg-white text-blue-800 px-3 py-1 rounded font-semibold text-sm hover:bg-gray-100 transition-colors"
+              >
+                Déconnexion
+              </button>
             </div>
-          )}
-          <button 
-            onClick={() => { localStorage.clear(); navigate('/login'); }} 
-            className="ml-2 bg-white text-blue-900 px-3 py-1 rounded font-semibold text-sm"
-          >
-            Déconnexion
-          </button>
+          </div>
         </div>
+        
+        {/* Menu mobile */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden mt-4 space-y-2 border-t border-blue-700 pt-4">
+            <button 
+              onClick={() => handleViewChange('dashboard')} 
+              className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'dashboard' ? 'bg-blue-700' : 'hover:bg-blue-700'} text-white`}
+            >
+              Dashboard
+            </button>
+            <button 
+              onClick={() => handleViewChange('formulaire')} 
+              className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'formulaire' ? 'bg-blue-700' : 'hover:bg-blue-700'} text-white`}
+            >
+              Nouvelle enquête
+            </button>
+            <button 
+              onClick={() => handleViewChange('enquetes')} 
+              className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'enquetes' ? 'bg-blue-700' : 'hover:bg-blue-700'} text-white`}
+            >
+              Mes enquêtes
+            </button>
+            <button 
+              onClick={() => handleViewChange('surveys')} 
+              className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'surveys' ? 'bg-blue-700' : 'hover:bg-blue-700'} text-white`}
+            >
+              Enquêtes disponibles
+            </button>
+            <button 
+              onClick={() => handleViewChange('parametres')} 
+              className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'parametres' ? 'bg-blue-700' : 'hover:bg-blue-700'} text-white`}
+            >
+              Paramètres
+            </button>
+            
+            {/* Profil et déconnexion mobile */}
+            <div className="flex items-center justify-between pt-2 border-t border-blue-700">
+              {user && (
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-white text-blue-800 flex items-center justify-center font-bold">
+                    {user.name?.[0]?.toUpperCase() || '?'}
+                  </div>
+                  <span className="text-sm">{user.name || 'Contrôleur'}</span>
+                </div>
+              )}
+              <button 
+                onClick={() => { localStorage.clear(); navigate('/login'); }} 
+                className="bg-white text-blue-800 px-3 py-1 rounded font-semibold text-sm hover:bg-gray-100 transition-colors"
+              >
+                Déconnexion
+              </button>
+            </div>
+          </div>
+        )}
       </nav>
-      <main className="p-8">
+      
+      {/* Contenu principal */}
+      <main className="p-4 sm:p-8">
         {view === 'dashboard' && <DashboardController setView={setView} />}
-        {view === 'form' && <SchoolForm />}
-        {view === 'records' && <RecordsList />}
+        {view === 'formulaire' && <SchoolForm />}
+        {view === 'enquetes' && <RecordsList />}
+        {view === 'surveys' && <ControllerAvailableSurveys />}
+        {view === 'parametres' && <Settings />}
       </main>
+      
+      <PNUDFooter />
     </div>
   );
 } 

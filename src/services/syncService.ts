@@ -78,9 +78,13 @@ class SyncService {
     const dataToSend = {
       formData: record.formData.formData || record.formData
     };
+    
+    // Pour les formulaires système, utiliser l'endpoint /system
+    const endpoint = record.formData.surveyId ? '/records' : '/records/system';
     console.log('Structure des données à envoyer:', dataToSend);
+    console.log('Endpoint utilisé:', endpoint);
 
-    const response = await fetch('http://localhost:3000/records', {
+    const response = await fetch(`http://localhost:3000${endpoint}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

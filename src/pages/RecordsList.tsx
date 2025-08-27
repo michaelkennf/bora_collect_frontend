@@ -188,7 +188,17 @@ export default function RecordsList() {
       }
 
       // Charger les enregistrements du serveur
-      const res = await fetch('http://localhost:3000/records', {
+      const user = localStorage.getItem('user');
+      let apiUrl = 'http://localhost:3000/records';
+      
+      if (user) {
+        const userData = JSON.parse(user);
+        if (userData.role === 'CONTROLLER') {
+          apiUrl = 'http://localhost:3000/records/controller';
+        }
+      }
+      
+      const res = await fetch(apiUrl, {
         headers: { Authorization: `Bearer ${token}` },
       });
       
@@ -202,7 +212,6 @@ export default function RecordsList() {
       const localRecords = await localStorageService.getLocalRecords();
       
       // Filtrer par l'utilisateur connecté (seulement pour les contrôleurs)
-      const user = localStorage.getItem('user');
       if (user) {
         const userData = JSON.parse(user);
         

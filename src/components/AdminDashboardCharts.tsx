@@ -32,6 +32,37 @@ interface AdminDashboardChartsProps {
 }
 
 export default function AdminDashboardCharts({ users }: AdminDashboardChartsProps) {
+  const [pendingApprovals, setPendingApprovals] = useState<number>(0);
+  const [loading, setLoading] = useState(true);
+
+  // Charger le nombre de demandes d'approbation en attente
+  useEffect(() => {
+    const fetchPendingApprovals = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'}/users/approval-stats`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setPendingApprovals(data.pending || 0);
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement des demandes d\'approbation:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPendingApprovals();
+  }, []);
+
   if (!users || users.length === 0) return null;
 
   // Statistiques des utilisateurs par rôle
@@ -258,18 +289,28 @@ export default function AdminDashboardCharts({ users }: AdminDashboardChartsProp
       </div>
 
       {/* Résumé des statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-blue-50 p-4 rounded-lg text-center">
           <div className="text-2xl font-bold text-blue-600">{users.length}</div>
           <div className="text-blue-800">Total utilisateurs</div>
         </div>
         <div className="bg-green-50 p-4 rounded-lg text-center">
-          <div className="text-2xl font-bold text-green-600">{users.filter((u: any) => u.status !== 'DELETED').length}</div>
+          <div className="text-2xl font-bold text-green-600">{users.filter((u: any) => u.status === 'ACTIVE').length}</div>
           <div className="text-green-800">Utilisateurs actifs</div>
         </div>
         <div className="bg-orange-50 p-4 rounded-lg text-center">
-          <div className="text-2xl font-bold text-orange-600">{users.filter((u: any) => u.status === 'DELETED').length}</div>
-          <div className="text-orange-800">Utilisateurs supprimés</div>
+          <div className="text-2xl font-bold text-orange-600">
+            {loading ? (
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-600 mx-auto"></div>
+            ) : (
+              pendingApprovals
+            )}
+          </div>
+          <div className="text-orange-800">Demandes d'inscription en attente</div>
+        </div>
+        <div className="bg-gray-50 p-4 rounded-lg text-center">
+          <div className="text-2xl font-bold text-gray-600">{users.filter((u: any) => u.status !== 'ACTIVE' && u.status !== 'PENDING_APPROVAL').length}</div>
+          <div className="text-gray-800">Autres statuts</div>
         </div>
       </div>
     </div>
