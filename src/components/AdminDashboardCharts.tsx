@@ -42,7 +42,7 @@ export default function AdminDashboardCharts({ users }: AdminDashboardChartsProp
         const token = localStorage.getItem('token');
         if (!token) return;
 
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'}/users/approval-stats`, {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'https://api.collect.fikiri.co'}/users/approval-stats`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',

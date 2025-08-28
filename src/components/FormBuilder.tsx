@@ -58,7 +58,7 @@ const FormBuilder: React.FC = () => {
   // Référence pour synchroniser les données des champs
   const fieldDataRef = useRef<Map<string, Partial<FormField>>>(new Map());
 
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://api.collect.fikiri.co';
 
   // Charger les enquêtes publiées et les formulaires existants au démarrage
   useEffect(() => {

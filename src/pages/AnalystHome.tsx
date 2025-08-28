@@ -74,7 +74,7 @@ export default function AnalystHome() {
     setDashboardLoading(true);
     setDashboardError('');
     
-    fetch('http://localhost:3000/records/stats/overview', { 
+    fetch('https://api.collect.fikiri.co/records/stats/overview', { 
       headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } 
     })
     .then(r => r.json())
@@ -103,7 +103,7 @@ export default function AnalystHome() {
         return 'Token manquant';
       }
 
-      const userRes = await fetch(`http://localhost:3000/users/${userId}`, {
+      const userRes = await fetch(`https://api.collect.fikiri.co/users/${userId}`, {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -143,7 +143,7 @@ export default function AnalystHome() {
     setRecordsLoading(true);
     setRecordsError('');
     try {
-      let url = 'http://localhost:3000/records/search?';
+      let url = 'https://api.collect.fikiri.co/records/search?';
       const params = [];
       if (search) params.push(`nomOuCode=${encodeURIComponent(search)}`);
       if (communeFilter) params.push(`commune=${encodeURIComponent(communeFilter)}`);

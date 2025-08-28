@@ -532,7 +532,7 @@ export default function SchoolForm() {
 
       // ÉTAPE 4: Tentative d'envoi au serveur (endpoint système)
       console.log('🌐 Tentative d\'envoi du formulaire système au serveur...');
-      const response = await fetch('http://localhost:3000/records/system', {
+      const response = await fetch('https://api.collect.fikiri.co/records/system', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

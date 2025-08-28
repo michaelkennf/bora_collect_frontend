@@ -26,7 +26,7 @@ export default function AdminParametres() {
     e.preventDefault();
     setInfoMsg(''); setInfoError(''); setSaving(true);
     try {
-      const res = await fetch('http://localhost:3000/users/me', {
+      const res = await fetch('https://api.collect.fikiri.co/users/me', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify(form),
@@ -53,7 +53,7 @@ export default function AdminParametres() {
       return;
     }
     try {
-      const res = await fetch('http://localhost:3000/users/me', {
+      const res = await fetch('https://api.collect.fikiri.co/users/me', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify({ password: pwd.new1 }),

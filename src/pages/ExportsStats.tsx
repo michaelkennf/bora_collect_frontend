@@ -9,7 +9,7 @@ export default function ExportsStats() {
   const fetchRecords = async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:3000/records', {
+      const res = await fetch('https://api.collect.fikiri.co/records', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) throw new Error('Erreur lors du chargement');
@@ -29,7 +29,7 @@ export default function ExportsStats() {
   // Exporter en CSV
   const exportCSV = async () => {
     try {
-      const res = await fetch('http://localhost:3000/records/export/csv', {
+      const res = await fetch('https://api.collect.fikiri.co/records/export/csv', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) throw new Error('Erreur lors de l\'export');
@@ -51,7 +51,7 @@ export default function ExportsStats() {
   // Exporter en PDF
   const exportPDF = async () => {
     try {
-      const res = await fetch('http://localhost:3000/records/export/pdf', {
+      const res = await fetch('https://api.collect.fikiri.co/records/export/pdf', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) throw new Error('Erreur lors de l\'export');

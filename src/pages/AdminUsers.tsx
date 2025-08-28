@@ -53,7 +53,7 @@ export default function AdminUsers() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('http://localhost:3000/users', {
+      const res = await fetch('https://api.collect.fikiri.co/users', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) throw new Error('Erreur lors du chargement');
@@ -77,7 +77,7 @@ export default function AdminUsers() {
     setSaving(true);
     try {
       const payload = { ...addForm };
-              const res = await fetch('http://localhost:3000/users', {
+              const res = await fetch('https://api.collect.fikiri.co/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify(payload),
@@ -105,7 +105,7 @@ export default function AdminUsers() {
     if (!confirmDeleteId) return;
     setLoading(true);
     try {
-              const res = await fetch(`http://localhost:3000/users/${confirmDeleteId}`, {
+              const res = await fetch(`https://api.collect.fikiri.co/users/${confirmDeleteId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
@@ -124,7 +124,7 @@ export default function AdminUsers() {
     if (!editRoleId) return;
     setRoleSaving(true);
     try {
-              const res = await fetch(`http://localhost:3000/users/${editRoleId}`, {
+              const res = await fetch(`https://api.collect.fikiri.co/users/${editRoleId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify({ role: editRole }),
@@ -145,7 +145,7 @@ export default function AdminUsers() {
     setResetSaving(true);
     setResetError('');
     try {
-              const res = await fetch(`http://localhost:3000/users/${showReset}`, {
+              const res = await fetch(`https://api.collect.fikiri.co/users/${showReset}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify({ password: resetPwd }),
@@ -173,7 +173,7 @@ export default function AdminUsers() {
   const handleReactivate = async (id: string) => {
     setLoading(true);
     try {
-              const res = await fetch(`http://localhost:3000/users/${id}`, {
+              const res = await fetch(`https://api.collect.fikiri.co/users/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify({ status: 'ACTIVE' }),

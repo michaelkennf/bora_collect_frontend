@@ -29,7 +29,7 @@ const AdminPendingApprovals: React.FC = () => {
   const [action, setAction] = useState<'approve' | 'reject'>('approve');
   const [comments, setComments] = useState('');
 
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://api.collect.fikiri.co';
 
   useEffect(() => {
     // Vérifier que l'utilisateur est connecté et est admin

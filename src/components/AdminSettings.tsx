@@ -61,7 +61,7 @@ export default function AdminSettings() {
         return;
       }
 
-      const response = await fetch(`http://localhost:3000/users/${user?.id}`, {
+      const response = await fetch(`https://api.collect.fikiri.co/users/${user?.id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

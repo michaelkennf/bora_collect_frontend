@@ -32,7 +32,7 @@ export function DashboardAdmin() {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:3000/users', {
+      const res = await fetch('https://api.collect.fikiri.co/users', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) throw new Error('Erreur lors du chargement des utilisateurs');
@@ -69,7 +69,7 @@ export function DashboardAdmin() {
         const token = localStorage.getItem('token');
         if (!token) return;
 
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'}/users/approval-stats`, {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'https://api.collect.fikiri.co'}/users/approval-stats`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
@@ -147,7 +147,7 @@ export default function AdminHome() {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:3000/users', {
+      const res = await fetch('https://api.collect.fikiri.co/users', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) throw new Error('Erreur lors du chargement');

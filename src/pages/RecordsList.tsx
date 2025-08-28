@@ -189,12 +189,12 @@ export default function RecordsList() {
 
       // Charger les enregistrements du serveur
       const user = localStorage.getItem('user');
-      let apiUrl = 'http://localhost:3000/records';
+      let apiUrl = 'https://api.collect.fikiri.co/records';
       
       if (user) {
         const userData = JSON.parse(user);
         if (userData.role === 'CONTROLLER') {
-          apiUrl = 'http://localhost:3000/records/controller';
+          apiUrl = 'https://api.collect.fikiri.co/records/controller';
         }
       }
       

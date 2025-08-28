@@ -53,7 +53,7 @@ export default function UserManager({ onUserAdded }: UserManagerProps) {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:3000/users', {
+      const res = await fetch('https://api.collect.fikiri.co/users', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) throw new Error('Erreur lors du chargement');
@@ -76,7 +76,7 @@ export default function UserManager({ onUserAdded }: UserManagerProps) {
     setAddError('');
     setSaving(true);
     try {
-      const res = await fetch('http://localhost:3000/users', {
+      const res = await fetch('https://api.collect.fikiri.co/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify(newUser),
@@ -98,7 +98,7 @@ export default function UserManager({ onUserAdded }: UserManagerProps) {
 
   const updateUserStatus = async (userId: string, status: User['status']) => {
     try {
-      const response = await fetch(`http://localhost:3000/users/${userId}`, {
+      const response = await fetch(`https://api.collect.fikiri.co/users/${userId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

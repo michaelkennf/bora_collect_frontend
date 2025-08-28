@@ -104,7 +104,7 @@ export default function Settings() {
         updateData.newPassword = form.newPassword;
       }
 
-                    const response = await fetch(`http://localhost:3000/users/me`, {
+                    const response = await fetch(`https://api.collect.fikiri.co/users/me`, {
          method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -317,3 +317,4 @@ export default function Settings() {
     </div>
   );
 }
+

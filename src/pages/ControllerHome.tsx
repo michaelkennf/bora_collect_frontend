@@ -26,7 +26,7 @@ export function DashboardController({ setView }: { setView: (view: string) => vo
       }
 
       // Forcer la récupération des vraies données sans cache
-      const res = await fetch('http://localhost:3000/records/controller', {
+      const res = await fetch('https://api.collect.fikiri.co/records/controller', {
         headers: { 
           Authorization: `Bearer ${token}`,
           'Cache-Control': 'no-cache',
