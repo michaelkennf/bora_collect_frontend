@@ -141,18 +141,18 @@ const FormBuilder: React.FC = () => {
     const selectedSurvey = surveys.find(s => s.id === surveyId);
     if (!selectedSurvey) return;
 
-         const newForm: FormTemplate = {
+    const newForm: FormTemplate = {
        id: `temp_${Date.now()}`, // ID temporaire clairement identifié
        name: `Formulaire - ${selectedSurvey.title}`,
        description: `Formulaire pour l'enquête: ${selectedSurvey.description}`,
        surveyId: surveyId,
        survey: selectedSurvey,
-       fields: [],
-       createdAt: new Date(),
-       updatedAt: new Date(),
-       isActive: true,
+      fields: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      isActive: true,
        isVisibleToControllers: false, // Par défaut non visible
-     };
+    };
     
     setCurrentForm(newForm);
     setShowSurveySelector(false);
@@ -192,8 +192,8 @@ const FormBuilder: React.FC = () => {
       return {
         ...prevForm,
         fields: prevForm.fields.map(field =>
-          field.id === fieldId ? { ...field, ...updates } : field
-        ),
+        field.id === fieldId ? { ...field, ...updates } : field
+      ),
       };
     });
     
@@ -300,9 +300,9 @@ const FormBuilder: React.FC = () => {
         
         // Recharger les formulaires depuis le serveur
         await fetchExistingForms();
-        
-        setShowBuilder(false);
-        setCurrentForm(null);
+
+    setShowBuilder(false);
+    setCurrentForm(null);
       } else {
         const errorData = await response.json();
         console.error('Erreur de sauvegarde:', {
@@ -523,7 +523,7 @@ const FormBuilder: React.FC = () => {
       onRemove(field.id);
     }, [field.id, onRemove]);
 
-         return (
+    return (
        <div className="border rounded-lg p-4 bg-gray-50">
          {/* En-tête du champ avec label et options */}
          <div className="flex justify-between items-start mb-3">
@@ -560,7 +560,7 @@ const FormBuilder: React.FC = () => {
             </button>
           </div>
         </div>
-        
+
                  {/* Options pour les champs de sélection */}
          {(field.type === 'select' || field.type === 'multiselect' || field.type === 'radio') && (
            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -577,7 +577,7 @@ const FormBuilder: React.FC = () => {
              <p className="text-xs text-blue-600 mt-1">
                Saisissez une option par ligne. Exemple : "Étudiant", "Employé", "Retraité"
              </p>
-           </div>
+          </div>
          )}
 
          {/* Placeholder pour les champs de texte */}
@@ -596,8 +596,8 @@ const FormBuilder: React.FC = () => {
              <p className="text-xs text-green-600 mt-1">
                Ce texte apparaîtra en gris dans le champ pour guider l'utilisateur
              </p>
-           </div>
-         )}
+            </div>
+          )}
 
                  {/* Informations du champ */}
          <div className="mt-4 p-3 bg-gray-100 rounded-lg">
@@ -613,17 +613,17 @@ const FormBuilder: React.FC = () => {
                  localRequired ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-600'
                }`}>
                  {localRequired ? '🔴 Requis' : '⚪ Optionnel'}
-               </span>
-             </div>
-           </div>
-         </div>
+                  </span>
+              </div>
+            </div>
+        </div>
       </div>
     );
   });
 
   // Composant de sélection d'enquête
   const SurveySelector = useCallback(() => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold text-gray-800">Sélectionner une Enquête</h2>
@@ -633,8 +633,8 @@ const FormBuilder: React.FC = () => {
           >
             ×
           </button>
-        </div>
-        
+            </div>
+
         <p className="text-gray-600 mb-6">
           Sélectionnez l'enquête à laquelle ce formulaire sera lié. 
           Seules les enquêtes publiées sont disponibles.
@@ -646,7 +646,7 @@ const FormBuilder: React.FC = () => {
             <p className="text-sm text-gray-400">
               Publiez d'abord une enquête dans la section "Publication d'enquêtes"
             </p>
-          </div>
+            </div>
         ) : (
           <div className="space-y-3">
             {surveys.map((survey) => (
@@ -656,7 +656,7 @@ const FormBuilder: React.FC = () => {
                 onClick={() => startFormCreation(survey.id)}
               >
                 <div className="flex justify-between items-start">
-                  <div>
+              <div>
                     <h3 className="font-semibold text-lg text-gray-800">{survey.title}</h3>
                     <p className="text-gray-600 text-sm mt-1">{survey.description}</p>
                     <div className="flex items-center gap-2 mt-2">
@@ -673,17 +673,17 @@ const FormBuilder: React.FC = () => {
                         </span>
                       )}
                     </div>
-                  </div>
+                    </div>
                   <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
                     Sélectionner
                   </button>
                 </div>
               </div>
             ))}
+              </div>
+            )}
+            </div>
           </div>
-        )}
-      </div>
-    </div>
   ), [surveys, startFormCreation]);
 
   // Composant de construction de formulaire
@@ -706,28 +706,28 @@ const FormBuilder: React.FC = () => {
                 }`}>
                   {currentForm.survey.status === 'PUBLISHED' ? 'Publiée' : currentForm.survey.status}
                 </span>
-              </div>
-            )}
           </div>
-          <button
-            onClick={() => setShowBuilder(false)}
+            )}
+            </div>
+              <button
+                onClick={() => setShowBuilder(false)}
             className="text-gray-500 hover:text-gray-700 text-2xl"
           >
             ×
-          </button>
+              </button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                      {/* Panneau de gauche - Champs disponibles */}
-           <div className="lg:col-span-1">
+            <div className="lg:col-span-1">
                            <h3 className="font-semibold text-lg mb-4">Champs disponibles</h3>
              <p className="text-sm text-gray-600 mb-4">
                Cliquez sur un type de champ pour l'ajouter à votre formulaire. 
                Chaque champ peut être personnalisé avec un label, des options et des validations.
              </p>
-             <div className="space-y-2">
+                <div className="space-y-2">
                {fieldTypes.map((fieldType) => (
-                 <button
+                    <button
                    key={fieldType.value}
                    onClick={() => addField(fieldType.value)}
                    className="w-full text-left p-3 border rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-3"
@@ -739,9 +739,9 @@ const FormBuilder: React.FC = () => {
                        {getFieldTypeDescription(fieldType.value)}
                      </div>
                    </div>
-                 </button>
-               ))}
-             </div>
+                    </button>
+                  ))}
+                </div>
            </div>
 
                      {/* Panneau central - Construction du formulaire */}
@@ -756,9 +756,9 @@ const FormBuilder: React.FC = () => {
                  >
                    {loading ? 'Sauvegarde...' : 'Sauvegarder'}
                  </button>
-               </div>
-             </div>
-             
+              </div>
+            </div>
+
              {/* Instructions de construction */}
              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
                <h4 className="font-medium text-blue-800 mb-2">Comment construire votre formulaire :</h4>
@@ -789,9 +789,9 @@ const FormBuilder: React.FC = () => {
                      • Profession (sélection)
                    </p>
                  </div>
-               </div>
-             ) : (
-              <div className="space-y-4">
+                  </div>
+                ) : (
+                  <div className="space-y-4">
                 {currentForm?.fields.map((field, index) => (
                   <FormFieldEditor
                     key={field.id}
@@ -801,12 +801,12 @@ const FormBuilder: React.FC = () => {
                     onRemove={removeField}
                   />
                 ))}
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
         </div>
-      </div>
-    </div>
   ), [currentForm, addField, updateField, removeField, saveForm, loading, fieldTypes]);
 
   return (
@@ -854,9 +854,9 @@ const FormBuilder: React.FC = () => {
                         : 'bg-yellow-100 text-yellow-800'
                     }`}>
                       {getSurveyStatus(form.surveyId) === 'PUBLISHED' ? 'Publiée' : getSurveyStatus(form.surveyId)}
-                    </span>
-                  </div>
-
+                </span>
+              </div>
+              
                   <div className="text-sm text-gray-500">
                     {form.fields.length} champ(s) | Créé le {form.createdAt.toLocaleDateString()}
                   </div>
@@ -889,7 +889,7 @@ const FormBuilder: React.FC = () => {
                   🧪 Test
                 </button>
               </div>
-
+              
               <div className="flex gap-2">
                 <button
                   onClick={() => {

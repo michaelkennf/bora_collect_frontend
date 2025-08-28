@@ -10,8 +10,8 @@ export default defineConfig(({ mode }) => {
     
     // Configuration des variables d'environnement
     define: {
-      // FORCER L'API EN LIGNE MÊME EN DÉVELOPPEMENT (HTTPS)
-      'import.meta.env.VITE_API_BASE_URL': JSON.stringify('https://api.fikiri.collect.co'),
+      // FORCER L'API EN LIGNE MÊME EN DÉVELOPPEMENT (DOMAINE CORRECT)
+      'import.meta.env.VITE_API_BASE_URL': JSON.stringify('https://api.collect.fikiri.co'),
       
       // Configuration des timeouts
       'import.meta.env.VITE_API_TIMEOUT': JSON.stringify(30000),

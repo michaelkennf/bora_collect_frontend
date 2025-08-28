@@ -11,22 +11,22 @@ export interface EnvironmentConfig {
 
 // Configuration par défaut pour le développement local
 const defaultLocalConfig: EnvironmentConfig = {
-  apiBaseUrl: 'https://api.fikiri.collect.co', // RESTAURER HTTPS
+  apiBaseUrl: 'https://api.collect.fikiri.co', // DOMAINE CORRECT
   apiTimeout: 30000,
   appName: 'FikiriCollect',
   appVersion: '1.0.0',
-  enableHttps: true, // RESTAURER HTTPS
+  enableHttps: true, // HTTPS activé
   enableDebug: true,
   isProduction: false,
 };
 
 // Configuration par défaut pour la production
 const defaultProductionConfig: EnvironmentConfig = {
-  apiBaseUrl: 'https://api.fikiri.collect.co', // RESTAURER HTTPS
+  apiBaseUrl: 'https://api.collect.fikiri.co', // DOMAINE CORRECT
   apiTimeout: 30000,
   appName: 'FikiriCollect',
   appVersion: '1.0.0',
-  enableHttps: true, // RESTAURER HTTPS
+  enableHttps: true, // HTTPS activé
   enableDebug: false,
   isProduction: true,
 };
@@ -39,7 +39,7 @@ const validateEnvironment = (): EnvironmentConfig => {
   // Détecter l'environnement de manière plus fiable
   const isProduction = import.meta.env.PROD || 
                       window.location.hostname !== 'localhost' ||
-                      import.meta.env.VITE_API_BASE_URL?.includes('fikiri.collect.co') ||
+                      import.meta.env.VITE_API_BASE_URL?.includes('collect.fikiri.co') ||
                       forceOnlineAPI || // FORCER L'API EN LIGNE
                       false;
   
