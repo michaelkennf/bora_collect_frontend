@@ -11,7 +11,7 @@ export interface EnvironmentConfig {
 
 // Configuration par défaut pour le développement local
 const defaultLocalConfig: EnvironmentConfig = {
-  apiBaseUrl: 'https://api.collect.fikiri.co', // DOMAINE CORRECT
+  apiBaseUrl: 'https://api.collect.fikiri.co', // API EN LIGNE - DOMAINE CORRECT
   apiTimeout: 30000,
   appName: 'FikiriCollect',
   appVersion: '1.0.0',
@@ -20,9 +20,9 @@ const defaultLocalConfig: EnvironmentConfig = {
   isProduction: false,
 };
 
-// Configuration par défaut pour la production
+// Configuration pour la production
 const defaultProductionConfig: EnvironmentConfig = {
-  apiBaseUrl: 'https://api.collect.fikiri.co', // DOMAINE CORRECT
+  apiBaseUrl: 'https://api.collect.fikiri.co', // API EN LIGNE - DOMAINE CORRECT
   apiTimeout: 30000,
   appName: 'FikiriCollect',
   appVersion: '1.0.0',
@@ -31,76 +31,61 @@ const defaultProductionConfig: EnvironmentConfig = {
   isProduction: true,
 };
 
-// Validation des variables d'environnement
+// Validation et configuration de l'environnement
 const validateEnvironment = (): EnvironmentConfig => {
-  // FORCER L'UTILISATION DE L'API EN LIGNE
-  const forceOnlineAPI = true; // CHANGER CETTE VALEUR POUR FORCER L'API EN LIGNE
-  
-  // Détecter l'environnement de manière plus fiable
-  const isProduction = import.meta.env.PROD || 
+  const forceOnlineAPI = true; // FORCER L'API EN LIGNE
+  const isProduction = import.meta.env.PROD ||
                       window.location.hostname !== 'localhost' ||
-                      import.meta.env.VITE_API_BASE_URL?.includes('collect.fikiri.co') ||
-                      forceOnlineAPI || // FORCER L'API EN LIGNE
+                      import.meta.env.VITE_API_BASE_URL?.includes('api.collect.fikiri.co') ||
+                      forceOnlineAPI ||
                       false;
-  
+
+  // Configuration de base
+  const baseConfig = isProduction ? defaultProductionConfig : defaultLocalConfig;
+
+  // Surcharge avec les variables d'environnement si disponibles
   const config: EnvironmentConfig = {
-    apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 
-                (isProduction ? defaultProductionConfig.apiBaseUrl : defaultLocalConfig.apiBaseUrl),
+    apiBaseUrl: import.meta.env.VITE_API_BASE_URL || baseConfig.apiBaseUrl,
     apiTimeout: parseInt(import.meta.env.VITE_API_TIMEOUT || '30000'),
-    appName: import.meta.env.VITE_APP_NAME || 'FikiriCollect',
-    appVersion: import.meta.env.VITE_APP_VERSION || '1.0.0',
-    enableHttps: import.meta.env.VITE_ENABLE_HTTPS === 'true' || isProduction,
-    enableDebug: import.meta.env.VITE_ENABLE_DEBUG === 'true' && !isProduction,
-    isProduction,
+    appName: import.meta.env.VITE_APP_NAME || baseConfig.appName,
+    appVersion: import.meta.env.VITE_APP_VERSION || baseConfig.appVersion,
+    enableHttps: import.meta.env.VITE_ENABLE_HTTPS === 'true' || baseConfig.enableHttps,
+    enableDebug: import.meta.env.VITE_ENABLE_DEBUG === 'true' || baseConfig.enableDebug,
+    isProduction: isProduction,
   };
 
   // Validation des valeurs critiques
   if (!config.apiBaseUrl) {
-    throw new Error('VITE_API_BASE_URL is required');
+    console.error('❌ VITE_API_BASE_URL manquant');
+    config.apiBaseUrl = 'https://api.collect.fikiri.co'; // Fallback vers l'API en ligne
   }
 
-  if (config.apiTimeout < 5000 || config.apiTimeout > 120000) {
-    throw new Error('VITE_API_TIMEOUT must be between 5000 and 120000 ms');
+  if (!config.apiTimeout || config.apiTimeout < 1000) {
+    console.warn('⚠️ Timeout API invalide, utilisation de la valeur par défaut');
+    config.apiTimeout = 30000;
   }
 
-  // Logs selon l'environnement
-  if (config.isProduction) {
-    console.log('🚀 Production mode: API at', config.apiBaseUrl);
-  } else {
-    console.log('🔧 Development mode: API at', config.apiBaseUrl);
-    if (config.enableDebug) {
-      console.log('🔍 Debug mode enabled');
-    }
-  }
+  console.log('🌍 Configuration environnement:', {
+    apiBaseUrl: config.apiBaseUrl,
+    isProduction: config.isProduction,
+    enableHttps: config.enableHttps,
+    enableDebug: config.enableDebug
+  });
 
   return config;
 };
 
-// Configuration globale de l'environnement
-export const environment: EnvironmentConfig = validateEnvironment();
+// Configuration validée
+export const environment = validateEnvironment();
 
-// Configuration par défaut
-export const defaultConfig: EnvironmentConfig = environment.isProduction 
-  ? defaultProductionConfig 
-  : defaultLocalConfig;
-
-// Fonction utilitaire pour obtenir la configuration
-export const getConfig = (): EnvironmentConfig => {
-  try {
-    return environment;
-  } catch (error) {
-    console.error('❌ Error loading environment configuration:', error);
-    console.warn('⚠️ Falling back to default configuration');
-    return defaultConfig;
-  }
-};
-
-// Fonction pour obtenir l'URL de l'API avec endpoint
-export const getApiUrl = (endpoint: string = ''): string => {
+// Fonction utilitaire pour construire les URLs de l'API
+export const getApiUrl = (endpoint: string): string => {
   const baseUrl = environment.apiBaseUrl;
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  return `${baseUrl}${cleanEndpoint}`;
+  const fullUrl = `${baseUrl}${cleanEndpoint}`;
+  
+  console.log(`🔗 Construction URL API: ${fullUrl}`);
+  return fullUrl;
 };
 
-// Configuration exportée par défaut
-export default getConfig(); 
+export default environment; 
