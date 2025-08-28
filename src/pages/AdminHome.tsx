@@ -187,10 +187,10 @@ export default function AdminHome() {
       <nav className="bg-blue-900 text-white p-4">
         <div className="flex justify-between items-center">
           {/* Logo et titre */}
-          <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
             <img src={logo2} alt="Logo 2" className="h-10 sm:h-12 w-auto object-contain bg-white rounded shadow" />
             <span className="font-bold text-base sm:text-lg ml-2 truncate" style={{maxWidth: 120}}>Admin</span>
-          </div>
+        </div>
           
           {/* Bouton menu mobile */}
           <button 
@@ -205,49 +205,49 @@ export default function AdminHome() {
           
           {/* Menu desktop */}
           <div className="hidden md:flex items-center gap-1 flex-shrink min-w-0">
-            <button 
+          <button 
               onClick={() => handleViewChange('dashboard')} 
               className={`px-2 py-2 rounded font-semibold text-xs ${view === 'dashboard' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white`}
-            >
-              Dashboard
-            </button>
-            <button 
+          >
+            Dashboard
+          </button>
+          <button 
               onClick={() => handleViewChange('utilisateurs')} 
               className={`px-2 py-2 rounded font-semibold text-xs ${view === 'utilisateurs' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white`}
-            >
-              Utilisateurs
-            </button>
-            <button 
+          >
+            Utilisateurs
+          </button>
+          <button 
               onClick={() => handleViewChange('formulaires')} 
               className={`px-2 py-2 rounded font-semibold text-xs ${view === 'formulaires' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white`}
-            >
+          >
               Gestion de formulaires
-            </button>
-            <button 
+          </button>
+          <button 
               onClick={() => handleViewChange('statistiques')} 
               className={`px-2 py-2 rounded font-semibold text-xs ${view === 'statistiques' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white`}
-            >
-              Statistiques
-            </button>
-            <button 
+          >
+            Statistiques
+          </button>
+          <button 
               onClick={() => handleViewChange('candidatures')} 
               className={`px-2 py-2 rounded font-semibold text-xs ${view === 'candidatures' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white`}
-            >
+          >
               Candidatures
-            </button>
-            <button 
+          </button>
+          <button 
               onClick={() => handleViewChange('pending-approvals')} 
               className={`px-2 py-2 rounded font-semibold text-xs ${view === 'pending-approvals' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white`}
-            >
-              Demandes d'inscription
-            </button>
-            <button 
+          >
+            Demandes d'inscription
+          </button>
+          <button 
               onClick={() => handleViewChange('survey-publication')} 
               className={`px-2 py-2 rounded font-semibold text-xs ${view === 'survey-publication' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white`}
-            >
-              Publication d'enquêtes
-            </button>
-            <button 
+          >
+            Publication d'enquêtes
+          </button>
+          <button 
               onClick={() => handleViewChange('parametres')} 
               className={`px-2 py-2 rounded font-semibold text-xs ${view === 'parametres' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white`}
             >
@@ -301,9 +301,9 @@ export default function AdminHome() {
             <button 
               onClick={() => handleViewChange('candidatures')} 
               className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'candidatures' ? 'bg-blue-700' : 'hover:bg-blue-800'} text-white`}
-            >
-              Candidatures
-            </button>
+          >
+            Candidatures
+          </button>
             <button 
               onClick={() => handleViewChange('pending-approvals')} 
               className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'pending-approvals' ? 'bg-blue-700' : 'hover:bg-blue-800'} text-white`}
@@ -325,14 +325,14 @@ export default function AdminHome() {
             
             {/* Profil et déconnexion mobile */}
             <div className="flex items-center justify-between pt-2 border-t border-blue-800">
-              {user && (
+          {user && (
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-full bg-white text-blue-900 flex items-center justify-center font-bold">
-                    {user.name?.[0]?.toUpperCase() || '?'}
+              {user.name?.[0]?.toUpperCase() || '?'}
                   </div>
                   <span className="text-sm">{user.name || 'Utilisateur'}</span>
-                </div>
-              )}
+            </div>
+          )}
               <button 
                 onClick={() => { localStorage.clear(); navigate('/login'); }} 
                 className="bg-white text-blue-900 px-3 py-1 rounded font-semibold text-sm hover:bg-gray-100 transition-colors"
@@ -340,7 +340,7 @@ export default function AdminHome() {
                 Déconnexion
               </button>
             </div>
-          </div>
+        </div>
         )}
       </nav>
       

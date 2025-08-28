@@ -17,13 +17,10 @@ COPY package*.json ./
 # Installer les dépendances
 RUN npm ci --force
 
-# Installer manuellement les dépendances Rollup manquantes
-RUN npm install --force @rollup/rollup-linux-x64-gnu
-
 # Copier le code source
 COPY . .
 
-# Construire l'application
+# Construire l'application en mode production
 RUN npm run build
 
 # Stage de production avec Nginx

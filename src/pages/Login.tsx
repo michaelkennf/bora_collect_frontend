@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import logo2 from '../assets/images/logo2.jpg';
+import { getApiUrl } from '../config/environment';
 
 const Login = () => {
   const [username, setUsername] = useState('');
@@ -16,7 +17,11 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3000/auth/login', {
+      // Utiliser la configuration dual pour l'URL de l'API
+      const loginUrl = getApiUrl('/auth/login');
+      console.log('🔗 Tentative de connexion à:', loginUrl);
+      
+      const response = await fetch(loginUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -28,6 +33,8 @@ const Login = () => {
         const data = await response.json();
         localStorage.setItem('token', data.access_token);
         localStorage.setItem('user', JSON.stringify(data.user));
+        
+        console.log('✅ Connexion réussie, redirection...');
         
         // Rediriger selon le rôle
         switch (data.user.role) {
@@ -46,8 +53,10 @@ const Login = () => {
       } else {
         const errorData = await response.json();
         setError(errorData.message || 'Erreur de connexion');
+        console.error('❌ Erreur de connexion:', errorData);
       }
     } catch (err) {
+      console.error('❌ Erreur réseau:', err);
       setError('Erreur de connexion au serveur');
     } finally {
       setIsLoading(false);
