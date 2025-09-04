@@ -261,7 +261,7 @@ export default function AdminUsers() {
                     'bg-blue-100 text-blue-800'
                   }`}>
                     {user.role === 'ADMIN' ? 'Admin' :
-                     user.role === 'CONTROLLER' ? 'Contrôleur' :
+                     user.role === 'CONTROLLER' ? 'Enquêteur' :
                      user.role === 'ANALYST' ? 'Analyste' : user.role}
                   </span>
                 </td>
