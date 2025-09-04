@@ -192,11 +192,11 @@ export default function SchoolForm() {
       return;
     }
     
-    // Vérifier que l'utilisateur est bien un contrôleur
+    // Vérifier que l'utilisateur est bien un enquêteur
     try {
       const userData = JSON.parse(user);
       if (userData.role !== 'CONTROLLER') {
-        toast.error('❌ Accès non autorisé. Seuls les contrôleurs peuvent accéder à cette page.');
+        toast.error('❌ Accès non autorisé. Seuls les enquêteurs peuvent accéder à cette page.');
         navigate('/login');
         return;
       }

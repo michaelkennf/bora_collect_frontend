@@ -5,7 +5,7 @@ import ConfirmModal from '../components/ConfirmModal';
 // Rôles disponibles
 const roles = [
   { value: 'ADMIN', label: 'Admin' },
-  { value: 'CONTROLLER', label: 'Contrôleur' },
+  { value: 'CONTROLLER', label: 'Enquêteur' },
   { value: 'ANALYST', label: 'Analyste' },
 ];
 

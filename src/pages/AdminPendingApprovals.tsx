@@ -173,7 +173,7 @@ const AdminPendingApprovals: React.FC = () => {
   const getRoleLabel = (role: string) => {
     switch (role) {
       case 'ADMIN': return 'Administrateur';
-      case 'CONTROLLER': return 'Contrôleur';
+      case 'CONTROLLER': return 'Enquêteur';
       case 'ANALYST': return 'Analyste';
       default: return role;
     }

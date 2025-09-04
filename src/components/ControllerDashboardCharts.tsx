@@ -38,7 +38,7 @@ export default function ControllerDashboardCharts({ personalStats }: ControllerD
         const token = localStorage.getItem('token');
         if (!token) return;
 
-        // Récupérer les statistiques des enregistrements (route spécifique contrôleur)
+        // Récupérer les statistiques des enregistrements (route spécifique enquêteur)
         const recordsResponse = await fetch('https://api.collect.fikiri.co/records/controller', {
           headers: { 
             Authorization: `Bearer ${token}`,

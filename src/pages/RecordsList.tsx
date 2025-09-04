@@ -211,16 +211,16 @@ export default function RecordsList() {
       // Charger les enregistrements locaux
       const localRecords = await localStorageService.getLocalRecords();
       
-      // Filtrer par l'utilisateur connecté (seulement pour les contrôleurs)
+      // Filtrer par l'utilisateur connecté (seulement pour les enquêteurs)
       if (user) {
         const userData = JSON.parse(user);
         
         if (userData.role === 'CONTROLLER') {
           
-          // Pour les contrôleurs : enregistrements serveur + enregistrements locaux
+          // Pour les enquêteurs : enregistrements serveur + enregistrements locaux
           const userServerRecords = serverRecords.filter((record: any) => record.authorId === currentUserId);
           
-          // Les enregistrements locaux sont toujours visibles pour le contrôleur qui les a créés
+          // Les enregistrements locaux sont toujours visibles pour l'enquêteur qui les a créés
           const userLocalRecords = localRecords.filter(lr => !lr.synced);
           
           // Combiner les deux types d'enregistrements

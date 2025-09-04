@@ -110,7 +110,7 @@ export function DashboardController({ setView }: { setView: (view: string) => vo
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">
-              Bienvenue, {user.name || 'Contrôleur'} !
+              Bienvenue, {user.name || 'Enquêteur'} !
             </h2>
             <p className="text-gray-600 text-sm sm:text-base">
               Interface de contrôle et de collecte de données
@@ -118,10 +118,10 @@ export function DashboardController({ setView }: { setView: (view: string) => vo
           </div>
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-lg">
-              {user.name?.[0]?.toUpperCase() || 'C'}
+              {user.name?.[0]?.toUpperCase() || 'E'}
             </div>
             <div className="text-right">
-              <div className="font-semibold text-gray-800">{user.name || 'Contrôleur'}</div>
+              <div className="font-semibold text-gray-800">{user.name || 'Enquêteur'}</div>
               <div className="text-sm text-gray-500">{user.email}</div>
             </div>
           </div>
@@ -229,7 +229,7 @@ export default function ControllerHome() {
           {/* Logo et titre */}
           <div className="flex items-center gap-2 min-w-0">
             <img src={logo2} alt="Logo 2" className="h-10 sm:h-12 w-auto object-contain bg-white rounded shadow" />
-            <span className="font-bold text-base sm:text-lg ml-2 truncate" style={{maxWidth: 120}}>Contrôleur</span>
+            <span className="font-bold text-base sm:text-lg ml-2 truncate" style={{maxWidth: 120}}>Enquêteur</span>
           </div>
           
           {/* Bouton menu mobile */}
@@ -334,7 +334,7 @@ export default function ControllerHome() {
                   <div className="w-8 h-8 rounded-full bg-white text-blue-800 flex items-center justify-center font-bold">
                     {user.name?.[0]?.toUpperCase() || '?'}
                   </div>
-                  <span className="text-sm">{user.name || 'Contrôleur'}</span>
+                  <span className="text-sm">{user.name || 'Enquêteur'}</span>
                 </div>
               )}
               <button 

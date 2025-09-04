@@ -472,7 +472,7 @@ const AdminSurveyPublication: React.FC = () => {
             Gestion des enquêtes
           </h1>
           <p className="text-gray-600">
-            Créez et gérez les enquêtes pour les contrôleurs
+            Créez et gérez les enquêtes pour les enquêteurs
           </p>
         </div>
 

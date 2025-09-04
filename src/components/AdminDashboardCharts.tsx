@@ -100,13 +100,13 @@ export default function AdminDashboardCharts({ users }: AdminDashboardChartsProp
 
   // Données pour le graphique en anneau - Répartition des utilisateurs par rôle
   const roleData = {
-    labels: ['Administrateurs', 'Contrôleurs', 'Analystes'],
+    labels: ['Administrateurs', 'Enquêteurs', 'Analystes'],
     datasets: [
       {
         data: [usersByRole.admin, usersByRole.controller, usersByRole.analyst],
         backgroundColor: [
           'rgba(239, 68, 68, 0.8)',   // Rouge pour admin
-          'rgba(59, 130, 246, 0.8)',   // Bleu pour contrôleurs
+          'rgba(59, 130, 246, 0.8)',   // Bleu pour enquêteurs
           'rgba(245, 158, 11, 0.8)',   // Orange pour analystes
         ],
         borderColor: [

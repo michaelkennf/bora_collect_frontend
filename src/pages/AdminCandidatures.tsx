@@ -161,7 +161,7 @@ const AdminCandidatures: React.FC = () => {
             Gestion des candidatures
           </h1>
           <p className="text-gray-600">
-            Examinez et gérez les candidatures des contrôleurs aux enquêtes
+            Examinez et gérez les candidatures des enquêteurs aux enquêtes
           </p>
         </div>
 
@@ -245,7 +245,7 @@ const AdminCandidatures: React.FC = () => {
               </svg>
               <h3 className="mt-2 text-sm font-medium text-gray-900">Aucune candidature</h3>
               <p className="mt-1 text-sm text-gray-500">
-                Aucun contrôleur n'a encore postulé aux enquêtes.
+                Aucun enquêteur n'a encore postulé aux enquêtes.
               </p>
             </div>
           ) : (

@@ -44,7 +44,7 @@ export default function UserManager({ onUserAdded }: UserManagerProps) {
   const [filterRole, setFilterRole] = useState<string>('');
 
   const roles = [
-    { value: 'CONTROLLER', label: 'Contrôleur', color: 'bg-blue-100 text-blue-800' },
+    { value: 'CONTROLLER', label: 'Enquêteur', color: 'bg-blue-100 text-blue-800' },
     { value: 'ANALYST', label: 'Analyste', color: 'bg-purple-100 text-purple-800' },
     { value: 'ADMIN', label: 'Administrateur', color: 'bg-red-100 text-red-800' },
   ];
@@ -290,7 +290,7 @@ export default function UserManager({ onUserAdded }: UserManagerProps) {
                   className="w-full border border-gray-300 rounded px-3 py-2"
                   required
                 >
-                  <option value="CONTROLLER">Contrôleur</option>
+                  <option value="CONTROLLER">Enquêteur</option>
                   <option value="ANALYST">Analyste</option>
                   <option value="ADMIN">Administrateur</option>
                 </select>
