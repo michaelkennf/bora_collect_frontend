@@ -447,6 +447,20 @@ export default function SchoolForm() {
     });
   };
 
+  // Sélection de l'équipement principal (choix unique)
+  const handleEquipementPrincipalChange = (equipement: string) => {
+    setForm(prev => ({
+      ...prev,
+      formData: {
+        ...prev.formData,
+        cooking: {
+          ...prev.formData.cooking,
+          equipements: [equipement]
+        }
+      }
+    }));
+  };
+
   // Gestion du changement des équipements
   const handleEquipementsChange = (equipement: string, checked: boolean) => {
     setForm(prev => ({
@@ -497,16 +511,26 @@ export default function SchoolForm() {
 
   // Gestion du changement des autres champs
   const handleOtherChange = (section: string, field: string, value: string) => {
-    setForm(prev => ({
-      ...prev,
-      formData: {
-        ...prev.formData,
-        [section]: {
-          ...prev.formData[section as keyof typeof prev.formData],
-          [field]: value
+    setForm(prev => {
+      const next = {
+        ...prev,
+        formData: {
+          ...prev.formData,
+          [section]: {
+            ...prev.formData[section as keyof typeof prev.formData],
+            [field]: value
+          }
         }
+      } as typeof prev;
+
+      // Logique conditionnelle: si connaissanceSolutions passe à "Non", vider les avantages
+      if (section === 'knowledge' && field === 'connaissanceSolutions' && value === 'Non') {
+        (next.formData as any).knowledge.avantages = [];
+        (next.formData as any).knowledge.autresAvantages = '';
       }
-    }));
+
+      return next;
+    });
   };
 
   // Validation simple
@@ -969,9 +993,10 @@ export default function SchoolForm() {
               {equipements.map(equipement => (
                 <label key={equipement} className="flex items-center gap-2">
                   <input
-                    type="checkbox"
+                    type="radio"
+                    name="equipementPrincipal"
                     checked={form.formData.cooking.equipements.includes(equipement)}
-                    onChange={(e) => handleEquipementsChange(equipement, e.target.checked)}
+                    onChange={() => handleEquipementPrincipalChange(equipement)}
                   />
                   <span className="text-sm sm:text-base">{equipement}</span>
                 </label>
