@@ -179,7 +179,6 @@ export function DashboardController({ setView }: { setView: (view: string) => vo
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             {/** Calcul du nom d'affichage */}
-            {(() => { /* deliberately empty */ })()}
             {/**/}
             {/**/}
             {/**/}
