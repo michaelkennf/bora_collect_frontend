@@ -155,13 +155,30 @@ export default function RecordsSyncedList() {
                 <h4 className="text-lg font-bold text-green-800 mb-4">2. Mode de Cuisson Actuelle</h4>
                 <div className="space-y-4">
                   <div>
-                    <strong>Combustibles utilisés:</strong>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {selected.formData.cooking.combustibles.map((combustible: string, idx: number) => (
-                        <span key={idx} className="bg-green-200 text-green-800 px-2 py-1 rounded text-sm">
-                          {combustible}
-                        </span>
-                      ))}
+                    <strong>Combustibles utilisés (par ordre d'importance):</strong>
+                    <div className="mt-2 space-y-2">
+                      {selected.formData.cooking.combustibles
+                        .sort((a: string, b: string) => {
+                          const rankingA = selected.formData.cooking.combustiblesRanking?.[a] || 999;
+                          const rankingB = selected.formData.cooking.combustiblesRanking?.[b] || 999;
+                          return rankingA - rankingB;
+                        })
+                        .map((combustible: string, idx: number) => {
+                          const rank = selected.formData.cooking.combustiblesRanking?.[combustible];
+                          const rankText = rank === 1 ? '1er' : rank === 2 ? '2e' : rank === 3 ? '3e' : rank ? `${rank}e` : '';
+                          return (
+                            <div key={idx} className="flex items-center gap-2">
+                              {rankText && (
+                                <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-semibold">
+                                  {rankText}
+                                </span>
+                              )}
+                              <span className="bg-green-200 text-green-800 px-2 py-1 rounded text-sm">
+                                {combustible}
+                              </span>
+                            </div>
+                          );
+                        })}
                     </div>
                     {selected.formData.cooking.autresCombustibles && (
                       <div className="mt-2">
@@ -170,7 +187,7 @@ export default function RecordsSyncedList() {
                     )}
                   </div>
                   <div>
-                    <strong>Équipements de cuisson:</strong>
+                    <strong>Principal équipement de cuisson:</strong>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {selected.formData.cooking.equipements.map((equipement: string, idx: number) => (
                         <span key={idx} className="bg-green-200 text-green-800 px-2 py-1 rounded text-sm">

@@ -16,6 +16,7 @@ interface HouseholdData {
 
 interface CookingData {
   combustibles: string[];
+  combustiblesRanking: { [key: string]: number }; // Classement des combustibles (1er, 2e, 3e, etc.)
   equipements: string[];
   autresCombustibles?: string;
   autresEquipements?: string;
@@ -89,6 +90,9 @@ const equipements = [
 
 // Options pour les avantages
 const avantages = [
+  'Absence de fumée (réduction des maladies respiratoires)',
+  'Économie d\'argent',
+  'Gain de temps pour d\'autres activités',
   'Moins de fumée / meilleure santé (sont plus sûres pour la santé de ma famille.)',
   'Économie de combustible (cuisinent aussi bien que les méthodes traditionnelles)',
   'Gain de temps (Rapide)',
@@ -115,6 +119,7 @@ const initialHousehold: HouseholdData = {
 
 const initialCooking: CookingData = {
   combustibles: [],
+  combustiblesRanking: {},
   equipements: [],
   autresCombustibles: '',
   autresEquipements: ''
@@ -371,20 +376,75 @@ export default function SchoolForm() {
     }));
   };
 
-  // Gestion du changement des combustibles
+  // Gestion du changement des combustibles avec classement
   const handleCombustiblesChange = (combustible: string, checked: boolean) => {
-    setForm(prev => ({
-      ...prev,
-      formData: {
-        ...prev.formData,
-        cooking: {
-          ...prev.formData.cooking,
-          combustibles: checked
-            ? [...prev.formData.cooking.combustibles, combustible]
-            : prev.formData.cooking.combustibles.filter(c => c !== combustible)
-        }
+    setForm(prev => {
+      const currentCombustibles = prev.formData.cooking.combustibles;
+      const currentRanking = prev.formData.cooking.combustiblesRanking;
+      
+      let newCombustibles: string[];
+      let newRanking: { [key: string]: number } = { ...currentRanking };
+      
+      if (checked) {
+        // Ajouter le combustible
+        newCombustibles = [...currentCombustibles, combustible];
+        // Assigner le prochain rang disponible
+        const nextRank = newCombustibles.length;
+        newRanking[combustible] = nextRank;
+      } else {
+        // Supprimer le combustible
+        newCombustibles = currentCombustibles.filter(c => c !== combustible);
+        // Supprimer du classement
+        delete newRanking[combustible];
+        // Réorganiser les rangs
+        const remainingCombustibles = Object.keys(newRanking);
+        newRanking = {};
+        remainingCombustibles.forEach((c, index) => {
+          newRanking[c] = index + 1;
+        });
       }
-    }));
+      
+      return {
+        ...prev,
+        formData: {
+          ...prev.formData,
+          cooking: {
+            ...prev.formData.cooking,
+            combustibles: newCombustibles,
+            combustiblesRanking: newRanking
+          }
+        }
+      };
+    });
+  };
+
+  // Gestion du changement de classement des combustibles
+  const handleCombustibleRankingChange = (combustible: string, newRank: number) => {
+    setForm(prev => {
+      const currentRanking = prev.formData.cooking.combustiblesRanking;
+      const newRanking = { ...currentRanking };
+      
+      // Vérifier si le rang est déjà utilisé
+      const existingCombustible = Object.keys(newRanking).find(c => newRanking[c] === newRank);
+      
+      if (existingCombustible && existingCombustible !== combustible) {
+        // Échanger les rangs
+        newRanking[existingCombustible] = currentRanking[combustible];
+      }
+      
+      newRanking[combustible] = newRank;
+      
+      return {
+        ...prev,
+        formData: {
+          ...prev.formData,
+          cooking: {
+            ...prev.formData.cooking,
+            combustiblesRanking: newRanking
+          }
+        }
+      };
+    });
   };
 
   // Gestion du changement des équipements
@@ -855,17 +915,41 @@ export default function SchoolForm() {
           
           <div className="mb-4 sm:mb-6">
             <h4 className="font-semibold mb-3 text-sm sm:text-base">2.1.1. Quels types de combustibles utilisez-vous principalement pour la cuisson ? *</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
-              {combustibles.map(combustible => (
-                <label key={combustible} className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={form.formData.cooking.combustibles.includes(combustible)}
-                    onChange={(e) => handleCombustiblesChange(combustible, e.target.checked)}
-                  />
-                  <span className="text-sm sm:text-base">{combustible}</span>
-                </label>
-              ))}
+            <p className="text-sm text-gray-600 mb-4">Sélectionnez les combustibles utilisés et classez-les par ordre d'importance (1er, 2e, 3e, etc.)</p>
+            <div className="space-y-3">
+              {combustibles.map(combustible => {
+                const isSelected = form.formData.cooking.combustibles.includes(combustible);
+                const currentRank = form.formData.cooking.combustiblesRanking[combustible];
+                const maxRank = form.formData.cooking.combustibles.length;
+                
+                return (
+                  <div key={combustible} className="flex items-center gap-3 p-3 border rounded-lg bg-white">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={(e) => handleCombustiblesChange(combustible, e.target.checked)}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-sm sm:text-base flex-1">{combustible}</span>
+                    {isSelected && (
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs text-gray-600">Rang:</label>
+                        <select
+                          value={currentRank || ''}
+                          onChange={(e) => handleCombustibleRankingChange(combustible, parseInt(e.target.value))}
+                          className="border rounded px-2 py-1 text-sm w-16"
+                        >
+                          {Array.from({ length: maxRank }, (_, i) => i + 1).map(rank => (
+                            <option key={rank} value={rank}>
+                              {rank === 1 ? '1er' : rank === 2 ? '2e' : rank === 3 ? '3e' : `${rank}e`}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
             <div className="mt-3">
               <label className="block font-semibold mb-2 text-sm sm:text-base">Autres (précisez):</label>
@@ -880,7 +964,7 @@ export default function SchoolForm() {
           </div>
           
           <div>
-            <h4 className="font-semibold mb-3 text-sm sm:text-base">2.1.2. Quel est l'équipement de cuisson actuel ? (Plusieurs choix possibles) *</h4>
+            <h4 className="font-semibold mb-3 text-sm sm:text-base">2.1.2. Quel est votre principal équipement de cuisson actuellement ? *</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
               {equipements.map(equipement => (
                 <label key={equipement} className="flex items-center gap-2">
@@ -948,32 +1032,34 @@ export default function SchoolForm() {
             )}
           </div>
           
-          <div>
-            <h4 className="font-semibold mb-3 text-sm sm:text-base">3.2. Selon vous, quels sont les avantages potentiels des solutions de cuisson propre ? (plusieurs réponses possibles)</h4>
-            <div className="grid grid-cols-1 gap-2 sm:gap-3">
-              {avantages.map(avantage => (
-                <label key={avantage} className="flex items-start gap-2">
-                  <input
-                    type="checkbox"
-                    checked={form.formData.knowledge.avantages.includes(avantage)}
-                    onChange={(e) => handleAvantagesChange(avantage, e.target.checked)}
-                    className="mt-1"
-                  />
-                  <span className="text-sm sm:text-base">{avantage}</span>
-                </label>
-              ))}
+          {form.formData.knowledge.connaissanceSolutions === 'Oui' && (
+            <div>
+              <h4 className="font-semibold mb-3 text-sm sm:text-base">3.2. Selon vous, quels sont les avantages potentiels des solutions de cuisson propre ? (plusieurs réponses possibles)</h4>
+              <div className="grid grid-cols-1 gap-2 sm:gap-3">
+                {avantages.map(avantage => (
+                  <label key={avantage} className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={form.formData.knowledge.avantages.includes(avantage)}
+                      onChange={(e) => handleAvantagesChange(avantage, e.target.checked)}
+                      className="mt-1"
+                    />
+                    <span className="text-sm sm:text-base">{avantage}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="mt-3">
+                <label className="block font-semibold mb-2 text-sm sm:text-base">Autres :</label>
+                <input
+                  type="text"
+                  value={form.formData.knowledge.autresAvantages || ''}
+                  onChange={(e) => handleOtherChange('knowledge', 'autresAvantages', e.target.value)}
+                  className="w-full border rounded p-2 text-sm sm:text-base"
+                  placeholder="Précisez les autres avantages"
+                />
+              </div>
             </div>
-            <div className="mt-3">
-              <label className="block font-semibold mb-2 text-sm sm:text-base">Autres :</label>
-              <input
-                type="text"
-                value={form.formData.knowledge.autresAvantages || ''}
-                onChange={(e) => handleOtherChange('knowledge', 'autresAvantages', e.target.value)}
-                className="w-full border rounded p-2 text-sm sm:text-base"
-                placeholder="Précisez les autres avantages"
-              />
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Section 4: Perceptions et contraintes - Responsive */}
