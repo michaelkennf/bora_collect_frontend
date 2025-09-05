@@ -154,7 +154,7 @@ export default function ControllerDashboardCharts({ personalStats }: ControllerD
     labels: chartData.recordsByMonth.map((item: any) => item.month),
     datasets: [
       {
-        label: 'Enquêtes par mois',
+        label: 'Sondages par mois',
         data: chartData.recordsByMonth.map((item: any) => item.count),
         backgroundColor: 'rgba(59, 130, 246, 0.8)',
         borderColor: 'rgba(59, 130, 246, 1)',
@@ -177,7 +177,7 @@ export default function ControllerDashboardCharts({ personalStats }: ControllerD
     <div className="space-y-8">
       {/* Graphique en barres - Évolution mensuelle */}
       <div className="bg-white p-6 rounded-lg shadow-lg">
-        <h3 className="text-lg font-semibold mb-4 text-center">Évolution des Enquêtes (6 mois à partir du mois actuel)</h3>
+        <h3 className="text-lg font-semibold mb-4 text-center">Évolution des Sondages (6 mois à partir du mois actuel)</h3>
         <div className="h-80">
           <Bar
             data={monthlyData}
@@ -305,7 +305,7 @@ export default function ControllerDashboardCharts({ personalStats }: ControllerD
           <div className="text-2xl font-bold text-blue-600">
             {chartData.recordsByMonth.reduce((sum: number, item: any) => sum + item.count, 0)}
           </div>
-          <div className="text-blue-800">Total des enquêtes (6 mois)</div>
+          <div className="text-blue-800">Total des sondages (6 mois)</div>
         </div>
         <div className="bg-green-50 p-4 rounded-lg text-center">
           <div className="text-2xl font-bold text-green-600">

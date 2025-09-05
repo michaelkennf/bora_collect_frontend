@@ -244,13 +244,13 @@ export function DashboardController({ setView }: { setView: (view: string) => vo
           <div className="text-2xl sm:text-3xl font-bold text-blue-600 mb-2">
             {statsLoading ? '...' : personalStats?.totalRecords || 0}
           </div>
-          <div className="text-sm sm:text-base text-gray-600">Total des enquêtes</div>
+          <div className="text-sm sm:text-base text-gray-600">Total des sondages</div>
         </div>
         <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 text-center">
           <div className="text-2xl sm:text-3xl font-bold text-green-600 mb-2">
             {statsLoading ? '...' : personalStats?.syncedRecords || 0}
           </div>
-          <div className="text-sm sm:text-base text-gray-600">Enquêtes synchronisées</div>
+          <div className="text-sm sm:text-base text-gray-600">Sondages synchronisés</div>
         </div>
       </div>
 
@@ -271,7 +271,7 @@ export function DashboardController({ setView }: { setView: (view: string) => vo
             className="bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-lg text-center transition-colors"
           >
             <div className="text-2xl mb-2">📝</div>
-            <div className="font-semibold">Nouvelle enquête</div>
+            <div className="font-semibold">Nouveau sondage</div>
             <div className="text-sm opacity-90">Créer un formulaire</div>
           </button>
           <button
@@ -279,7 +279,7 @@ export function DashboardController({ setView }: { setView: (view: string) => vo
             className="bg-green-600 hover:bg-green-700 text-white p-4 rounded-lg text-center transition-colors"
           >
             <div className="text-2xl mb-2">📊</div>
-            <div className="font-semibold">Mes enquêtes</div>
+            <div className="font-semibold">Mes sondages</div>
             <div className="text-sm opacity-90">Voir mes données</div>
           </button>
           <button
@@ -287,8 +287,8 @@ export function DashboardController({ setView }: { setView: (view: string) => vo
             className="bg-purple-600 hover:bg-purple-700 text-white p-4 rounded-lg text-center transition-colors"
           >
             <div className="text-2xl mb-2">🔍</div>
-            <div className="font-semibold">Enquêtes disponibles</div>
-            <div className="text-sm opacity-90">Postuler aux enquêtes</div>
+            <div className="font-semibold">Sondages disponibles</div>
+            <div className="text-sm opacity-90">Postuler aux sondages</div>
           </button>
         </div>
       </div>
@@ -365,19 +365,19 @@ export default function ControllerHome() {
               onClick={() => handleViewChange('formulaire')} 
               className={`px-3 py-2 rounded font-semibold text-sm ${view === 'formulaire' ? 'bg-blue-700 shadow' : 'hover:bg-blue-700'} text-white transition-colors`}
             >
-              Nouvelle enquête
+              Nouveau sondage
             </button>
             <button 
               onClick={() => handleViewChange('enquetes')} 
               className={`px-3 py-2 rounded font-semibold text-sm ${view === 'enquetes' ? 'bg-blue-700 shadow' : 'hover:bg-blue-700'} text-white transition-colors`}
             >
-              Mes enquêtes
+              Mes sondages
             </button>
             <button 
               onClick={() => handleViewChange('surveys')} 
               className={`px-3 py-2 rounded font-semibold text-sm ${view === 'surveys' ? 'bg-blue-700 shadow' : 'hover:bg-blue-700'} text-white transition-colors`}
             >
-              Enquêtes disponibles
+              Sondages disponibles
             </button>
             <button 
               onClick={() => handleViewChange('parametres')} 
@@ -416,19 +416,19 @@ export default function ControllerHome() {
               onClick={() => handleViewChange('formulaire')} 
               className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'formulaire' ? 'bg-blue-700' : 'hover:bg-blue-700'} text-white`}
             >
-              Nouvelle enquête
+              Nouveau sondage
             </button>
             <button 
               onClick={() => handleViewChange('enquetes')} 
               className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'enquetes' ? 'bg-blue-700' : 'hover:bg-blue-700'} text-white`}
             >
-              Mes enquêtes
+              Mes sondages
             </button>
             <button 
               onClick={() => handleViewChange('surveys')} 
               className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'surveys' ? 'bg-blue-700' : 'hover:bg-blue-700'} text-white`}
             >
-              Enquêtes disponibles
+              Sondages disponibles
             </button>
             <button 
               onClick={() => handleViewChange('parametres')} 

@@ -56,12 +56,12 @@ export default function RecordsSyncedList() {
 
   return (
     <div className="max-w-5xl mx-auto bg-white p-8 rounded-xl shadow-lg mt-8">
-      <h2 className="text-2xl font-bold text-center mb-6">Enquêtes Synchronisées - Solutions de Cuisson Propre</h2>
+      <h2 className="text-2xl font-bold text-center mb-6">Sondages Synchronisés - Solutions de Cuisson Propre</h2>
       {error && <div className="text-red-600 mb-4 text-center">{error}</div>}
       {loading ? (
         <div>Chargement...</div>
       ) : records.length === 0 ? (
-        <div className="text-center text-gray-500">Aucune enquête synchronisée trouvée.</div>
+        <div className="text-center text-gray-500">Aucun sondage synchronisé trouvé.</div>
       ) : (
         <table className="w-full border mt-4">
           <thead>
@@ -99,7 +99,7 @@ export default function RecordsSyncedList() {
           <div className="bg-white p-6 rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto relative">
             {/* En-tête avec bouton fermer */}
             <div className="flex justify-between items-center mb-6 border-b pb-4">
-              <h3 className="text-2xl font-bold text-blue-800">📋 Détails de l'Enquête - Solutions de Cuisson Propre</h3>
+              <h3 className="text-2xl font-bold text-blue-800">📋 Détails du Sondage - Solutions de Cuisson Propre</h3>
               <button 
                 onClick={() => setSelected(null)} 
                 className="text-gray-500 hover:text-gray-700 text-2xl font-bold"

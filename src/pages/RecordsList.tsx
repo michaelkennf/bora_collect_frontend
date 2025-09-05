@@ -311,7 +311,7 @@ export default function RecordsList() {
   return (
     <div className="max-w-7xl mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">Liste des Enquêtes</h1>
+        <h1 className="text-3xl font-bold">Liste des Sondages</h1>
       </div>
 
       {/* Statut de synchronisation */}
@@ -485,7 +485,7 @@ export default function RecordsList() {
               {/* En-tête du modal */}
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-medium text-gray-900">
-                  Détails de l'enquête - {showDetails.formData?.household?.nomOuCode || 'Ménage'}
+                  Détails du sondage - {showDetails.formData?.household?.nomOuCode || 'Ménage'}
                 </h3>
                 <button
                   onClick={closeDetails}
