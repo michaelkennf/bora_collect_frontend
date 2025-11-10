@@ -1,4 +1,4 @@
-import { environment, getApiUrl } from '../config/environment';
+import { environment } from '../config/environment';
 
 // Configuration axios avec timeout et intercepteurs
 class ApiService {
@@ -12,7 +12,7 @@ class ApiService {
 
   // Méthode pour faire des requêtes GET
   async get<T>(endpoint: string, options?: RequestInit): Promise<T> {
-    const url = getApiUrl(endpoint);
+    const url = `${this.baseURL}${endpoint}`;
     
     try {
       const response = await fetch(url, {
@@ -38,7 +38,7 @@ class ApiService {
 
   // Méthode pour faire des requêtes POST
   async post<T>(endpoint: string, data?: any, options?: RequestInit): Promise<T> {
-    const url = getApiUrl(endpoint);
+    const url = `${this.baseURL}${endpoint}`;
     
     try {
       const response = await fetch(url, {
@@ -66,7 +66,7 @@ class ApiService {
 
   // Méthode pour faire des requêtes PUT
   async put<T>(endpoint: string, data?: any, options?: RequestInit): Promise<T> {
-    const url = getApiUrl(endpoint);
+    const url = `${this.baseURL}${endpoint}`;
     
     try {
       const response = await fetch(url, {
@@ -94,7 +94,7 @@ class ApiService {
 
   // Méthode pour faire des requêtes DELETE
   async delete<T>(endpoint: string, options?: RequestInit): Promise<T> {
-    const url = getApiUrl(endpoint);
+    const url = `${this.baseURL}${endpoint}`;
     
     try {
       const response = await fetch(url, {
@@ -121,7 +121,7 @@ class ApiService {
 
   // Méthode pour faire des requêtes PATCH
   async patch<T>(endpoint: string, data?: any, options?: RequestInit): Promise<T> {
-    const url = getApiUrl(endpoint);
+    const url = `${this.baseURL}${endpoint}`;
     
     try {
       const response = await fetch(url, {
@@ -149,7 +149,7 @@ class ApiService {
 
   // Méthode pour faire des requêtes avec upload de fichier
   async upload<T>(endpoint: string, formData: FormData, options?: RequestInit): Promise<T> {
-    const url = getApiUrl(endpoint);
+    const url = `${this.baseURL}${endpoint}`;
     
     try {
       const response = await fetch(url, {
@@ -181,7 +181,7 @@ class ApiService {
 
   // Méthode pour vérifier si on est en production
   isProduction(): boolean {
-    return environment.isProduction;
+    return false; // Hardcoded pour le moment
   }
 
   // Méthode pour obtenir la configuration

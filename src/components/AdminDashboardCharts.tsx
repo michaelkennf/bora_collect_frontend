@@ -42,7 +42,7 @@ export default function AdminDashboardCharts({ users }: AdminDashboardChartsProp
         const token = localStorage.getItem('token');
         if (!token) return;
 
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'https://api.collect.fikiri.co'}/users/approval-stats`, {
+        const response = await fetch(`http://localhost:3000/users/approval-stats`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
@@ -71,6 +71,7 @@ export default function AdminDashboardCharts({ users }: AdminDashboardChartsProp
     controller: users.filter((u: any) => u.role === 'CONTROLLER').length,
     supervisor: 0, // Rôle SUPERVISOR supprimé
     analyst: users.filter((u: any) => u.role === 'ANALYST').length,
+    projectManager: users.filter((u: any) => u.role === 'PROJECT_MANAGER').length,
   };
 
   // Données pour le graphique en anneau - Répartition des utilisateurs par sexe
@@ -100,19 +101,21 @@ export default function AdminDashboardCharts({ users }: AdminDashboardChartsProp
 
   // Données pour le graphique en anneau - Répartition des utilisateurs par rôle
   const roleData = {
-    labels: ['Administrateurs', 'Enquêteurs', 'Analystes'],
+    labels: ['Administrateurs', 'Enquêteurs', 'Analystes', 'Project Managers'],
     datasets: [
       {
-        data: [usersByRole.admin, usersByRole.controller, usersByRole.analyst],
+        data: [usersByRole.admin, usersByRole.controller, usersByRole.analyst, usersByRole.projectManager],
         backgroundColor: [
           'rgba(239, 68, 68, 0.8)',   // Rouge pour admin
           'rgba(59, 130, 246, 0.8)',   // Bleu pour enquêteurs
           'rgba(245, 158, 11, 0.8)',   // Orange pour analystes
+          'rgba(16, 185, 129, 0.8)',   // Vert pour project managers
         ],
         borderColor: [
           'rgba(239, 68, 68, 1)',
           'rgba(59, 130, 246, 1)',
           'rgba(245, 158, 11, 1)',
+          'rgba(16, 185, 129, 1)',
         ],
         borderWidth: 2,
       },
@@ -158,8 +161,8 @@ export default function AdminDashboardCharts({ users }: AdminDashboardChartsProp
 
   return (
     <div className="space-y-8">
-      {/* Graphiques en anneau et barres côte à côte */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Graphiques en anneau côte à côte */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Graphique en anneau - Répartition des utilisateurs par rôle */}
         <div className="bg-white p-6 rounded-lg shadow-lg">
           <h3 className="text-lg font-semibold mb-4 text-center">Répartition des utilisateurs par rôle</h3>
@@ -205,49 +208,6 @@ export default function AdminDashboardCharts({ users }: AdminDashboardChartsProp
             />
           </div>
         </div>
-
-        {/* Statistiques détaillées par sexe */}
-        <div className="bg-white p-6 rounded-lg shadow-lg">
-          <h3 className="text-lg font-semibold mb-4 text-center">Statistiques par sexe</h3>
-          <div className="space-y-4">
-            <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
-              <span className="flex items-center">
-                <div className="w-4 h-4 rounded-full bg-blue-500 mr-2"></div>
-                Masculin
-              </span>
-              <span className="font-bold text-blue-600">
-                {users.filter((u: any) => u.gender === 'MALE' && u.status === 'ACTIVE').length}
-              </span>
-            </div>
-            
-            <div className="flex justify-between items-center p-3 bg-pink-50 rounded-lg">
-              <span className="flex items-center">
-                <div className="w-4 h-4 rounded-full bg-pink-500 mr-2"></div>
-                Féminin
-              </span>
-              <span className="font-bold text-pink-600">
-                {users.filter((u: any) => u.gender === 'FEMALE' && u.status === 'ACTIVE').length}
-              </span>
-            </div>
-            
-            <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-              <span className="flex items-center">
-                <div className="w-4 h-4 rounded-full bg-green-500 mr-2"></div>
-                Autre
-              </span>
-              <span className="font-bold text-green-600">
-                {users.filter((u: any) => u.gender === 'OTHER' && u.status === 'ACTIVE').length}
-              </span>
-            </div>
-            
-            <div className="pt-4 border-t border-gray-200 text-center">
-              <div className="text-2xl font-bold text-gray-800">
-                {users.filter((u: any) => u.status === 'ACTIVE').length}
-              </div>
-              <div className="text-sm text-gray-600">Total d'utilisateurs actifs</div>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Graphique linéaire - Évolution des nouveaux utilisateurs */}
@@ -285,32 +245,6 @@ export default function AdminDashboardCharts({ users }: AdminDashboardChartsProp
               },
             }}
           />
-        </div>
-      </div>
-
-      {/* Résumé des statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-blue-50 p-4 rounded-lg text-center">
-          <div className="text-2xl font-bold text-blue-600">{users.length}</div>
-          <div className="text-blue-800">Total utilisateurs</div>
-        </div>
-        <div className="bg-green-50 p-4 rounded-lg text-center">
-          <div className="text-2xl font-bold text-green-600">{users.filter((u: any) => u.status === 'ACTIVE').length}</div>
-          <div className="text-green-800">Utilisateurs actifs</div>
-        </div>
-        <div className="bg-orange-50 p-4 rounded-lg text-center">
-          <div className="text-2xl font-bold text-orange-600">
-            {loading ? (
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-600 mx-auto"></div>
-            ) : (
-              pendingApprovals
-            )}
-          </div>
-          <div className="text-orange-800">Demandes d'inscription en attente</div>
-        </div>
-        <div className="bg-gray-50 p-4 rounded-lg text-center">
-          <div className="text-2xl font-bold text-gray-600">{users.filter((u: any) => u.status !== 'ACTIVE' && u.status !== 'PENDING_APPROVAL').length}</div>
-          <div className="text-gray-800">Autres statuts</div>
         </div>
       </div>
     </div>

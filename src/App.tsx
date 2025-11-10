@@ -3,10 +3,13 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import CreateAccount from './pages/CreateAccount';
+import ProjectManagerRegistration from './pages/ProjectManagerRegistration';
 import AccountCreatedSuccess from './pages/AccountCreatedSuccess';
 import AdminHome, { DashboardAdmin } from './pages/AdminHome';
 import ControllerHome, { DashboardController } from './pages/ControllerHome';
 import AnalystHome from './pages/AnalystHome';
+import ProjectManagerHome from './pages/ProjectManagerHome';
+import PMEnumeratorRequests from './pages/PMEnumeratorRequests';
 import RecordsList from './pages/RecordsList';
 import RecordsSyncedList from './pages/RecordsSyncedList';
 import SchoolForm from './pages/SchoolForm';
@@ -26,10 +29,54 @@ import 'react-toastify/dist/ReactToastify.css';
 function PrivateRoute({ children, roles }: { children: React.ReactNode; roles: string[] }) {
   const token = localStorage.getItem('token');
   const user = localStorage.getItem('user');
-  if (!token || !user) return <Navigate to="/login" />;
-  const { role } = JSON.parse(user);
-  if (!roles.includes(role)) return <Navigate to="/login" />;
-  return <>{children}</>;
+  
+  console.log('🔍 PrivateRoute - Token:', !!token, 'User:', !!user);
+  console.log('🔍 PrivateRoute - Roles attendus:', roles);
+  
+  if (!token || !user) {
+    console.log('❌ PrivateRoute - Token ou user manquant, redirection vers login');
+    return <Navigate to="/login" />;
+  }
+  
+  try {
+    const userData = JSON.parse(user);
+    console.log('🔍 PrivateRoute - User data:', userData);
+    console.log('🔍 PrivateRoute - User role:', userData.role);
+    console.log('🔍 PrivateRoute - User status:', userData.status);
+    
+    // Vérifier que les données utilisateur sont valides
+    if (!userData || !userData.role || !userData.id) {
+      console.log('❌ PrivateRoute - Données utilisateur invalides');
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      return <Navigate to="/login" />;
+    }
+    
+    // Vérifier si l'utilisateur est actif (sauf pour les PM qui peuvent être PENDING_APPROVAL)
+    if (userData.status && userData.status !== 'ACTIVE' && userData.status !== 'PENDING_APPROVAL') {
+      console.log('❌ PrivateRoute - Utilisateur non actif:', userData.status);
+      return <Navigate to="/login" />;
+    }
+    
+    // Pour les PM en attente d'approbation, permettre l'accès mais avec un message
+    if (userData.status === 'PENDING_APPROVAL' && userData.role === 'PROJECT_MANAGER') {
+      console.log('⚠️ PrivateRoute - PM en attente d\'approbation, accès autorisé');
+    }
+    
+    if (!roles.includes(userData.role)) {
+      console.log('❌ PrivateRoute - Rôle non autorisé:', userData.role, 'pour roles:', roles);
+      return <Navigate to="/login" />;
+    }
+    
+    console.log('✅ PrivateRoute - Accès autorisé pour rôle:', userData.role);
+    return <>{children}</>;
+  } catch (error) {
+    console.error('❌ PrivateRoute - Erreur parsing user data:', error);
+    // Nettoyer les données corrompues
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    return <Navigate to="/login" />;
+  }
 }
 
 export default function App() {
@@ -40,6 +87,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/create-account" element={<CreateAccount />} />
+          <Route path="/project-manager-registration" element={<ProjectManagerRegistration />} />
           <Route path="/account-created" element={<AccountCreatedSuccess />} />
           <Route path="/admin" element={<PrivateRoute roles={["ADMIN"]}><AdminHome /></PrivateRoute>}>
             <Route index element={<DashboardAdmin />} />
@@ -70,6 +118,16 @@ export default function App() {
           <Route path="/analyst-home" element={
             <PrivateRoute roles={["ANALYST"]}>
               <AnalystHome />
+            </PrivateRoute>
+          } />
+          <Route path="/project-manager" element={
+            <PrivateRoute roles={["PROJECT_MANAGER"]}>
+              <ProjectManagerHome />
+            </PrivateRoute>
+          } />
+          <Route path="/analyst/enumerator-requests" element={
+            <PrivateRoute roles={["PROJECT_MANAGER"]}>
+              <PMEnumeratorRequests />
             </PrivateRoute>
           } />
           <Route path="/analyst/parametres" element={

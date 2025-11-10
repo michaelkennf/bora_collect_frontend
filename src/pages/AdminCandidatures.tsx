@@ -32,7 +32,7 @@ const AdminCandidatures: React.FC = () => {
   const [reviewStatus, setReviewStatus] = useState<'APPROVED' | 'REJECTED'>('APPROVED');
   const [reviewComments, setReviewComments] = useState('');
 
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://api.collect.fikiri.co';
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
   useEffect(() => {
     fetchApplications();

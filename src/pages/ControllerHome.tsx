@@ -2,109 +2,231 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import logo2 from '../assets/images/logo2.jpg';
 import ControllerDashboardCharts from '../components/ControllerDashboardCharts';
-import SchoolForm from './SchoolForm';
+import ControllerDailyObjectives from '../components/ControllerDailyObjectives';
+import ObjectiveAlerts from '../components/ObjectiveAlerts';
+import ObjectiveProjection from '../components/ObjectiveProjection';
+import ControllerCampaignForms from './ControllerCampaignForms';
 import RecordsList from './RecordsList';
 import ControllerAvailableSurveys from './ControllerAvailableSurveys';
 import Settings from './Settings';
 import PNUDFooter from '../components/PNUDFooter';
+import { environment } from '../config/environment';
+
+// Styles CSS pour les animations 3D
+const flipCardStyles = `
+  .perspective-1000 {
+    perspective: 1000px;
+  }
+  .transform-style-preserve-3d {
+    transform-style: preserve-3d;
+  }
+  .backface-hidden {
+    backface-visibility: hidden;
+  }
+  .rotate-y-180 {
+    transform: rotateY(180deg);
+  }
+`;
 
 export function DashboardController({ setView }: { setView: (view: string) => void }) {
   const [user, setUser] = useState<any>(null);
-  const [personalStats, setPersonalStats] = useState<any>(null);
-  const [statsLoading, setStatsLoading] = useState(false);
-  const [records, setRecords] = useState<any[]>([]);
-  const navigate = useNavigate();
+  const [dashboardStats, setDashboardStats] = useState<any>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [flippedCards, setFlippedCards] = useState<{ [key: string]: boolean }>({});
+  const [dailyObjectives, setDailyObjectives] = useState<any[]>([]);
+  const [objectivesLoading, setObjectivesLoading] = useState(false);
 
-  // Fonction pour récupérer les statistiques personnelles
-  const fetchPersonalStats = async () => {
+  // Fonction pour gérer le retournement des cartes
+  const toggleCardFlip = (cardId: string) => {
+    setFlippedCards(prev => ({
+      ...prev,
+      [cardId]: !prev[cardId]
+    }));
+  };
+
+  // Fonction pour récupérer les statistiques du tableau de bord
+  const fetchDashboardStats = async () => {
     setStatsLoading(true);
     try {
-      // Récupérer les vraies statistiques depuis l'API
       const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('Token non trouvé');
       }
 
-      // Forcer la récupération des vraies données sans cache
-      const res = await fetch('https://api.collect.fikiri.co/records/controller', {
+      const statsResponse = await fetch(`${environment.apiBaseUrl}/users/enumerator-stats`, {
         headers: { 
-          Authorization: `Bearer ${token}`,
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
+          Authorization: `Bearer ${token}`
         },
         cache: 'no-store'
       });
       
-      if (!res.ok) {
-        throw new Error(`Erreur HTTP: ${res.status}`);
+      if (!statsResponse.ok) {
+        throw new Error(`Erreur HTTP: ${statsResponse.status}`);
       }
       
-      const records = await res.json();
-      
-      // Vérifier que les données sont bien un tableau
-      if (!Array.isArray(records)) {
-        console.error('❌ Les données reçues ne sont pas un tableau:', records);
-        throw new Error('Format de données invalide');
-      }
-      
-      // Calculer les vraies statistiques - tous les enregistrements sont synchronisés
-      const totalRecords = records.length;
-      
-      console.log(`📊 Données récupérées de l'API: ${totalRecords} enregistrements`);
-      console.log('📋 Contenu des enregistrements:', records);
-      
-      setPersonalStats({
-        totalRecords,
-        syncedRecords: totalRecords, // Tous sont synchronisés
+      const stats = await statsResponse.json();
+      setDashboardStats({
+        totalSurveys: stats.totalSurveys || 0,
+        totalCampaigns: stats.totalCampaigns || 0,
+        totalFormsSubmitted: stats.totalFormsSubmitted || 0,
+        totalCompletedCampaigns: stats.totalCompletedCampaigns || 0,
+        totalOngoingCampaigns: stats.totalOngoingCampaigns || 0,
+        expectedTotal: stats.expectedTotal || 0,
+        totalDailyTarget: stats.totalDailyTarget || 0,
+        totalEnumeratorTarget:
+          typeof stats.totalEnumeratorTarget === 'number'
+            ? stats.totalEnumeratorTarget
+            : stats.expectedTotal || 0,
+        personalTargets: Array.isArray(stats.personalTargets) ? stats.personalTargets : [],
+        todaySubmitted: stats.todaySubmitted || 0,
+        averagePerDay: stats.averagePerDay || 0,
+        workedDays: stats.workedDays || 0,
+        plannedDays: stats.plannedDays || 0,
+        remainingToReach: typeof stats.remainingToReach === 'number'
+          ? stats.remainingToReach
+          : Math.max((stats.expectedTotal || 0) - (stats.totalFormsSubmitted || 0), 0)
       });
-      
-      // Stocker les enquêtes pour l'affichage
-      setRecords(records);
-      
-    } catch (err: any) {
-      console.error('❌ Erreur lors de la récupération des données:', err.message);
-      // En cas d'erreur, utiliser des données par défaut
-      setPersonalStats({
-        totalRecords: 0,
-        syncedRecords: 0,
+    } catch (error) {
+      console.error('❌ Erreur lors de la récupération des statistiques:', error);
+      setDashboardStats({
+        totalSurveys: 0,
+        totalCampaigns: 0,
+        totalFormsSubmitted: 0,
+        totalCompletedCampaigns: 0,
+        totalOngoingCampaigns: 0
       });
-      setRecords([]);
     } finally {
       setStatsLoading(false);
     }
   };
 
-  useEffect(() => {
-    const u = localStorage.getItem('user');
-    if (u) setUser(JSON.parse(u));
-  }, []);
+  // Fonction pour récupérer les objectifs quotidiens
+  const fetchDailyObjectives = async () => {
+    setObjectivesLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch(`${environment.apiBaseUrl}/surveys/enumerator-daily-objectives`, {
+        headers: { 
+          Authorization: `Bearer ${token}`
+        },
+        cache: 'no-store'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setDailyObjectives(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors de la récupération des objectifs:', error);
+      setDailyObjectives([]);
+    } finally {
+      setObjectivesLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const handler = () => {
-      const u = localStorage.getItem('user');
-      if (u) setUser(JSON.parse(u));
+    const loadUserData = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const response = await fetch(`${environment.apiBaseUrl}/auth/me`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const userData = await response.json();
+          setUser(userData.user);
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement des données utilisateur:', error);
+      }
     };
-    window.addEventListener('userProfileUpdated', handler);
-    return () => window.removeEventListener('userProfileUpdated', handler);
+
+    loadUserData();
   }, []);
 
   useEffect(() => {
     if (user) {
-      fetchPersonalStats();
+      fetchDashboardStats();
+      fetchDailyObjectives();
     }
   }, [user]);
 
-  if (!user) {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Supprimer la vérification !user dans DashboardController car elle est déjà faite dans ControllerHome
+
+  // Afficher un écran de chargement si les données ne sont pas encore prêtes
+  if (statsLoading || !user || !dashboardStats) {
     return (
-      <div className="text-center py-8">
-        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <p className="mt-2 text-gray-600">Chargement de l'utilisateur...</p>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+        {/* Styles CSS pour les animations */}
+        <style dangerouslySetInnerHTML={{ __html: flipCardStyles }} />
+        
+        {/* Skeleton pour l'en-tête */}
+        <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white rounded-xl shadow-lg p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
+            <div className="flex-1">
+              <div className="animate-pulse bg-white/20 rounded h-8 w-64 mb-2"></div>
+              <div className="animate-pulse bg-white/20 rounded h-4 w-32"></div>
+            </div>
+            <div className="flex items-center gap-3 mt-4 sm:mt-0">
+              <div className="animate-pulse bg-white/20 rounded-full w-12 h-12"></div>
+              <div className="text-right">
+                <div className="animate-pulse bg-white/20 rounded h-4 w-24 mb-1"></div>
+                <div className="animate-pulse bg-white/20 rounded h-3 w-32"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Skeleton pour les cartes de statistiques */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="relative w-full h-32">
+              <div className="absolute inset-0 bg-gradient-to-br from-gray-300 to-gray-400 rounded-xl shadow-lg animate-pulse">
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center text-white">
+                    <div className="animate-pulse bg-white/20 rounded w-8 h-8 mx-auto mb-2"></div>
+                    <div className="animate-pulse bg-white/20 rounded h-4 w-24 mb-1"></div>
+                    <div className="animate-pulse bg-white/20 rounded h-3 w-16"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Skeleton pour les graphiques */}
+        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
+          <div className="animate-pulse bg-gray-200 rounded h-6 w-48 mb-4"></div>
+          <div className="animate-pulse bg-gray-200 rounded h-64"></div>
+        </div>
+
+        {/* Skeleton pour les actions rapides */}
+        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
+          <div className="animate-pulse bg-gray-200 rounded h-6 w-32 mb-4"></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="animate-pulse bg-gray-200 rounded-lg h-24"></div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
 
+  const personalTotal =
+    dashboardStats.totalEnumeratorTarget ?? dashboardStats.expectedTotal ?? 0;
+  const personalDailyTarget = dashboardStats.totalDailyTarget ?? 0;
+
   return (
-    <div className="space-y-6">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+      {/* Styles CSS pour les animations */}
+      <style dangerouslySetInnerHTML={{ __html: flipCardStyles }} />
+      
       {/** Nom d'affichage sans le mot "Contrôleur" */}
       {(() => { /* inline IIFE to keep scope local */ })()}
       {/**/}
@@ -210,88 +332,374 @@ export function DashboardController({ setView }: { setView: (view: string) => vo
             {/**/}
             <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">
               {(() => {
-                const displayName = (user.name || 'Enquêteur').replace(/Contr[oô]leur/gi, 'Enquêteur');
+                let displayName = user?.name;
+                
+                // Vérifier si le nom est vide, null ou undefined
+                if (!displayName || displayName.trim() === '') {
+                  displayName = 'Enquêteur';
+                }
+                
                 return `Bienvenue, ${displayName} !`;
               })()}
             </h2>
             <p className="text-gray-600 text-sm sm:text-base">
-              Interface de contrôle et de collecte de données
+              Interface enquêteur
             </p>
           </div>
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-lg">
               {(() => {
-                const displayName = (user.name || 'Enquêteur').replace(/Contr[oô]leur/gi, 'Enquêteur');
+                const displayName = user?.name || 'Enquêteur';
                 return displayName?.[0]?.toUpperCase() || 'E';
               })()}
             </div>
-            <div className="text-right">
-              <div className="font-semibold text-gray-800">
-                {(() => {
-                  const displayName = (user.name || 'Enquêteur').replace(/Contr[oô]leur/gi, 'Enquêteur');
-                  return displayName;
-                })()}
+          </div>
+        </div>
+      </div>
+
+      {/* Statistiques personnelles avec cartes animées */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 max-w-5xl mx-auto">
+        {/* Carte Total de sondages */}
+        <div 
+          className="relative w-full h-24 cursor-pointer perspective-1000 hover:scale-105 transition-transform duration-300"
+          onClick={() => toggleCardFlip('totalSurveys')}
+        >
+          <div className={`relative w-full h-full transition-transform duration-700 transform-style-preserve-3d ${
+            flippedCards.totalSurveys ? 'rotate-y-180' : ''
+          }`}>
+            {/* Recto */}
+            <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg hover:shadow-xl flex items-center justify-center transition-shadow duration-300">
+              <div className="text-center text-white">
+                <div className="mb-2 hover:scale-110 transition-transform duration-200 relative">
+                  <div className="absolute inset-0 bg-white opacity-20 rounded-full blur-sm"></div>
+                  <svg className="w-6 h-6 mx-auto relative z-10 drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                  </svg>
+                </div>
+                <div className="text-xs font-semibold">Total de sondages</div>
+                <div className="text-xs opacity-80 mt-1 animate-pulse">Cliquez pour voir</div>
               </div>
-              <div className="text-sm text-gray-500">{user.email}</div>
+            </div>
+            {/* Verso */}
+            <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg flex items-center justify-center rotate-y-180">
+              <div className="text-center text-white">
+                <div className="text-2xl font-bold mb-1">
+                  {statsLoading ? (
+                    <div className="animate-pulse bg-white/20 rounded w-12 h-8 mx-auto"></div>
+                  ) : (
+                    <span className="animate-bounce hover:animate-pulse transition-all duration-300 hover:scale-110 hover:text-yellow-200">{dashboardStats?.totalSurveys || 0}</span>
+                  )}
+                </div>
+                <div className="text-sm">Sondages réalisés</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Carte Mes campagnes */}
+        <div 
+          className="relative w-full h-24 cursor-pointer perspective-1000 hover:scale-105 transition-transform duration-300"
+          onClick={() => toggleCardFlip('totalCampaigns')}
+        >
+          <div className={`relative w-full h-full transition-transform duration-700 transform-style-preserve-3d ${
+            flippedCards.totalCampaigns ? 'rotate-y-180' : ''
+          }`}>
+            {/* Recto */}
+            <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg hover:shadow-xl flex items-center justify-center transition-shadow duration-300">
+              <div className="text-center text-white">
+                <div className="mb-2 hover:scale-110 transition-transform duration-200 relative">
+                  <div className="absolute inset-0 bg-white opacity-20 rounded-full blur-sm"></div>
+                  <svg className="w-6 h-6 mx-auto relative z-10 drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                  </svg>
+                </div>
+                <div className="text-xs font-semibold">Mes campagnes</div>
+                <div className="text-xs opacity-80 mt-1 animate-pulse">Cliquez pour voir</div>
+              </div>
+            </div>
+            {/* Verso */}
+            <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg flex items-center justify-center rotate-y-180">
+              <div className="text-center text-white">
+                <div className="text-2xl font-bold mb-1">
+                  {statsLoading ? (
+                    <div className="animate-pulse bg-white/20 rounded w-12 h-8 mx-auto"></div>
+                  ) : (
+                    <span className="animate-bounce hover:animate-pulse transition-all duration-300 hover:scale-110 hover:text-yellow-200">{dashboardStats?.totalCampaigns || 0}</span>
+                  )}
+                </div>
+                <div className="text-xs">
+                  <div>En cours: {statsLoading ? (
+                    <span className="animate-pulse bg-white/20 rounded w-8 h-4 inline-block"></span>
+                  ) : (
+                    <span className="animate-bounce">{dashboardStats?.totalOngoingCampaigns || 0}</span>
+                  )}</div>
+                  <div>Terminées: {statsLoading ? (
+                    <span className="animate-pulse bg-white/20 rounded w-8 h-4 inline-block"></span>
+                  ) : (
+                    <span className="animate-bounce">{dashboardStats?.totalCompletedCampaigns || 0}</span>
+                  )}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Carte Formulaires soumis */}
+        <div 
+          className="relative w-full h-24 cursor-pointer perspective-1000 hover:scale-105 transition-transform duration-300"
+          onClick={() => toggleCardFlip('totalFormsSubmitted')}
+        >
+          <div className={`relative w-full h-full transition-transform duration-700 transform-style-preserve-3d ${
+            flippedCards.totalFormsSubmitted ? 'rotate-y-180' : ''
+          }`}>
+            {/* Recto */}
+            <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg hover:shadow-xl flex items-center justify-center transition-shadow duration-300">
+              <div className="text-center text-white">
+                <div className="mb-2 hover:scale-110 transition-transform duration-200 relative">
+                  <div className="absolute inset-0 bg-white opacity-20 rounded-full blur-sm"></div>
+                  <svg className="w-6 h-6 mx-auto relative z-10 drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+                    <path d="M8 12h8v2H8v-2zm0 4h8v2H8v-2z" fill="rgba(255,255,255,0.3)"/>
+                  </svg>
+                </div>
+                <div className="text-xs font-semibold">Formulaires soumis</div>
+                <div className="text-xs opacity-80 mt-1 animate-pulse">Cliquez pour voir</div>
+              </div>
+            </div>
+            {/* Verso */}
+            <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg flex items-center justify-center rotate-y-180">
+              <div className="text-center text-white">
+                <div className="text-2xl font-bold mb-1">
+                  {statsLoading ? (
+                    <div className="animate-pulse bg-white/20 rounded w-12 h-8 mx-auto"></div>
+                  ) : (
+                    <span className="animate-bounce hover:animate-pulse transition-all duration-300 hover:scale-110 hover:text-yellow-200">{dashboardStats?.totalFormsSubmitted || 0}</span>
+                  )}
+                </div>
+                <div className="text-sm">Formulaires complétés</div>
+                {!statsLoading && (
+                  <div className="mt-1 text-xs text-purple-100 space-y-1">
+                    <div>Aujourd'hui : <strong>{dashboardStats?.todaySubmitted || 0}</strong> / {(dashboardStats?.totalDailyTarget || 0)}</div>
+                    <div>Moyenne : <strong>{dashboardStats?.averagePerDay ? Number(dashboardStats.averagePerDay).toFixed(1) : '0.0'}</strong> / jour</div>
+                    <div>Jours actifs : <strong>{dashboardStats?.workedDays || 0}</strong>{dashboardStats?.plannedDays ? ` / ${dashboardStats.plannedDays}` : ''}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Carte Objectif personnel */}
+        <div 
+          className="relative w-full h-24 cursor-pointer perspective-1000 hover:scale-105 transition-transform duration-300"
+          onClick={() => toggleCardFlip('personalTarget')}
+        >
+          <div className={`relative w-full h-full transition-transform duration-700 transform-style-preserve-3d ${
+            flippedCards.personalTarget ? 'rotate-y-180' : ''
+          }`}>
+            {/* Recto */}
+            <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl shadow-lg hover:shadow-xl flex items-center justify-center transition-shadow duration-300">
+              <div className="text-center text-white">
+                <div className="mb-2 hover:scale-110 transition-transform duration-200 relative">
+                  <div className="absolute inset-0 bg-white opacity-20 rounded-full blur-sm"></div>
+                  <svg className="w-6 h-6 mx-auto relative z-10 drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M13 2H3v18h18V9h-8z" opacity="0.4"/>
+                    <path d="M13 2v6h6" />
+                  </svg>
+                </div>
+                <div className="text-xs font-semibold">Objectif personnel total</div>
+                <div className="text-xs opacity-80 mt-1 animate-pulse">Cliquez pour voir</div>
+              </div>
+            </div>
+            {/* Verso */}
+            <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl shadow-lg flex items-center justify-center rotate-y-180">
+              <div className="text-center text-white space-y-1">
+                <div className="text-2xl font-bold mb-1">
+                  {statsLoading ? (
+                    <div className="animate-pulse bg-white/20 rounded w-12 h-8 mx-auto"></div>
+                  ) : (
+                    <span className="animate-bounce hover:animate-pulse transition-all duration-300 hover:scale-110 hover:text-yellow-200">
+                      {personalTotal}
+                    </span>
+                  )}
+                </div>
+                <div className="text-sm">Objectif total (toutes campagnes)</div>
+                {!statsLoading && (
+                  <div className="text-xs text-indigo-100 space-y-1">
+                    <div>
+                      Réalisé : <strong>{dashboardStats?.totalFormsSubmitted || 0}</strong> /{' '}
+                      {personalTotal}
+                    </div>
+                    <div>
+                      Reste à faire : <strong>{dashboardStats?.remainingToReach || 0}</strong>
+                    </div>
+                    {personalDailyTarget ? (
+                      <div>
+                        Objectif quotidien combiné : {personalDailyTarget} formulaires
+                      </div>
+                    ) : null}
+                    {dashboardStats?.plannedDays ? (
+                      <div>Durée prévue : {dashboardStats.plannedDays} jours</div>
+                    ) : null}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Statistiques personnelles */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 text-center">
-          <div className="text-2xl sm:text-3xl font-bold text-blue-600 mb-2">
-            {statsLoading ? '...' : personalStats?.totalRecords || 0}
-          </div>
-          <div className="text-sm sm:text-base text-gray-600">Total des sondages</div>
-        </div>
-        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 text-center">
-          <div className="text-2xl sm:text-3xl font-bold text-green-600 mb-2">
-            {statsLoading ? '...' : personalStats?.syncedRecords || 0}
-          </div>
-          <div className="text-sm sm:text-base text-gray-600">Sondages synchronisés</div>
-        </div>
-      </div>
-
-      {/* Graphiques */}
-      {!statsLoading && personalStats && (
+      {!statsLoading && dashboardStats?.personalTargets?.length > 0 && (
         <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
-          <h3 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4">Statistiques personnelles</h3>
-          <ControllerDashboardCharts personalStats={personalStats} />
+          <h3 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4">
+            Objectifs par campagne
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Campagne
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Objectif quotidien
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Jours planifiés
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Objectif total
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Statut
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {dashboardStats.personalTargets.map((target: any) => (
+                  <tr key={target.surveyId}>
+                    <td className="px-4 py-3 text-sm text-gray-900 font-semibold">
+                      {target.surveyTitle}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      {target.dailyTarget || 0}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      {target.campaignDays || 0}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-900 font-semibold">
+                      {target.totalTarget || 0}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                          target.status === 'PUBLISHED'
+                            ? 'bg-blue-100 text-blue-700'
+                            : target.status === 'TERMINATED'
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {target.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
-      {/* Actions rapides */}
+      {/* Graphiques */}
+      {!statsLoading && dashboardStats && (
+        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
+          <h3 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4">Statistiques personnelles</h3>
+          <ControllerDashboardCharts personalStats={dashboardStats} />
+        </div>
+      )}
+
+      {/* Alertes et Objectifs Quotidiens */}
+      {!objectivesLoading && dailyObjectives.length > 0 && dailyObjectives[0] && (
+        <>
+          {/* Alertes Intelligentes */}
+          <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
+            <h3 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4">Alertes</h3>
+            <ObjectiveAlerts
+              totalSubmitted={dailyObjectives[0].currentProgress.totalSubmitted}
+              totalTarget={dailyObjectives[0].totalTarget}
+              dailySubmitted={dailyObjectives[0].todayProgress.submitted}
+              dailyTarget={dailyObjectives[0].todayProgress.target}
+              remainingDays={dailyObjectives[0].recommendations.remainingDays}
+              userRole="CONTROLLER"
+            />
+          </div>
+
+          {/* Projections */}
+          <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
+            <ObjectiveProjection
+              totalSubmitted={dailyObjectives[0].currentProgress.totalSubmitted}
+              totalTarget={dailyObjectives[0].totalTarget}
+              dailySubmitted={dailyObjectives[0].todayProgress.submitted}
+              dailyTarget={dailyObjectives[0].todayProgress.target}
+              remainingDays={dailyObjectives[0].recommendations.remainingDays}
+              averageDailyRate={dailyObjectives[0].recommendations.avgPerDay}
+            />
+          </div>
+        </>
+      )}
+
+      {/* Objectifs Quotidiens */}
       <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
-        <h3 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4">Actions rapides</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <h3 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4">Suivi de mes Objectifs Quotidiens</h3>
+        <ControllerDailyObjectives objectives={dailyObjectives} loading={objectivesLoading} />
+      </div>
+
+      {/* Actions rapides */}
+      {!statsLoading && (
+        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
+          <h3 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4">Actions rapides</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           <button
             onClick={() => setView('formulaire')}
-            className="bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-lg text-center transition-colors"
+            className="bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-lg text-center transition-all duration-300 hover:scale-105 hover:shadow-lg"
           >
-            <div className="text-2xl mb-2">📝</div>
+            <div className="mb-2 flex justify-center">
+              <svg className="w-8 h-8 drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+                <path d="M8 12h8v2H8v-2zm0 4h8v2H8v-2z" fill="rgba(255,255,255,0.3)"/>
+              </svg>
+            </div>
             <div className="font-semibold">Nouveau sondage</div>
             <div className="text-sm opacity-90">Créer un formulaire</div>
           </button>
           <button
             onClick={() => setView('enquetes')}
-            className="bg-green-600 hover:bg-green-700 text-white p-4 rounded-lg text-center transition-colors"
+            className="bg-green-600 hover:bg-green-700 text-white p-4 rounded-lg text-center transition-all duration-300 hover:scale-105 hover:shadow-lg"
           >
-            <div className="text-2xl mb-2">📊</div>
+            <div className="mb-2 flex justify-center">
+              <svg className="w-8 h-8 drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+              </svg>
+            </div>
             <div className="font-semibold">Mes sondages</div>
             <div className="text-sm opacity-90">Voir mes données</div>
           </button>
           <button
             onClick={() => setView('surveys')}
-            className="bg-purple-600 hover:bg-purple-700 text-white p-4 rounded-lg text-center transition-colors"
+            className="bg-purple-600 hover:bg-purple-700 text-white p-4 rounded-lg text-center transition-all duration-300 hover:scale-105 hover:shadow-lg"
           >
-            <div className="text-2xl mb-2">🔍</div>
-            <div className="font-semibold">Sondages disponibles</div>
-            <div className="text-sm opacity-90">Postuler aux sondages</div>
+            <div className="mb-2 flex justify-center">
+              <svg className="w-8 h-8 drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+              </svg>
+            </div>
+            <div className="font-semibold">Opportunités disponibles</div>
+            <div className="text-sm opacity-90">Postuler à des campagnes disponibles</div>
           </button>
         </div>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -334,125 +742,242 @@ export default function ControllerHome() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Navigation responsive */}
-      <nav className="bg-blue-800 text-white p-4">
-        <div className="flex justify-between items-center">
-          {/* Logo et titre */}
-          <div className="flex items-center gap-2 min-w-0">
-            <img src={logo2} alt="Logo 2" className="h-10 sm:h-12 w-auto object-contain bg-white rounded shadow" />
-            <span className="font-bold text-base sm:text-lg ml-2 truncate" style={{maxWidth: 120}}>Enquêteur</span>
-          </div>
-          
-          {/* Bouton menu mobile */}
-          <button 
-            className="md:hidden p-2 rounded hover:bg-blue-700 transition-colors"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            aria-label="Menu"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-          
-          {/* Menu desktop */}
-          <div className="hidden md:flex items-center gap-2">
+      <nav className="bg-gradient-to-r from-blue-900 via-blue-800 to-blue-900 text-white shadow-lg border-b border-blue-700">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-20">
+            {/* Logo et titre */}
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="relative">
+                <img src={logo2} alt="Logo" className="h-10 sm:h-12 w-auto object-contain bg-white rounded-lg shadow-md p-1" />
+                <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-white animate-pulse"></div>
+              </div>
+              <div className="flex flex-col">
+                <span className="font-bold text-base sm:text-lg text-white">Enquêteur</span>
+                <span className="text-xs text-blue-200 hidden sm:block">FikiriCollect</span>
+              </div>
+            </div>
+            
+            {/* Bouton menu mobile */}
             <button 
-              onClick={() => handleViewChange('dashboard')} 
-              className={`px-3 py-2 rounded font-semibold text-sm ${view === 'dashboard' ? 'bg-blue-700 shadow' : 'hover:bg-blue-700'} text-white transition-colors`}
+              className="md:hidden p-2 rounded-lg hover:bg-blue-700/50 transition-all duration-200 hover:scale-105 active:scale-95"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              aria-label="Menu"
             >
-              Dashboard
-            </button>
-            <button 
-              onClick={() => handleViewChange('formulaire')} 
-              className={`px-3 py-2 rounded font-semibold text-sm ${view === 'formulaire' ? 'bg-blue-700 shadow' : 'hover:bg-blue-700'} text-white transition-colors`}
-            >
-              Nouveau sondage
-            </button>
-            <button 
-              onClick={() => handleViewChange('enquetes')} 
-              className={`px-3 py-2 rounded font-semibold text-sm ${view === 'enquetes' ? 'bg-blue-700 shadow' : 'hover:bg-blue-700'} text-white transition-colors`}
-            >
-              Mes sondages
-            </button>
-            <button 
-              onClick={() => handleViewChange('surveys')} 
-              className={`px-3 py-2 rounded font-semibold text-sm ${view === 'surveys' ? 'bg-blue-700 shadow' : 'hover:bg-blue-700'} text-white transition-colors`}
-            >
-              Sondages disponibles
-            </button>
-            <button 
-              onClick={() => handleViewChange('parametres')} 
-              className={`px-3 py-2 rounded font-semibold text-sm ${view === 'parametres' ? 'bg-blue-700 shadow' : 'hover:bg-blue-700'} text-white transition-colors`}
-            >
-              Paramètres
+              <svg className="w-6 h-6 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
             </button>
             
-            {/* Profil utilisateur et déconnexion */}
-            <div className="flex items-center gap-2 ml-2">
-              {user && (
-                <div className="w-8 h-8 rounded-full bg-white text-blue-800 flex items-center justify-center font-bold">
-                  {user.name?.[0]?.toUpperCase() || '?'}
-                </div>
-              )}
+            {/* Menu desktop */}
+            <div className="hidden md:flex items-center gap-1">
               <button 
-                onClick={() => { localStorage.clear(); navigate('/login'); }} 
-                className="bg-white text-blue-800 px-3 py-1 rounded font-semibold text-sm hover:bg-gray-100 transition-colors"
+                onClick={() => handleViewChange('dashboard')} 
+                className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 ${
+                  view === 'dashboard' 
+                    ? 'bg-white text-blue-900 shadow-lg transform scale-105' 
+                    : 'text-white hover:bg-blue-700/50 hover:scale-105'
+                }`}
               >
-                Déconnexion
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
+                  </svg>
+                  Dashboard
+                </div>
               </button>
+              <button 
+                onClick={() => handleViewChange('formulaire')} 
+                className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 ${
+                  view === 'formulaire' 
+                    ? 'bg-white text-blue-900 shadow-lg transform scale-105' 
+                    : 'text-white hover:bg-blue-700/50 hover:scale-105'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+                  </svg>
+                  Nouveau sondage
+                </div>
+              </button>
+              <button 
+                onClick={() => handleViewChange('enquetes')} 
+                className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 ${
+                  view === 'enquetes' 
+                    ? 'bg-white text-blue-900 shadow-lg transform scale-105' 
+                    : 'text-white hover:bg-blue-700/50 hover:scale-105'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                  </svg>
+                  Mes sondages
+                </div>
+              </button>
+              <button 
+                onClick={() => handleViewChange('surveys')} 
+                className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 ${
+                  view === 'surveys' 
+                    ? 'bg-white text-blue-900 shadow-lg transform scale-105' 
+                    : 'text-white hover:bg-blue-700/50 hover:scale-105'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                  </svg>
+                  Opportunités disponibles
+                </div>
+              </button>
+              <button 
+                onClick={() => handleViewChange('parametres')} 
+                className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 ${
+                  view === 'parametres' 
+                    ? 'bg-white text-blue-900 shadow-lg transform scale-105' 
+                    : 'text-white hover:bg-blue-700/50 hover:scale-105'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.22,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.22,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.68 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/>
+                  </svg>
+                  Paramètres
+                </div>
+              </button>
+              
+              {/* Profil utilisateur et déconnexion */}
+              <div className="flex items-center gap-3 ml-4 pl-4 border-l border-blue-700">
+                {user && (
+                  <div className="relative">
+                    <div className="w-8 h-8 rounded-full bg-white text-blue-900 flex items-center justify-center font-bold shadow-md hover:shadow-lg transition-shadow duration-200">
+                      {user?.name?.[0]?.toUpperCase() || '?'}
+                    </div>
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-white"></div>
+                  </div>
+                )}
+                <button 
+                  onClick={() => { localStorage.clear(); navigate('/login'); }} 
+                  className="bg-white text-blue-900 px-4 py-2 rounded-lg font-semibold text-sm hover:bg-gray-100 hover:shadow-lg transition-all duration-200 hover:scale-105 active:scale-95"
+                >
+                  Déconnexion
+                </button>
+              </div>
             </div>
           </div>
         </div>
         
         {/* Menu mobile */}
         {isMobileMenuOpen && (
-          <div className="md:hidden mt-4 space-y-2 border-t border-blue-700 pt-4">
-            <button 
-              onClick={() => handleViewChange('dashboard')} 
-              className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'dashboard' ? 'bg-blue-700' : 'hover:bg-blue-700'} text-white`}
-            >
-              Dashboard
-            </button>
-            <button 
-              onClick={() => handleViewChange('formulaire')} 
-              className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'formulaire' ? 'bg-blue-700' : 'hover:bg-blue-700'} text-white`}
-            >
-              Nouveau sondage
-            </button>
-            <button 
-              onClick={() => handleViewChange('enquetes')} 
-              className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'enquetes' ? 'bg-blue-700' : 'hover:bg-blue-700'} text-white`}
-            >
-              Mes sondages
-            </button>
-            <button 
-              onClick={() => handleViewChange('surveys')} 
-              className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'surveys' ? 'bg-blue-700' : 'hover:bg-blue-700'} text-white`}
-            >
-              Sondages disponibles
-            </button>
-            <button 
-              onClick={() => handleViewChange('parametres')} 
-              className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'parametres' ? 'bg-blue-700' : 'hover:bg-blue-700'} text-white`}
-            >
-              Paramètres
-            </button>
-            
-            {/* Profil et déconnexion mobile */}
-            <div className="flex items-center justify-between pt-2 border-t border-blue-700">
-              {user && (
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-white text-blue-800 flex items-center justify-center font-bold">
-                    {user.name?.[0]?.toUpperCase() || '?'}
-                  </div>
-                  <span className="text-sm">{user.name || 'Enquêteur'}</span>
-                </div>
-              )}
+          <div className="md:hidden bg-blue-800/50 backdrop-blur-sm border-t border-blue-700">
+            <div className="px-4 py-4 space-y-2">
               <button 
-                onClick={() => { localStorage.clear(); navigate('/login'); }} 
-                className="bg-white text-blue-800 px-3 py-1 rounded font-semibold text-sm hover:bg-gray-100 transition-colors"
+                onClick={() => handleViewChange('dashboard')} 
+                className={`w-full text-left px-4 py-3 rounded-lg font-semibold text-sm transition-all duration-200 ${
+                  view === 'dashboard' 
+                    ? 'bg-white text-blue-900 shadow-lg' 
+                    : 'text-white hover:bg-blue-700/50'
+                }`}
               >
-                Déconnexion
+                <div className="flex items-center gap-3">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
+                  </svg>
+                  Dashboard
+                </div>
               </button>
+              <button 
+                onClick={() => handleViewChange('formulaire')} 
+                className={`w-full text-left px-4 py-3 rounded-lg font-semibold text-sm transition-all duration-200 ${
+                  view === 'formulaire' 
+                    ? 'bg-white text-blue-900 shadow-lg' 
+                    : 'text-white hover:bg-blue-700/50'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+                  </svg>
+                  Nouveau sondage
+                </div>
+              </button>
+              <button 
+                onClick={() => handleViewChange('enquetes')} 
+                className={`w-full text-left px-4 py-3 rounded-lg font-semibold text-sm transition-all duration-200 ${
+                  view === 'enquetes' 
+                    ? 'bg-white text-blue-900 shadow-lg' 
+                    : 'text-white hover:bg-blue-700/50'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                  </svg>
+                  Mes sondages
+                </div>
+              </button>
+              <button 
+                onClick={() => handleViewChange('surveys')} 
+                className={`w-full text-left px-4 py-3 rounded-lg font-semibold text-sm transition-all duration-200 ${
+                  view === 'surveys' 
+                    ? 'bg-white text-blue-900 shadow-lg' 
+                    : 'text-white hover:bg-blue-700/50'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                  </svg>
+                  Opportunités disponibles
+                </div>
+              </button>
+              <button 
+                onClick={() => handleViewChange('parametres')} 
+                className={`w-full text-left px-4 py-3 rounded-lg font-semibold text-sm transition-all duration-200 ${
+                  view === 'parametres' 
+                    ? 'bg-white text-blue-900 shadow-lg' 
+                    : 'text-white hover:bg-blue-700/50'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.22,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.22,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.68 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/>
+                  </svg>
+                  Paramètres
+                </div>
+              </button>
+              
+              {/* Profil et déconnexion mobile */}
+              <div className="flex items-center justify-between pt-4 mt-4 border-t border-blue-700">
+                {user && (
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      {user?.profilePhoto ? (
+                        <img 
+                          src={`${environment.apiBaseUrl}${user.profilePhoto}`} 
+                          alt="Photo de profil" 
+                          className="w-8 h-8 rounded-full object-cover shadow-md"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-white text-blue-900 flex items-center justify-center font-bold shadow-md">
+                          {user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
+                        </div>
+                      )}
+                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-white"></div>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-semibold text-white">{user?.name || 'Enquêteur'}</span>
+                      <span className="text-xs text-blue-200">{user?.email}</span>
+                    </div>
+                  </div>
+                )}
+                <button 
+                  onClick={() => { localStorage.clear(); navigate('/login'); }} 
+                  className="bg-white text-blue-900 px-4 py-2 rounded-lg font-semibold text-sm hover:bg-gray-100 hover:shadow-lg transition-all duration-200 hover:scale-105 active:scale-95"
+                >
+                  Déconnexion
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -461,8 +986,12 @@ export default function ControllerHome() {
       {/* Contenu principal */}
       <main className="p-4 sm:p-8">
         {view === 'dashboard' && <DashboardController setView={setView} />}
-        {view === 'formulaire' && <SchoolForm />}
-        {view === 'enquetes' && <RecordsList />}
+        {view === 'formulaire' && (
+          <ControllerCampaignForms />
+        )}
+        {view === 'enquetes' && (
+          <RecordsList />
+        )}
         {view === 'surveys' && <ControllerAvailableSurveys />}
         {view === 'parametres' && <Settings />}
       </main>

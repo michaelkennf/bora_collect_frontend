@@ -13,12 +13,12 @@ export default function RecordsSyncedList() {
     try {
       // Déterminer l'URL selon le rôle
       const user = localStorage.getItem('user');
-      let apiUrl = 'https://api.collect.fikiri.co/records?status=SENT';
+      let apiUrl = 'http://localhost:3000/records?status=SENT';
       
       if (user) {
         const userData = JSON.parse(user);
         if (userData.role === 'CONTROLLER') {
-          apiUrl = 'https://api.collect.fikiri.co/records/controller?status=SENT';
+          apiUrl = 'http://localhost:3000/records/controller?status=SENT';
         }
       }
       

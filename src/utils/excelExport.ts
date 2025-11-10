@@ -46,31 +46,76 @@ export const exportEnquetesToExcel = (enquetes: any[], filename: string = 'enque
       const authorName = enquete.authorName || 'N/A';
       console.log(`🔍 Enquête ${index + 1}: ID=${enquete.id}, Enquêteur=${authorName}, AuthorID=${enquete.authorId}`);
       
+      // Fonction helper pour obtenir une valeur avec fallback
+      const getValue = (newKey: string, oldKey?: string, oldSubKey?: string) => {
+        // Vérifier d'abord le nouveau format
+        if (enquete.formData?.[newKey] !== undefined && enquete.formData?.[newKey] !== null) {
+          return enquete.formData[newKey];
+        }
+        // Fallback vers l'ancien format
+        if (oldKey && oldSubKey && enquete.formData?.[oldKey]) {
+          return enquete.formData[oldKey]?.[oldSubKey];
+        }
+        return 'N/A';
+      };
+      
+      // Fonction helper pour les tableaux
+      const getArrayValue = (newKey: string, oldKey?: string, oldSubKey?: string) => {
+        const value = getValue(newKey, oldKey, oldSubKey);
+        if (Array.isArray(value)) {
+          return value.length > 0 ? value.join(', ') : '0';
+        }
+        // Pour les avantages spécifiquement, retourner "0" au lieu de "N/A"
+        if (newKey === 'connaissance.avantages' || oldSubKey === 'avantages') {
+          return '0';
+        }
+        return value || 'N/A';
+      };
+      
+      // Fonction helper pour les objets de classement
+      const getRankingValue = (key: string) => {
+        try {
+          const value = enquete.formData?.[key];
+          if (typeof value === 'object' && value !== null) {
+            return Object.entries(value)
+              .sort(([,a], [,b]) => {
+                const order = ['1er', '2e', '3e', '4e', '5e'];
+                return order.indexOf(a as string) - order.indexOf(b as string);
+              })
+              .map(([item, rank]) => `${item} (${rank})`)
+              .join(', ');
+          }
+          return value || 'N/A';
+        } catch (error) {
+          console.error('Erreur dans getRankingValue:', error);
+          return 'N/A';
+        }
+      };
+      
       return {
       'ID Enquête': enquete.id || 'N/A',
-      'Nom/Code Ménage': enquete.formData?.household?.nomOuCode || 'N/A',
-      'Âge': enquete.formData?.household?.age || 'N/A',
-      'Sexe': enquete.formData?.household?.sexe || 'N/A',
-      'Taille du Ménage': enquete.formData?.household?.tailleMenage || 'N/A',
-      'Commune/Quartier': enquete.formData?.household?.communeQuartier || 'N/A',
-      'Géolocalisation': enquete.formData?.household?.geolocalisation || 'N/A',
-      'Date de Création': enquete.createdAt ? new Date(enquete.createdAt).toLocaleDateString('fr-FR') : 'N/A',
+      'Nom/Code Ménage': getValue('identification.nomOuCode', 'household', 'nomOuCode'),
+      'Âge': getValue('identification.age', 'household', 'age'),
+      'Sexe': getValue('identification.sexe', 'household', 'sexe'),
+      'Taille du Ménage': getValue('identification.tailleMenage', 'household', 'tailleMenage'),
+      'Commune/Quartier': getValue('identification.communeQuartier', 'household', 'communeQuartier'),
+      'Géolocalisation': getValue('household.geolocalisation', 'household', 'geolocalisation'),
+      'Date de Création': enquete.createdAt ? new Date(enquete.createdAt).toLocaleString('fr-FR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      }) : 'N/A',
       'Enquêteur': enquete.authorName || 'N/A',
-      'Combustibles Utilisés': Array.isArray(enquete.formData?.cooking?.combustibles) 
-        ? enquete.formData.cooking.combustibles.join(', ') 
-        : 'N/A',
-      'Équipements Utilisés': Array.isArray(enquete.formData?.cooking?.equipements) 
-        ? enquete.formData.cooking.equipements.join(', ') 
-        : 'N/A',
-      'Connaissance Solutions Propres': enquete.formData?.knowledge?.connaissanceSolutions || 'N/A',
-      'Avantages Perçus': Array.isArray(enquete.formData?.knowledge?.avantages) 
-        ? enquete.formData.knowledge.avantages.join(', ') 
-        : 'N/A',
-      'Obstacles à l\'Adoption': Array.isArray(enquete.formData?.constraints?.obstacles) 
-        ? enquete.formData.constraints.obstacles.join(', ') 
-        : 'N/A',
-      'Prêt à Acheter Foyer': enquete.formData?.adoption?.pretAcheterFoyer || 'N/A',
-      'Prêt à Acheter GPL': enquete.formData?.adoption?.pretAcheterGPL || 'N/A'
+      'Combustibles Utilisés': getRankingValue('modeCuisson.combustibles'),
+      'Équipements Utilisés': getValue('modeCuisson.equipements', 'cooking', 'equipements'),
+      'Connaissance Solutions Propres': getValue('connaissance.connaissanceSolutions', 'knowledge', 'connaissanceSolutions'),
+      'Avantages Perçus': getArrayValue('connaissance.avantages', 'knowledge', 'avantages'),
+      'Obstacles à l\'Adoption': getArrayValue('perceptions.obstacles', 'constraints', 'obstacles'),
+      'Prêt à Acheter Foyer': getValue('intentionAdoption.pretAcheterFoyer', 'adoption', 'pretAcheterFoyer'),
+      'Prêt à Acheter GPL': getValue('intentionAdoption.pretAcheterGPL', 'adoption', 'pretAcheterGPL')
     };
     });
     

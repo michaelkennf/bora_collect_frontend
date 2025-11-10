@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'react-toastify';
+import { environment } from '../config/environment';
 
 export interface FormField {
   id: string;
@@ -39,7 +40,7 @@ export interface FormTemplate {
   description: string;
   surveyId: string; // ID de l'enquête liée
   survey?: Survey; // Informations de l'enquête
-  fields: FormField[];
+  fields: any; // Peut être un tableau de FormField[] ou un schéma objet imbriqué
   createdAt: Date;
   updatedAt: Date;
   isActive: boolean;
@@ -58,7 +59,54 @@ const FormBuilder: React.FC = () => {
   // Référence pour synchroniser les données des champs
   const fieldDataRef = useRef<Map<string, Partial<FormField>>>(new Map());
 
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://api.collect.fikiri.co';
+  const apiBaseUrl = environment.apiBaseUrl || 'http://localhost:3000';
+
+  // Normalise un schéma de champs (objet imbriqué) en tableau de FormField pour l'éditeur
+  const normalizeFormFields = useCallback((fields: any): FormField[] => {
+    if (!fields) return [];
+    if (Array.isArray(fields)) return fields as FormField[];
+
+    // Schéma objet: parcourir sections puis champs
+    const normalized: FormField[] = [];
+    let order = 0;
+
+    Object.keys(fields).forEach((sectionKey) => {
+      const section = fields[sectionKey];
+      if (section && typeof section === 'object' && section.fields) {
+        Object.keys(section.fields).forEach((fieldKey) => {
+          const f = section.fields[fieldKey] || {};
+          // Mapper les types système vers les types de l'éditeur
+          const typeMap: Record<string, FormField['type']> = {
+            text: 'text',
+            number: 'number',
+            select: 'select',
+            checkbox: 'checkbox',
+            radio: 'radio',
+            textarea: 'textarea'
+          };
+          const mappedType = typeMap[(f.type as string) || 'text'] || 'text';
+
+          const options: string[] | undefined = Array.isArray(f.options)
+            ? f.options
+            : Array.isArray(f.enum)
+            ? f.enum
+            : undefined;
+
+          normalized.push({
+            id: `${sectionKey}.${fieldKey}`,
+            type: mappedType,
+            label: (f.label as string) || (f.title as string) || fieldKey,
+            placeholder: (f.placeholder as string) || '',
+            required: Boolean(f.required),
+            options,
+            order: order++,
+          });
+        });
+      }
+    });
+
+    return normalized;
+  }, []);
 
   // Charger les enquêtes publiées et les formulaires existants au démarrage
   useEffect(() => {
@@ -71,7 +119,18 @@ const FormBuilder: React.FC = () => {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${apiBaseUrl}/surveys/published`, {
+      // Vérifier le rôle de l'utilisateur
+      const userData = localStorage.getItem('user');
+      if (!userData) return;
+      
+      const user = JSON.parse(userData);
+      
+      // Utiliser l'endpoint approprié selon le rôle
+      const endpoint = user.role === 'PROJECT_MANAGER' 
+        ? `${apiBaseUrl}/forms/pm-campaigns`
+        : `${apiBaseUrl}/surveys/published`;
+
+      const response = await fetch(endpoint, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -81,9 +140,12 @@ const FormBuilder: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         setSurveys(data);
+        console.log(`✅ ${data.length} campagnes chargées pour ${user.role}`);
+      } else {
+        console.error('Erreur lors du chargement des campagnes:', response.status);
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des enquêtes:', error);
+      console.error('Erreur lors du chargement des campagnes:', error);
     }
   }, [apiBaseUrl]);
 
@@ -109,33 +171,68 @@ const FormBuilder: React.FC = () => {
           ...form,
           createdAt: new Date(form.createdAt),
           updatedAt: new Date(form.updatedAt),
+          // Normaliser le champ fields pour l'éditeur
+          fields: normalizeFormFields(form.fields),
         }));
         setForms(formsWithDates);
       }
     } catch (error) {
       console.error('Erreur lors du chargement des formulaires:', error);
     }
-  }, [apiBaseUrl]);
+  }, [apiBaseUrl, normalizeFormFields]);
 
   const fieldTypes = [
-    { value: 'text', label: 'Texte simple', icon: '📝' },
-    { value: 'email', label: 'Email', icon: '📧' },
-    { value: 'number', label: 'Nombre', icon: '🔢' },
-    { value: 'select', label: 'Sélection unique', icon: '📋' },
-    { value: 'multiselect', label: 'Sélection multiple', icon: '☑️' },
-    { value: 'textarea', label: 'Zone de texte', icon: '📄' },
-    { value: 'checkbox', label: 'Case à cocher', icon: '☑️' },
-    { value: 'radio', label: 'Boutons radio', icon: '🔘' },
-    { value: 'date', label: 'Date', icon: '📅' },
-    { value: 'file', label: 'Fichier', icon: '📁' },
-    { value: 'gps', label: 'Géolocalisation', icon: '📍' },
-    { value: 'section', label: 'Section/Diviseur', icon: '📑' },
+    { value: 'text', label: 'Texte simple', icon: 'text' },
+    { value: 'email', label: 'Email', icon: 'email' },
+    { value: 'number', label: 'Nombre', icon: 'number' },
+    { value: 'select', label: 'Sélection unique', icon: 'select' },
+    { value: 'multiselect', label: 'Sélection multiple', icon: 'multiselect' },
+    { value: 'textarea', label: 'Zone de texte', icon: 'textarea' },
+    { value: 'checkbox', label: 'Case à cocher', icon: 'checkbox' },
+    { value: 'radio', label: 'Boutons radio', icon: 'radio' },
+    { value: 'date', label: 'Date', icon: 'date' },
+    { value: 'file', label: 'Fichier', icon: 'file' },
+    { value: 'gps', label: 'Géolocalisation', icon: 'gps' },
+    { value: 'section', label: 'Section/Diviseur', icon: 'section' },
   ];
 
-  const createNewForm = useCallback(() => {
-    // Afficher d'abord le sélecteur d'enquête
+  const renderFieldIcon = (iconType: string) => {
+    const iconClass = "w-4 h-4";
+    switch (iconType) {
+      case 'text':
+        return <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>;
+      case 'email':
+        return <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>;
+      case 'number':
+        return <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" /></svg>;
+      case 'select':
+        return <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>;
+      case 'multiselect':
+        return <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+      case 'textarea':
+        return <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>;
+      case 'checkbox':
+        return <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+      case 'radio':
+        return <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+      case 'date':
+        return <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
+      case 'file':
+        return <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>;
+      case 'gps':
+        return <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>;
+      case 'section':
+        return <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>;
+      default:
+        return <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>;
+    }
+  };
+
+  const createNewForm = useCallback(async () => {
+    // Recharger les enquêtes publiées juste avant d'afficher le sélecteur
+    await fetchPublishedSurveys();
     setShowSurveySelector(true);
-  }, []);
+  }, [fetchPublishedSurveys]);
 
   const startFormCreation = useCallback((surveyId: string) => {
     const selectedSurvey = surveys.find(s => s.id === surveyId);
@@ -147,7 +244,7 @@ const FormBuilder: React.FC = () => {
        description: `Formulaire pour l'enquête: ${selectedSurvey.description}`,
        surveyId: surveyId,
        survey: selectedSurvey,
-      fields: [],
+      fields: [], // l'éditeur travaille toujours avec un tableau normalisé
       createdAt: new Date(),
       updatedAt: new Date(),
       isActive: true,
@@ -191,7 +288,7 @@ const FormBuilder: React.FC = () => {
       
       return {
         ...prevForm,
-        fields: prevForm.fields.map(field =>
+        fields: prevForm.fields.map((field: any) =>
         field.id === fieldId ? { ...field, ...updates } : field
       ),
       };
@@ -212,7 +309,7 @@ const FormBuilder: React.FC = () => {
       
       return {
         ...prevForm,
-        fields: prevForm.fields.filter(field => field.id !== fieldId),
+        fields: prevForm.fields.filter((field: any) => field.id !== fieldId),
       };
     });
   }, [currentForm]);
@@ -247,7 +344,7 @@ const FormBuilder: React.FC = () => {
       });
 
       // Synchroniser les données des champs avant la sauvegarde
-      const synchronizedFields = currentForm.fields.map(field => {
+      const synchronizedFields = currentForm.fields.map((field: any) => {
         const updates = fieldDataRef.current.get(field.id);
         if (updates) {
           return { ...field, ...updates };
@@ -255,7 +352,8 @@ const FormBuilder: React.FC = () => {
         return field;
       });
 
-             const formData = {
+      // L'API attend un JSON dans fields. Nous envoyons le tableau normalisé tel quel.
+      const formData = {
          name: currentForm.name,
          description: currentForm.description,
          surveyId: currentForm.surveyId,
@@ -392,7 +490,7 @@ const FormBuilder: React.FC = () => {
 
       if (response.ok) {
         const availableForms = await response.json();
-        console.log('📝 Formulaires disponibles pour test:', availableForms);
+        console.log('Formulaires disponibles pour test:', availableForms);
         
         const isVisible = availableForms.some((f: any) => f.id === formId);
         if (isVisible) {
@@ -529,7 +627,7 @@ const FormBuilder: React.FC = () => {
          <div className="flex justify-between items-start mb-3">
            <div className="flex-1">
              <label className="block text-sm font-medium text-gray-700 mb-1">
-               📝 Label du champ *
+               Label du champ *
              </label>
              <input
                type="text"
@@ -732,7 +830,7 @@ const FormBuilder: React.FC = () => {
                    onClick={() => addField(fieldType.value)}
                    className="w-full text-left p-3 border rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-3"
                  >
-                   <span className="text-xl">{fieldType.icon}</span>
+                   <span className="text-gray-600">{renderFieldIcon(fieldType.icon)}</span>
                    <div className="text-left">
                      <span className="font-medium">{fieldType.label}</span>
                      <div className="text-xs text-gray-500 mt-1">
@@ -775,7 +873,11 @@ const FormBuilder: React.FC = () => {
 
                          {currentForm?.fields.length === 0 ? (
                <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
-                 <div className="text-6xl mb-4">📝</div>
+                 <div className="flex justify-center mb-4">
+                   <svg className="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                   </svg>
+                 </div>
                  <h4 className="text-lg font-medium text-gray-700 mb-2">Commencez par ajouter des champs</h4>
                  <p className="text-gray-500 mb-4">
                    Votre formulaire est vide. Ajoutez des champs depuis le panneau de gauche pour commencer.
@@ -792,7 +894,7 @@ const FormBuilder: React.FC = () => {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                {currentForm?.fields.map((field, index) => (
+                {currentForm?.fields.map((field: any, index: number) => (
                   <FormFieldEditor
                     key={field.id}
                     field={field}
@@ -826,12 +928,6 @@ const FormBuilder: React.FC = () => {
         <div className="text-center py-12">
           <h3 className="text-xl font-semibold mb-2">Aucun formulaire créé</h3>
           <p className="text-gray-600 mb-6">Commencez par créer votre premier formulaire personnalisé</p>
-          <button
-            onClick={createNewForm}
-            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Créer mon premier formulaire
-          </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

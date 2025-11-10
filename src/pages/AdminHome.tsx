@@ -1,21 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import logo2 from '../assets/images/logo2.jpg';
-import AdminDashboardCharts from '../components/AdminDashboardCharts';
-import AdminUsers from './AdminUsers';
-import FormBuilder from '../components/FormBuilder';
-import AdminParametres from './AdminParametres';
-import AdminDeletedUsers from './AdminDeletedUsers';
+import AdminDashboard from './AdminDashboard';
+import AdminUserManagement from './AdminUserManagement';
+import AdminCampaignManagement from './AdminCampaignManagement';
 import AdminPendingApprovals from './AdminPendingApprovals';
-import AdminSurveyPublication from './AdminSurveyPublication';
-import AdminCandidatures from './AdminCandidatures';
-import AdminSettings from '../components/AdminSettings';
-import AdminStatistics from '../components/AdminStatistics';
+import AdminPMRequests from './AdminPMRequests';
+import AdminCreateProjectManager from './AdminCreateProjectManager';
+import AdminCampaignData from './AdminCampaignData';
+import AdminSettings from './AdminSettings';
+import AdminDashboardCharts from '../components/AdminDashboardCharts';
+import CarteRDCSVG from '../components/CarteRDCSVG';
 import PNUDFooter from '../components/PNUDFooter';
+import NotificationPanel from '../components/NotificationPanel';
+import { environment } from '../config/environment';
 
 export function DashboardAdmin() {
   const [users, setUsers] = useState<any[]>([]);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [flippedCards, setFlippedCards] = useState<{ [key: string]: boolean }>({});
   const [userStats, setUserStats] = useState({
     totalUsers: 0,
     activeUsers: 0,
@@ -27,12 +31,42 @@ export function DashboardAdmin() {
       analyst: 0,
     }
   });
+  const [campaignStats, setCampaignStats] = useState({
+    totalCampaigns: 0,
+    activeCampaigns: 0,
+    completedCampaigns: 0,
+    pendingCampaigns: 0
+  });
+
+  // Styles CSS pour les animations 3D
+  const flipCardStyles = `
+    .perspective-1000 {
+      perspective: 1000px;
+    }
+    .transform-style-preserve-3d {
+      transform-style: preserve-3d;
+    }
+    .backface-hidden {
+      backface-visibility: hidden;
+    }
+    .rotate-y-180 {
+      transform: rotateY(180deg);
+    }
+  `;
+
+  // Fonction pour gérer le retournement des cartes
+  const toggleCardFlip = (cardId: string) => {
+    setFlippedCards(prev => ({
+      ...prev,
+      [cardId]: !prev[cardId]
+    }));
+  };
 
   // Récupérer la liste des utilisateurs
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch('https://api.collect.fikiri.co/users', {
+      const res = await fetch(`${environment.apiBaseUrl}/users`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) throw new Error('Erreur lors du chargement des utilisateurs');
@@ -60,7 +94,70 @@ export function DashboardAdmin() {
 
   useEffect(() => {
     fetchUsers();
+    fetchCampaignStats();
   }, []);
+
+  // Charger les données utilisateur
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const response = await fetch(`${environment.apiBaseUrl}/auth/me`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          const userData = await response.json();
+          console.log('🔍 AdminHome - Données utilisateur chargées:', userData.user);
+          console.log('🔍 AdminHome - profilePhoto:', userData.user.profilePhoto);
+          setUser(userData.user);
+          localStorage.setItem('user', JSON.stringify(userData.user));
+        } else {
+          // Fallback sur localStorage si l'API échoue
+          const u = localStorage.getItem('user');
+          if (u) setUser(JSON.parse(u));
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement des données utilisateur:', error);
+        // Fallback sur localStorage en cas d'erreur
+        const u = localStorage.getItem('user');
+        if (u) setUser(JSON.parse(u));
+      }
+    };
+
+    loadUserData();
+  }, []);
+
+  // Récupérer les statistiques des campagnes
+  const fetchCampaignStats = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch(`${environment.apiBaseUrl}/surveys/admin`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const campaigns = await response.json();
+        setCampaignStats({
+          totalCampaigns: campaigns.length,
+          activeCampaigns: campaigns.filter((c: any) => c.status === 'PUBLISHED').length,
+          completedCampaigns: campaigns.filter((c: any) => c.status === 'TERMINATED').length,
+          pendingCampaigns: campaigns.filter((c: any) => c.status === 'DRAFT').length
+        });
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des statistiques de campagnes:', error);
+    }
+  };
 
   // Charger les demandes d'approbation en attente
   useEffect(() => {
@@ -69,7 +166,7 @@ export function DashboardAdmin() {
         const token = localStorage.getItem('token');
         if (!token) return;
 
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'https://api.collect.fikiri.co'}/users/approval-stats`, {
+        const response = await fetch(`${environment.apiBaseUrl}/users/approval-stats`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
@@ -93,21 +190,135 @@ export function DashboardAdmin() {
 
   return (
     <>
+      <style>{flipCardStyles}</style>
       <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6 text-center px-4">Tableau de bord Admin - FikiriCollect</h1>
       
-      {/* Statistiques utilisateurs - Responsive */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8 px-4">
-        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg text-center">
-          <div className="text-2xl sm:text-3xl font-bold text-blue-600 mb-2">{userStats.totalUsers}</div>
-          <div className="text-sm sm:text-base text-gray-600">Total des utilisateurs</div>
+      {/* Section d'accueil responsive */}
+      <div className="max-w-4xl mx-auto bg-blue-50 rounded-xl shadow p-4 sm:p-6 mb-6 sm:mb-8 mx-4">
+        <p className="text-base sm:text-lg text-gray-800 mb-4 text-center">Bienvenue, {user?.name || 'Administrateur'} !<br/>Ici, vous pouvez&nbsp;:</p>
+        <ul className="list-disc ml-4 sm:ml-8 text-sm sm:text-base text-gray-700 mb-4 space-y-1">
+          <li>Gérer les utilisateurs du système</li>
+          <li>Consulter les statistiques globales</li>
+          <li>Exporter les données et rapports</li>
+          <li>Consulter les données du système grâce à la carte</li>
+        </ul>
+      </div>
+      
+      {/* Carte Interactive de la RDC */}
+      <div className="px-4 mb-6 sm:mb-8">
+        <CarteRDCSVG />
+      </div>
+      
+      {/* Statistiques principales avec cartes animées */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6 sm:mb-8 px-4 max-w-4xl mx-auto">
+        {/* Carte Total Utilisateurs */}
+        <div 
+          className="relative w-full h-24 cursor-pointer perspective-1000 hover:scale-105 transition-transform duration-300"
+          onClick={() => toggleCardFlip('totalUsers')}
+        >
+          <div className={`relative w-full h-full transition-transform duration-700 transform-style-preserve-3d ${
+            flippedCards.totalUsers ? 'rotate-y-180' : ''
+          }`}>
+            {/* Recto */}
+            <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg hover:shadow-xl flex items-center justify-center transition-shadow duration-300">
+              <div className="text-center text-white">
+                <div className="mb-2 hover:scale-110 transition-transform duration-200 relative">
+                  <div className="absolute inset-0 bg-white opacity-20 rounded-full blur-sm"></div>
+                  <svg className="w-6 h-6 mx-auto relative z-10 drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                  </svg>
+                </div>
+                <div className="text-xs font-semibold">Total Utilisateurs</div>
+                <div className="text-xs opacity-80 mt-1 animate-pulse">Cliquez pour voir</div>
+              </div>
+            </div>
+            {/* Verso */}
+            <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg flex items-center justify-center rotate-y-180">
+              <div className="text-center text-white">
+                <div className="text-2xl font-bold mb-1">
+                  {loading ? (
+                    <div className="animate-pulse bg-white/20 rounded w-12 h-8 mx-auto"></div>
+                  ) : (
+                    <span className="animate-bounce hover:animate-pulse transition-all duration-300 hover:scale-110 hover:text-yellow-200">
+                      {userStats.totalUsers}
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs">
+                  <div>Project Managers: {loading ? (
+                    <span className="animate-pulse bg-white/20 rounded w-8 h-4 inline-block"></span>
+                  ) : (
+                    <span className="animate-bounce">{userStats.usersByRole.admin}</span>
+                  )}</div>
+                  <div>Enquêteurs: {loading ? (
+                    <span className="animate-pulse bg-white/20 rounded w-8 h-4 inline-block"></span>
+                  ) : (
+                    <span className="animate-bounce">{userStats.usersByRole.controller}</span>
+                  )}</div>
+                  <div>Analystes: {loading ? (
+                    <span className="animate-pulse bg-white/20 rounded w-8 h-4 inline-block"></span>
+                  ) : (
+                    <span className="animate-bounce">{userStats.usersByRole.analyst}</span>
+                  )}</div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg text-center">
-          <div className="text-2xl sm:text-3xl font-bold text-green-600 mb-2">{userStats.activeUsers}</div>
-          <div className="text-sm sm:text-base text-gray-600">Utilisateurs actifs</div>
+
+        {/* Carte Total Campagnes */}
+        <div 
+          className="relative w-full h-24 cursor-pointer perspective-1000 hover:scale-105 transition-transform duration-300"
+          onClick={() => toggleCardFlip('totalCampaigns')}
+        >
+          <div className={`relative w-full h-full transition-transform duration-700 transform-style-preserve-3d ${
+            flippedCards.totalCampaigns ? 'rotate-y-180' : ''
+          }`}>
+            {/* Recto */}
+            <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg hover:shadow-xl flex items-center justify-center transition-shadow duration-300">
+              <div className="text-center text-white">
+                <div className="mb-2 hover:scale-110 transition-transform duration-200 relative">
+                  <div className="absolute inset-0 bg-white opacity-20 rounded-full blur-sm"></div>
+                  <svg className="w-6 h-6 mx-auto relative z-10 drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                  </svg>
+                </div>
+                <div className="text-xs font-semibold">Total Campagnes</div>
+                <div className="text-xs opacity-80 mt-1 animate-pulse">Cliquez pour voir</div>
+              </div>
+            </div>
+            {/* Verso */}
+            <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg flex items-center justify-center rotate-y-180">
+              <div className="text-center text-white">
+                <div className="text-2xl font-bold mb-1">
+                  {loading ? (
+                    <div className="animate-pulse bg-white/20 rounded w-12 h-8 mx-auto"></div>
+                  ) : (
+                    <span className="animate-bounce hover:animate-pulse transition-all duration-300 hover:scale-110 hover:text-yellow-200">
+                      {campaignStats.totalCampaigns}
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs">
+                  <div>En cours: {loading ? (
+                    <span className="animate-pulse bg-white/20 rounded w-8 h-4 inline-block"></span>
+                  ) : (
+                    <span className="animate-bounce">{campaignStats.activeCampaigns}</span>
+                  )}</div>
+                  <div>Terminées: {loading ? (
+                    <span className="animate-pulse bg-white/20 rounded w-8 h-4 inline-block"></span>
+                  ) : (
+                    <span className="animate-bounce">{campaignStats.completedCampaigns}</span>
+                  )}</div>
+                  <div>En attente: {loading ? (
+                    <span className="animate-pulse bg-white/20 rounded w-8 h-4 inline-block"></span>
+                  ) : (
+                    <span className="animate-bounce">{campaignStats.pendingCampaigns}</span>
+                  )}</div>
+                </div>
+              </div>
+            </div>
         </div>
-        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg text-center sm:col-span-2 lg:col-span-1">
-          <div className="text-2xl sm:text-3xl font-bold text-orange-600 mb-2">{userStats.pendingApprovals}</div>
-          <div className="text-sm sm:text-base text-gray-600">Demandes d'inscription en attente</div>
         </div>
       </div>
       
@@ -120,17 +331,6 @@ export function DashboardAdmin() {
       ) : (
         <AdminDashboardCharts users={users} />
       )}
-      
-      {/* Section d'accueil responsive */}
-      <div className="max-w-4xl mx-auto bg-blue-50 rounded-xl shadow p-4 sm:p-6 mb-6 sm:mb-8 mx-4">
-        <p className="text-base sm:text-lg text-gray-800 mb-4 text-center">Bienvenue sur le tableau de bord administrateur de FikiriCollect.<br/>Ici, vous pouvez&nbsp;:</p>
-        <ul className="list-disc ml-4 sm:ml-8 text-sm sm:text-base text-gray-700 mb-4 space-y-1">
-          <li>Gérer les utilisateurs du système</li>
-          <li>Consulter les statistiques globales</li>
-          <li>Exporter les données et rapports</li>
-          <li>Configurer les paramètres du système</li>
-        </ul>
-      </div>
     </>
   );
 }
@@ -140,14 +340,15 @@ export default function AdminHome() {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [pendingCounts, setPendingCounts] = useState({ total: 0, pendingApplications: 0, pendingPMRequests: 0, pendingRecords: 0 });
   const navigate = useNavigate();
-  const [view, setView] = useState('dashboard'); // 'dashboard', 'utilisateurs', 'formulaires', 'statistiques', 'parametres'
+  const [view, setView] = useState('dashboard'); // 'dashboard', 'users', 'campaigns', 'pending-approvals', 'pm-requests', 'create-pm', 'campaign-data', 'settings'
 
   // Fonction pour charger les utilisateurs
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch('https://api.collect.fikiri.co/users', {
+      const res = await fetch(`${environment.apiBaseUrl}/users`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) throw new Error('Erreur lors du chargement');
@@ -160,10 +361,110 @@ export default function AdminHome() {
     }
   };
 
+  // Fonction pour charger les compteurs de demandes en attente
+  const fetchPendingCounts = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const res = await fetch(`${environment.apiBaseUrl}/surveys/admin/pending-counts`, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+      });
+      
+      if (!res.ok) {
+        console.error('❌ Erreur lors du chargement des compteurs:', res.status, res.statusText);
+        return;
+      }
+      
+      const data = await res.json();
+      console.log('🔔 Admin Home - Compteurs mis à jour:', data);
+      setPendingCounts(data);
+    } catch (err: any) {
+      console.error('❌ Erreur lors du chargement des compteurs:', err.message);
+    }
+  };
+
+  // Fonction pour rafraîchir manuellement les compteurs
+  const refreshPendingCounts = () => {
+    console.log('🔄 Admin Home - Rafraîchissement manuel des compteurs');
+    fetchPendingCounts();
+  };
+
   useEffect(() => {
-    const u = localStorage.getItem('user');
-    if (u) setUser(JSON.parse(u));
+    const loadUserData = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        // Charger les données utilisateur depuis le serveur pour avoir les données fraîches
+        const response = await fetch(`${environment.apiBaseUrl}/auth/me`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          const userData = await response.json();
+          setUser(userData);
+          localStorage.setItem('user', JSON.stringify(userData));
+        } else {
+          // Fallback sur localStorage si l'API échoue
+          const u = localStorage.getItem('user');
+          if (u) setUser(JSON.parse(u));
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement des données utilisateur:', error);
+        // Fallback sur localStorage en cas d'erreur
+        const u = localStorage.getItem('user');
+        if (u) setUser(JSON.parse(u));
+      }
+    };
+
+    loadUserData();
     fetchUsers();
+    fetchPendingCounts();
+
+    // Rafraîchir les compteurs toutes les 30 secondes
+    const interval = setInterval(() => {
+      fetchPendingCounts();
+    }, 30000);
+
+    // Écouter les événements de nouvelle demande
+    const handleNewApplication = () => {
+      console.log('🔔 Admin Home - Nouvelle demande détectée, rafraîchissement des compteurs');
+      fetchPendingCounts();
+    };
+
+    const handleNewRecord = () => {
+      console.log('🔔 Admin Home - Nouveau record détecté, rafraîchissement des compteurs');
+      fetchPendingCounts();
+    };
+
+    window.addEventListener('newApplicationSubmitted', handleNewApplication);
+    window.addEventListener('applicationStatusChanged', handleNewApplication);
+    window.addEventListener('newRecordSubmitted', handleNewRecord);
+
+    // Écouter les événements de mise à jour du profil
+    const handleProfileUpdate = (event: CustomEvent) => {
+      const updatedUser = event.detail;
+      console.log('🔍 AdminHome - Profil mis à jour:', updatedUser);
+      console.log('🔍 AdminHome - Nouvelle profilePhoto:', updatedUser.profilePhoto);
+      setUser(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+    };
+
+    window.addEventListener('userProfileUpdated', handleProfileUpdate as EventListener);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('newApplicationSubmitted', handleNewApplication);
+      window.removeEventListener('applicationStatusChanged', handleNewApplication);
+      window.removeEventListener('newRecordSubmitted', handleNewRecord);
+      window.removeEventListener('userProfileUpdated', handleProfileUpdate as EventListener);
+    };
   }, []);
 
   useEffect(() => {
@@ -184,161 +485,303 @@ export default function AdminHome() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Navigation responsive */}
-      <nav className="bg-blue-900 text-white p-4">
-        <div className="flex justify-between items-center">
+      <nav className="bg-gradient-to-r from-blue-900 via-blue-800 to-blue-900 text-white shadow-lg border-b border-blue-700">
+        <div className="max-w-full mx-auto px-2 sm:px-4 lg:px-6">
+          <div className="flex justify-between items-center h-20">
           {/* Logo et titre */}
-        <div className="flex items-center gap-2 min-w-0">
-            <img src={logo2} alt="Logo 2" className="h-10 sm:h-12 w-auto object-contain bg-white rounded shadow" />
-            <span className="font-bold text-base sm:text-lg ml-2 truncate" style={{maxWidth: 120}}>Admin</span>
+            <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+              <div className="relative">
+                <img src={logo2} alt="Logo" className="h-8 sm:h-10 w-auto object-contain bg-white rounded-lg shadow-md p-1" />
+                <div className="absolute -top-1 -right-1 w-2 h-2 sm:w-3 sm:h-3 bg-green-400 rounded-full border-2 border-white animate-pulse"></div>
+              </div>
+              <div className="flex flex-col">
+                <span className="font-bold text-sm sm:text-base text-white">Admin</span>
+                <span className="text-xs text-blue-200 hidden sm:block">FikiriCollect</span>
+              </div>
         </div>
           
           {/* Bouton menu mobile */}
           <button 
-            className="md:hidden p-2 rounded hover:bg-blue-800 transition-colors"
+              className="md:hidden p-2 rounded-lg hover:bg-blue-700/50 transition-all duration-200 hover:scale-105 active:scale-95"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             aria-label="Menu"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-6 h-6 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
           
           {/* Menu desktop */}
-          <div className="hidden md:flex items-center gap-1 flex-shrink min-w-0">
+            <div className="hidden md:flex items-center gap-0.5 lg:gap-1">
           <button 
               onClick={() => handleViewChange('dashboard')} 
-              className={`px-2 py-2 rounded font-semibold text-xs ${view === 'dashboard' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white`}
-          >
-            Dashboard
+                className={`px-1.5 lg:px-2 py-2 rounded-lg font-semibold text-xs lg:text-sm transition-all duration-200 whitespace-nowrap ${
+                  view === 'dashboard' 
+                    ? 'bg-white text-blue-900 shadow-lg transform scale-105' 
+                    : 'text-white hover:bg-blue-700/50 hover:scale-105'
+                }`}
+              >
+                <div className="flex items-center gap-0.5 lg:gap-1">
+                  <svg className="w-4 h-4 lg:w-5 lg:h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
+                  </svg>
+                  <span className="hidden lg:inline">Dashboard</span>
+                  <span className="lg:hidden">Dash</span>
+                </div>
           </button>
           <button 
-              onClick={() => handleViewChange('utilisateurs')} 
-              className={`px-2 py-2 rounded font-semibold text-xs ${view === 'utilisateurs' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white`}
-          >
-            Utilisateurs
+                onClick={() => handleViewChange('users')} 
+                className={`px-1.5 lg:px-2 py-2 rounded-lg font-semibold text-xs lg:text-sm transition-all duration-200 whitespace-nowrap ${
+                  view === 'users' 
+                    ? 'bg-white text-blue-900 shadow-lg transform scale-105' 
+                    : 'text-white hover:bg-blue-700/50 hover:scale-105'
+                }`}
+              >
+                <div className="flex items-center gap-0.5 lg:gap-1">
+                  <svg className="w-4 h-4 lg:w-5 lg:h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                  </svg>
+                  <span className="hidden lg:inline">Gestion Utilisateurs</span>
+                  <span className="lg:hidden">Utilisateurs</span>
+                </div>
           </button>
           <button 
-              onClick={() => handleViewChange('formulaires')} 
-              className={`px-2 py-2 rounded font-semibold text-xs ${view === 'formulaires' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white`}
-          >
-              Gestion de formulaires
-          </button>
-          <button 
-              onClick={() => handleViewChange('statistiques')} 
-              className={`px-2 py-2 rounded font-semibold text-xs ${view === 'statistiques' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white`}
-          >
-            Statistiques
-          </button>
-          <button 
-              onClick={() => handleViewChange('candidatures')} 
-              className={`px-2 py-2 rounded font-semibold text-xs ${view === 'candidatures' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white`}
-          >
-              Candidatures
+                onClick={() => handleViewChange('campaigns')} 
+                className={`px-1.5 lg:px-2 py-2 rounded-lg font-semibold text-xs lg:text-sm transition-all duration-200 whitespace-nowrap ${
+                  view === 'campaigns' 
+                    ? 'bg-white text-blue-900 shadow-lg transform scale-105' 
+                    : 'text-white hover:bg-blue-700/50 hover:scale-105'
+                }`}
+              >
+                <div className="flex items-center gap-0.5 lg:gap-1">
+                  <svg className="w-4 h-4 lg:w-5 lg:h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                  </svg>
+                  <span className="hidden lg:inline">Gestion Campagnes</span>
+                  <span className="lg:hidden">Campagnes</span>
+                </div>
           </button>
           <button 
               onClick={() => handleViewChange('pending-approvals')} 
-              className={`px-2 py-2 rounded font-semibold text-xs ${view === 'pending-approvals' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white`}
-          >
-            Demandes d'inscription
+                className={`px-1.5 lg:px-2 py-2 rounded-lg font-semibold text-xs lg:text-sm transition-all duration-200 whitespace-nowrap ${
+                  view === 'pending-approvals' 
+                    ? 'bg-white text-blue-900 shadow-lg transform scale-105' 
+                    : 'text-white hover:bg-blue-700/50 hover:scale-105'
+                }`}
+              >
+                <div className="flex items-center gap-0.5 lg:gap-1">
+                  <svg className="w-4 h-4 lg:w-5 lg:h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                  </svg>
+                  <span className="hidden lg:inline">Demandes PM</span>
+                  <span className="lg:hidden">Demandes</span>
+                </div>
+          </button>
+          
+          {/* Panel de notifications */}
+          <NotificationPanel 
+            userRole={user?.role || 'ADMIN'}
+            onNotificationClick={(link) => {
+              if (link) {
+                // Extraire la vue de la route
+                if (link.includes('pending-approvals')) {
+                  handleViewChange('pending-approvals');
+                }
+              }
+            }}
+          />
+          <button 
+                onClick={() => handleViewChange('campaign-data')} 
+                className={`px-1.5 lg:px-2 py-2 rounded-lg font-semibold text-xs lg:text-sm transition-all duration-200 whitespace-nowrap ${
+                  view === 'campaign-data' 
+                    ? 'bg-white text-blue-900 shadow-lg transform scale-105' 
+                    : 'text-white hover:bg-blue-700/50 hover:scale-105'
+                }`}
+              >
+                <div className="flex items-center gap-0.5 lg:gap-1">
+                  <svg className="w-4 h-4 lg:w-5 lg:h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                  </svg>
+                  <span className="hidden lg:inline">Données Campagnes</span>
+                  <span className="lg:hidden">Données</span>
+                </div>
           </button>
           <button 
-              onClick={() => handleViewChange('survey-publication')} 
-              className={`px-2 py-2 rounded font-semibold text-xs ${view === 'survey-publication' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white`}
-          >
-            Publication d'enquêtes
-          </button>
-          <button 
-              onClick={() => handleViewChange('parametres')} 
-              className={`px-2 py-2 rounded font-semibold text-xs ${view === 'parametres' ? 'bg-gradient-to-r from-blue-700 to-blue-500 shadow' : 'hover:bg-blue-800'} text-white`}
-            >
-              Paramètres
+                onClick={() => handleViewChange('settings')} 
+                className={`px-1.5 lg:px-2 py-2 rounded-lg font-semibold text-xs lg:text-sm transition-all duration-200 whitespace-nowrap ${
+                  view === 'settings' 
+                    ? 'bg-white text-blue-900 shadow-lg transform scale-105' 
+                    : 'text-white hover:bg-blue-700/50 hover:scale-105'
+                }`}
+              >
+                <div className="flex items-center gap-0.5 lg:gap-1">
+                  <svg className="w-4 h-4 lg:w-5 lg:h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.22,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.22,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.68 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/>
+                  </svg>
+                  <span className="hidden lg:inline">Paramètres</span>
+                  <span className="lg:hidden">Param</span>
+                </div>
             </button>
             
             {/* Profil utilisateur et déconnexion */}
-            <div className="flex items-center gap-2 ml-2">
+              <div className="flex items-center gap-1 ml-1 pl-1 border-l border-blue-700 min-w-0">
               {user && (
-                <div className="w-8 h-8 rounded-full bg-white text-blue-900 flex items-center justify-center font-bold">
-                  {user.name?.[0]?.toUpperCase() || '?'}
+                  <div className="relative">
+                    {(() => {
+                      console.log('🔍 AdminHome - Rendu avatar, user:', user);
+                      console.log('🔍 AdminHome - profilePhoto pour avatar:', user.profilePhoto);
+                      return user?.profilePhoto ? (
+                        <img 
+                          src={`${environment.apiBaseUrl}${user.profilePhoto}`} 
+                          alt="Photo de profil" 
+                          className="w-6 h-6 rounded-full object-cover shadow-md hover:shadow-lg transition-shadow duration-200"
+                        />
+                      ) : (
+                        <div className="w-6 h-6 rounded-full bg-white text-blue-900 flex items-center justify-center font-bold text-xs shadow-md hover:shadow-lg transition-shadow duration-200">
+                          {user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
+                        </div>
+                      );
+                    })()}
+                    <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-green-400 rounded-full border border-white"></div>
                 </div>
               )}
               <button 
                 onClick={() => { localStorage.clear(); navigate('/login'); }} 
-                className="bg-white text-blue-900 px-3 py-1 rounded font-semibold text-sm hover:bg-gray-100 transition-colors"
+                  className="bg-white text-blue-900 px-1.5 py-1 rounded-lg font-semibold text-xs hover:bg-gray-100 hover:shadow-lg transition-all duration-200 hover:scale-105 active:scale-95 whitespace-nowrap"
               >
                 Déconnexion
               </button>
+              </div>
             </div>
           </div>
         </div>
         
         {/* Menu mobile */}
         {isMobileMenuOpen && (
-          <div className="md:hidden mt-4 space-y-2 border-t border-blue-800 pt-4">
+          <div className="md:hidden bg-blue-800/50 backdrop-blur-sm border-t border-blue-700">
+            <div className="px-4 py-4 space-y-2">
             <button 
               onClick={() => handleViewChange('dashboard')} 
-              className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'dashboard' ? 'bg-blue-700' : 'hover:bg-blue-800'} text-white`}
-            >
+                className={`w-full text-left px-4 py-3 rounded-lg font-semibold text-sm transition-all duration-200 ${
+                  view === 'dashboard' 
+                    ? 'bg-white text-blue-900 shadow-lg' 
+                    : 'text-white hover:bg-blue-700/50'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
+                  </svg>
               Dashboard
+                </div>
             </button>
             <button 
-              onClick={() => handleViewChange('utilisateurs')} 
-              className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'utilisateurs' ? 'bg-blue-700' : 'hover:bg-blue-800'} text-white`}
-            >
-              Utilisateurs
+                onClick={() => handleViewChange('users')} 
+                className={`w-full text-left px-4 py-3 rounded-lg font-semibold text-sm transition-all duration-200 ${
+                  view === 'users' 
+                    ? 'bg-white text-blue-900 shadow-lg' 
+                    : 'text-white hover:bg-blue-700/50'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                  </svg>
+                  Gestion Utilisateurs
+                </div>
             </button>
             <button 
-              onClick={() => handleViewChange('formulaires')} 
-              className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'formulaires' ? 'bg-blue-700' : 'hover:bg-blue-800'} text-white`}
-            >
-              Gestion de formulaires
-            </button>
-            <button 
-              onClick={() => handleViewChange('statistiques')} 
-              className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'statistiques' ? 'bg-blue-700' : 'hover:bg-blue-800'} text-white`}
-            >
-              Statistiques
-            </button>
-            <button 
-              onClick={() => handleViewChange('candidatures')} 
-              className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'candidatures' ? 'bg-blue-700' : 'hover:bg-blue-800'} text-white`}
-          >
-            Candidatures
+                onClick={() => handleViewChange('campaigns')} 
+                className={`w-full text-left px-4 py-3 rounded-lg font-semibold text-sm transition-all duration-200 ${
+                  view === 'campaigns' 
+                    ? 'bg-white text-blue-900 shadow-lg' 
+                    : 'text-white hover:bg-blue-700/50'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                  </svg>
+                  Gestion Campagnes
+                </div>
           </button>
             <button 
               onClick={() => handleViewChange('pending-approvals')} 
-              className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'pending-approvals' ? 'bg-blue-700' : 'hover:bg-blue-800'} text-white`}
-            >
-              Demandes d'inscription
+                className={`w-full text-left px-4 py-3 rounded-lg font-semibold text-sm transition-all duration-200 ${
+                  view === 'pending-approvals' 
+                    ? 'bg-white text-blue-900 shadow-lg' 
+                    : 'text-white hover:bg-blue-700/50'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                  </svg>
+                  Demandes PM
+                </div>
             </button>
             <button 
-              onClick={() => handleViewChange('survey-publication')} 
-              className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'survey-publication' ? 'bg-blue-700' : 'hover:bg-blue-800'} text-white`}
-            >
-              Publication d'enquêtes
+                onClick={() => handleViewChange('campaign-data')} 
+                className={`w-full text-left px-4 py-3 rounded-lg font-semibold text-sm transition-all duration-200 ${
+                  view === 'campaign-data' 
+                    ? 'bg-white text-blue-900 shadow-lg' 
+                    : 'text-white hover:bg-blue-700/50'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                  </svg>
+                  Données Campagnes
+                </div>
             </button>
             <button 
-              onClick={() => handleViewChange('parametres')} 
-              className={`w-full text-left px-3 py-2 rounded font-semibold text-sm ${view === 'parametres' ? 'bg-blue-700' : 'hover:bg-blue-800'} text-white`}
-            >
+                onClick={() => handleViewChange('settings')} 
+                className={`w-full text-left px-4 py-3 rounded-lg font-semibold text-sm transition-all duration-200 ${
+                  view === 'settings' 
+                    ? 'bg-white text-blue-900 shadow-lg' 
+                    : 'text-white hover:bg-blue-700/50'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.22,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.22,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.68 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/>
+                  </svg>
               Paramètres
+                </div>
             </button>
             
             {/* Profil et déconnexion mobile */}
-            <div className="flex items-center justify-between pt-2 border-t border-blue-800">
+              <div className="flex items-center justify-between pt-4 mt-4 border-t border-blue-700">
           {user && (
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-white text-blue-900 flex items-center justify-center font-bold">
-              {user.name?.[0]?.toUpperCase() || '?'}
-                  </div>
-                  <span className="text-sm">{user.name || 'Utilisateur'}</span>
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      {user?.profilePhoto ? (
+                        <img 
+                          src={`${environment.apiBaseUrl}${user.profilePhoto}`} 
+                          alt="Photo de profil" 
+                          className="w-8 h-8 rounded-full object-cover shadow-md"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-white text-blue-900 flex items-center justify-center font-bold shadow-md">
+                          {user?.name?.[0]?.toUpperCase() || '?'}
+                        </div>
+                      )}
+                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-white"></div>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-semibold text-white">{user?.name || 'Admin'}</span>
+                      <span className="text-xs text-blue-200">{user?.email}</span>
+                    </div>
             </div>
           )}
               <button 
                 onClick={() => { localStorage.clear(); navigate('/login'); }} 
-                className="bg-white text-blue-900 px-3 py-1 rounded font-semibold text-sm hover:bg-gray-100 transition-colors"
+                  className="bg-white text-blue-900 px-4 py-2 rounded-lg font-semibold text-sm hover:bg-gray-100 hover:shadow-lg transition-all duration-200 hover:scale-105 active:scale-95"
               >
                 Déconnexion
               </button>
+              </div>
             </div>
         </div>
         )}
@@ -347,13 +790,32 @@ export default function AdminHome() {
       {/* Contenu principal */}
       <main className="p-4 sm:p-8">
         {view === 'dashboard' && <DashboardAdmin />}
-        {view === 'utilisateurs' && <AdminUsers />}
-        {view === 'formulaires' && <FormBuilder />}
-        {view === 'statistiques' && <AdminDashboardCharts users={users} />}
-        {view === 'parametres' && <AdminParametres />}
-        {view === 'pending-approvals' && <AdminPendingApprovals />}
-        {view === 'survey-publication' && <AdminSurveyPublication />}
-        {view === 'candidatures' && <AdminCandidatures />}
+        {view === 'users' && <AdminUserManagement />}
+        {view === 'campaigns' && <AdminCampaignManagement />}
+        {view === 'pending-approvals' && (
+          <AdminPendingApprovals 
+            onNavigateToRequests={() => {
+              // Naviguer vers la vraie page des demandes PM
+              setView('pm-requests');
+            }}
+            onNavigateToCreatePM={() => {
+              // Naviguer vers la page de création de PM en utilisant le système de navigation interne
+              setView('create-pm');
+            }}
+          />
+        )}
+        {view === 'pm-requests' && (
+          <AdminPMRequests 
+            onBack={() => setView('pending-approvals')}
+          />
+        )}
+        {view === 'create-pm' && (
+          <AdminCreateProjectManager 
+            onBack={() => setView('pending-approvals')}
+          />
+        )}
+        {view === 'campaign-data' && <AdminCampaignData />}
+        {view === 'settings' && <AdminSettings />}
       </main>
       
       <PNUDFooter />

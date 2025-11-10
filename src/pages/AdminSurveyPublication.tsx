@@ -56,7 +56,7 @@ const AdminSurveyPublication: React.FC = () => {
   });
 
   // Configuration
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://api.collect.fikiri.co';
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
   // Fonction utilitaire pour la gestion des erreurs
   const handleApiError = useCallback((error: any, context: string) => {
@@ -244,7 +244,7 @@ const AdminSurveyPublication: React.FC = () => {
       // URL et méthode
       const url = editingSurvey 
         ? `${apiBaseUrl}/surveys/${editingSurvey.id}`
-        : `${apiBaseUrl}/surveys`;
+        : `${apiBaseUrl}/surveys/admin`;
       
       const method = editingSurvey ? 'PUT' : 'POST';
 

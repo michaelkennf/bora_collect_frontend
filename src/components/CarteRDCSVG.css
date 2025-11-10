@@ -1,0 +1,142 @@
+/* Styles pour la carte SVG de la RDC */
+.map-container {
+  position: relative;
+  width: 100%;
+  height: auto;
+}
+
+.map-container svg {
+  width: 100%;
+  height: auto;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+/* Styles pour les provinces */
+.land {
+  fill: #6CA6CD;
+  stroke: #ffffff;
+  stroke-width: 1.5;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+.land:hover {
+  fill: #1E90FF;
+  stroke: #ffffff;
+  stroke-width: 2.5;
+  filter: drop-shadow(0 4px 12px rgba(30, 144, 255, 0.3));
+  transform: scale(1.02);
+}
+
+.land.selected {
+  fill: #003366;
+  stroke: #ffffff;
+  stroke-width: 3;
+  filter: drop-shadow(0 8px 20px rgba(0, 51, 102, 0.4));
+  transform: scale(1.05);
+}
+
+.land.hovered {
+  fill: #4A90E2;
+  stroke: #ffffff;
+  stroke-width: 2;
+  filter: drop-shadow(0 2px 8px rgba(74, 144, 226, 0.2));
+}
+
+/* Animation pour les interactions */
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.land:hover {
+  animation: pulse 0.6s ease-in-out;
+}
+
+/* Styles pour les tooltips */
+.province-tooltip {
+  position: absolute;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  pointer-events: none;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .map-container {
+    padding: 10px;
+  }
+  
+  .land {
+    stroke-width: 0.5;
+  }
+  
+  .land:hover {
+    stroke-width: 1;
+  }
+}
+
+/* Styles pour les couleurs spécifiques des provinces */
+.province-kinshasa {
+  fill: #FF6B6B;
+}
+
+.province-kongo-central {
+  fill: #4ECDC4;
+}
+
+.province-katanga {
+  fill: #45B7D1;
+}
+
+.province-kivu {
+  fill: #96CEB4;
+}
+
+.province-kasai {
+  fill: #FFEAA7;
+}
+
+.province-equateur {
+  fill: #DDA0DD;
+}
+
+.province-orientale {
+  fill: #98D8C8;
+}
+
+/* Effet de brillance au survol */
+.land:hover::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.3) 50%, transparent 70%);
+  animation: shine 0.8s ease-in-out;
+}
+
+@keyframes shine {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}

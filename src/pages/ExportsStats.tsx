@@ -9,7 +9,7 @@ export default function ExportsStats() {
   const fetchRecords = async () => {
     setLoading(true);
     try {
-      const res = await fetch('https://api.collect.fikiri.co/records', {
+      const res = await fetch('http://localhost:3000/records', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) throw new Error('Erreur lors du chargement');
@@ -29,7 +29,23 @@ export default function ExportsStats() {
   // Exporter en CSV
   const exportCSV = async () => {
     try {
-      const res = await fetch('https://api.collect.fikiri.co/records/export/csv', {
+      // D'abord récupérer l'ID de la campagne depuis les records
+      const recordsResponse = await fetch('http://localhost:3000/records', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      
+      if (!recordsResponse.ok) throw new Error('Erreur lors du chargement des records');
+      const recordsData = await recordsResponse.json();
+      
+      if (recordsData.length === 0) {
+        setError('Aucune donnée à exporter');
+        return;
+      }
+      
+      // Utiliser l'ID de la campagne du premier record
+      const campaignId = recordsData[0].surveyId;
+      
+      const res = await fetch(`http://localhost:3000/records/campaign/${campaignId}/export`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) throw new Error('Erreur lors de l\'export');
@@ -51,7 +67,7 @@ export default function ExportsStats() {
   // Exporter en PDF
   const exportPDF = async () => {
     try {
-      const res = await fetch('https://api.collect.fikiri.co/records/export/pdf', {
+      const res = await fetch('http://localhost:3000/records/export/pdf', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) throw new Error('Erreur lors de l\'export');

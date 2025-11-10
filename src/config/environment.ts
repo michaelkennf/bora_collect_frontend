@@ -6,86 +6,72 @@ export interface EnvironmentConfig {
   appVersion: string;
   enableHttps: boolean;
   enableDebug: boolean;
-  isProduction: boolean;
 }
 
-// Configuration par défaut pour le développement local
-const defaultLocalConfig: EnvironmentConfig = {
-  apiBaseUrl: 'http://localhost:8001', // API LOCALE - DÉVELOPPEMENT
-  apiTimeout: 30000,
-  appName: 'FikiriCollect',
-  appVersion: '1.0.0',
-  enableHttps: false, // HTTP pour le développement local
-  enableDebug: true,
-  isProduction: false,
-};
-
-// Configuration pour la production
-const defaultProductionConfig: EnvironmentConfig = {
-  apiBaseUrl: 'https://api.collect.fikiri.co', // API EN LIGNE - DOMAINE CORRECT
-  apiTimeout: 30000,
-  appName: 'FikiriCollect',
-  appVersion: '1.0.0',
-  enableHttps: true, // HTTPS activé
-  enableDebug: false,
-  isProduction: true,
-};
-
-// Validation et configuration de l'environnement
+// Validation des variables d'environnement
 const validateEnvironment = (): EnvironmentConfig => {
-  const forceOnlineAPI = false; // UTILISER L'API LOCALE POUR LE DÉVELOPPEMENT
-  const isProduction = import.meta.env.PROD ||
-                      window.location.hostname !== 'localhost' ||
-                      import.meta.env.VITE_API_BASE_URL?.includes('api.collect.fikiri.co') ||
-                      forceOnlineAPI ||
-                      false;
-
-  // Configuration de base
-  const baseConfig = isProduction ? defaultProductionConfig : defaultLocalConfig;
-
-  // Surcharge avec les variables d'environnement si disponibles
   const config: EnvironmentConfig = {
-    apiBaseUrl: import.meta.env.VITE_API_BASE_URL || baseConfig.apiBaseUrl,
+    apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000',
     apiTimeout: parseInt(import.meta.env.VITE_API_TIMEOUT || '30000'),
-    appName: import.meta.env.VITE_APP_NAME || baseConfig.appName,
-    appVersion: import.meta.env.VITE_APP_VERSION || baseConfig.appVersion,
-    enableHttps: import.meta.env.VITE_ENABLE_HTTPS === 'true' || baseConfig.enableHttps,
-    enableDebug: import.meta.env.VITE_ENABLE_DEBUG === 'true' || baseConfig.enableDebug,
-    isProduction: isProduction,
+    appName: import.meta.env.VITE_APP_NAME || 'BoraCollect',
+    appVersion: import.meta.env.VITE_APP_VERSION || '1.0.0',
+    enableHttps: import.meta.env.VITE_ENABLE_HTTPS === 'true',
+    enableDebug: import.meta.env.VITE_ENABLE_DEBUG === 'true',
   };
 
   // Validation des valeurs critiques
   if (!config.apiBaseUrl) {
-    console.error('❌ VITE_API_BASE_URL manquant');
-    config.apiBaseUrl = isProduction ? 'https://api.collect.fikiri.co' : 'http://localhost:8001'; // Fallback selon l'environnement
+    throw new Error('VITE_API_BASE_URL is required');
   }
 
-  if (!config.apiTimeout || config.apiTimeout < 1000) {
-    console.warn('⚠️ Timeout API invalide, utilisation de la valeur par défaut');
-    config.apiTimeout = 30000;
+  if (config.apiTimeout < 5000 || config.apiTimeout > 120000) {
+    throw new Error('VITE_API_TIMEOUT must be between 5000 and 120000 ms');
   }
 
-  console.log('🌍 Configuration environnement:', {
-    apiBaseUrl: config.apiBaseUrl,
-    isProduction: config.isProduction,
-    enableHttps: config.enableHttps,
-    enableDebug: config.enableDebug
-  });
+  // Avertissements en mode développement
+  if (import.meta.env.DEV) {
+    if (config.apiBaseUrl.includes('localhost')) {
+      console.warn('⚠️ Using localhost API URL in development mode');
+    }
+    
+    if (config.enableDebug) {
+      console.log('🔍 Debug mode enabled');
+    }
+  }
 
   return config;
 };
 
-// Configuration validée
-export const environment = validateEnvironment();
-
-// Fonction utilitaire pour construire les URLs de l'API
-export const getApiUrl = (endpoint: string): string => {
-  const baseUrl = environment.apiBaseUrl;
-  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  const fullUrl = `${baseUrl}${cleanEndpoint}`;
-  
-  console.log(`🔗 Construction URL API: ${fullUrl}`);
-  return fullUrl;
+// Configuration globale de l'environnement
+export const environment: EnvironmentConfig = {
+  apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000',
+  apiTimeout: parseInt(import.meta.env.VITE_API_TIMEOUT || '30000'),
+  appName: import.meta.env.VITE_APP_NAME || 'FikiriCollect',
+  appVersion: import.meta.env.VITE_APP_VERSION || '1.0.0',
+  enableHttps: import.meta.env.VITE_ENABLE_HTTPS === 'true',
+  enableDebug: import.meta.env.VITE_ENABLE_DEBUG === 'true',
 };
 
-export default environment; 
+// Configuration par défaut pour le développement
+export const defaultConfig: EnvironmentConfig = {
+  apiBaseUrl: 'http://localhost:3000',
+  apiTimeout: 30000,
+  appName: 'BoraCollect',
+  appVersion: '1.0.0',
+  enableHttps: false,
+  enableDebug: false,
+};
+
+// Fonction utilitaire pour obtenir la configuration
+export const getConfig = (): EnvironmentConfig => {
+  try {
+    return environment;
+  } catch (error) {
+    console.error('❌ Error loading environment configuration:', error);
+    console.warn('⚠️ Falling back to default configuration');
+    return defaultConfig;
+  }
+};
+
+// Configuration exportée par défaut
+export default getConfig(); 

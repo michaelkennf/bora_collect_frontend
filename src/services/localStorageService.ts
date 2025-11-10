@@ -2,6 +2,7 @@
 export interface LocalRecord {
   id: string;
   formData: any;
+  surveyId?: string; // ID de la campagne
   createdAt: Date;
   synced: boolean;
   syncedAt?: Date;
@@ -13,10 +14,11 @@ class LocalStorageService {
   private readonly SYNC_STATUS_KEY = 'sync_status';
 
   // Sauvegarder un enregistrement en local
-  async saveRecord(formData: any): Promise<string> {
+  async saveRecord(formData: any, surveyId?: string): Promise<string> {
     const record: LocalRecord = {
       id: this.generateId(),
       formData,
+      surveyId, // Inclure l'ID de la campagne
       createdAt: new Date(),
       synced: false
     };
@@ -25,7 +27,7 @@ class LocalStorageService {
     records.push(record);
     await this.saveLocalRecords(records);
 
-    console.log('Enregistrement sauvegardé en local:', record.id);
+    console.log('Enregistrement sauvegardé en local:', record.id, 'pour campagne:', surveyId);
     return record.id;
   }
 

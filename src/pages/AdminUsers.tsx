@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ConfirmModal from '../components/ConfirmModal';
+import UserCreationForm from '../components/UserCreationForm';
 
-// Rôles disponibles
+// Rôles disponibles pour l'admin (seulement Project Managers)
 const roles = [
-  { value: 'ADMIN', label: 'Admin' },
-  { value: 'CONTROLLER', label: 'Enquêteur' },
-  { value: 'ANALYST', label: 'Analyste' },
+  { value: 'ANALYST', label: 'Project Manager' },
 ];
 
 // Options pour le sexe
@@ -23,6 +22,7 @@ interface User {
   role: string;
   gender?: string;
   profilePictureUrl?: string;
+  profilePhoto?: string;
   status: string;
 }
 
@@ -33,7 +33,8 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showAdd, setShowAdd] = useState(false);
-  const [addForm, setAddForm] = useState<{ name: string; email: string; password: string; role: string; gender: string; contact?: string }>({ name: '', email: '', password: '', role: 'CONTROLLER', gender: 'OTHER', contact: '' });
+  const [campaigns, setCampaigns] = useState([]);
+  const [loadingCampaigns, setLoadingCampaigns] = useState(false);
   const [addError, setAddError] = useState('');
   const [saving, setSaving] = useState(false);
   const [editRoleId, setEditRoleId] = useState<string | null>(null);
@@ -48,17 +49,19 @@ export default function AdminUsers() {
   const [resetSaving, setResetSaving] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  // Charger tous les utilisateurs
+  // Charger seulement les Project Managers
   const fetchUsers = async () => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('https://api.collect.fikiri.co/users', {
+      const res = await fetch('http://localhost:3000/users', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) throw new Error('Erreur lors du chargement');
-      const data = await res.json();
-      setUsers(data);
+      const allUsers = await res.json();
+      // Filtrer seulement les Project Managers (ANALYST)
+      const pmUsers = allUsers.filter((user: any) => user.role === 'ANALYST');
+      setUsers(pmUsers);
     } catch (err: any) {
       setError(err.message || 'Erreur inconnue');
     } finally {
@@ -66,31 +69,54 @@ export default function AdminUsers() {
     }
   };
 
+  // Charger les campagnes disponibles
+  const fetchCampaigns = async () => {
+    setLoadingCampaigns(true);
+    try {
+      const response = await fetch('http://localhost:3000/users/campaigns');
+      if (response.ok) {
+        const campaignsData = await response.json();
+        setCampaigns(campaignsData);
+      } else {
+        console.error('Erreur lors du chargement des campagnes');
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des campagnes:', error);
+    } finally {
+      setLoadingCampaigns(false);
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
+    fetchCampaigns();
   }, []);
 
-  // Ajouter un utilisateur
-  const handleAdd = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Ajouter un Project Manager
+  const handleAdd = async (formData: any) => {
     setAddError('');
     setSaving(true);
     try {
-      const payload = { ...addForm };
-              const res = await fetch('https://api.collect.fikiri.co/users', {
+      // Forcer le rôle ANALYST (Project Manager) pour l'admin
+      const pmData = {
+        ...formData,
+        role: 'ANALYST'
+      };
+      
+      const res = await fetch('http://localhost:3000/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(pmData),
       });
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.message || 'Erreur lors de la création');
       }
       setShowAdd(false);
-      setAddForm({ name: '', email: '', password: '', role: 'CONTROLLER', gender: 'OTHER', contact: '' });
       fetchUsers();
     } catch (err: any) {
       setAddError(err.message || 'Erreur inconnue');
+      throw err; // Re-throw pour que le composant UserCreationForm puisse gérer l'erreur
     } finally {
       setSaving(false);
     }
@@ -105,7 +131,7 @@ export default function AdminUsers() {
     if (!confirmDeleteId) return;
     setLoading(true);
     try {
-              const res = await fetch(`https://api.collect.fikiri.co/users/${confirmDeleteId}`, {
+              const res = await fetch(`http://localhost:3000/users/${confirmDeleteId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
@@ -124,7 +150,7 @@ export default function AdminUsers() {
     if (!editRoleId) return;
     setRoleSaving(true);
     try {
-              const res = await fetch(`https://api.collect.fikiri.co/users/${editRoleId}`, {
+              const res = await fetch(`http://localhost:3000/users/${editRoleId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify({ role: editRole }),
@@ -145,7 +171,7 @@ export default function AdminUsers() {
     setResetSaving(true);
     setResetError('');
     try {
-              const res = await fetch(`https://api.collect.fikiri.co/users/${showReset}`, {
+              const res = await fetch(`http://localhost:3000/users/${showReset}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify({ password: resetPwd }),
@@ -173,7 +199,7 @@ export default function AdminUsers() {
   const handleReactivate = async (id: string) => {
     setLoading(true);
     try {
-              const res = await fetch(`https://api.collect.fikiri.co/users/${id}`, {
+              const res = await fetch(`http://localhost:3000/users/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify({ status: 'ACTIVE' }),
@@ -190,12 +216,12 @@ export default function AdminUsers() {
   return (
     <div className="max-w-7xl mx-auto bg-white p-4 sm:p-8 rounded-xl shadow-lg mt-4 sm:mt-8 mx-4">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-        <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Gestion des utilisateurs</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Gestion des Project Managers</h2>
         <button
           onClick={() => setShowAdd(true)}
           className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm sm:text-base transition-colors"
         >
-          + Ajouter un utilisateur
+          + Ajouter un Project Manager
         </button>
       </div>
 
@@ -221,7 +247,7 @@ export default function AdminUsers() {
           </select>
         </div>
         <div className="text-sm text-gray-600">
-          {users.length} utilisateur(s) trouvé(s)
+          {users.length} Project Manager(s) trouvé(s)
         </div>
       </div>
 
@@ -242,9 +268,17 @@ export default function AdminUsers() {
               <tr key={user.id} className="hover:bg-gray-50">
                 <td className="px-3 sm:px-4 py-4 whitespace-nowrap">
                   <div className="flex items-center">
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm sm:text-base">
-                      {user.name?.[0]?.toUpperCase() || '?'}
-                    </div>
+                    {user.profilePhoto ? (
+                      <img 
+                        src={`http://localhost:3000${user.profilePhoto}`} 
+                        alt={`Photo de ${user.name}`} 
+                        className="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover shadow-md"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm sm:text-base shadow-md">
+                        {user.name?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || 'U'}
+                      </div>
+                    )}
                     <div className="ml-3">
                       <div className="text-sm sm:text-base font-medium text-gray-900">{user.name}</div>
                       <div className="text-xs sm:text-sm text-gray-500">{user.email}</div>
@@ -331,96 +365,18 @@ export default function AdminUsers() {
       {/* Modal ajout utilisateur */}
       {showAdd && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white p-8 rounded-xl shadow-2xl max-w-lg w-full relative max-h-[90vh] overflow-y-auto">
+          <div className="bg-white p-8 rounded-xl shadow-2xl max-w-2xl w-full relative max-h-[90vh] overflow-y-auto">
             <button onClick={() => setShowAdd(false)} className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-2xl font-bold transition-colors">&times;</button>
-            <h3 className="text-2xl font-bold mb-6 text-gray-800 text-center">Ajouter un utilisateur</h3>
-            <form onSubmit={handleAdd} className="flex flex-col gap-5">
-              <div>
-                <label className="block font-semibold mb-2 text-gray-700">Nom complet *</label>
-                <input 
-                  type="text" 
-                  value={addForm.name} 
-                  onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))} 
-                  className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" 
-                  placeholder="Entrez le nom complet"
-                  required 
-                />
-              </div>
-              <div>
-                <label className="block font-semibold mb-2 text-gray-700">Adresse email *</label>
-                <input 
-                  type="email" 
-                  value={addForm.email} 
-                  onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))} 
-                  className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" 
-                  placeholder="exemple@email.com"
-                  required 
-                />
-              </div>
-              <div>
-                <label className="block font-semibold mb-2 text-gray-700">Mot de passe *</label>
-                <input 
-                  type="password" 
-                  value={addForm.password} 
-                  onChange={e => setAddForm(f => ({ ...f, password: e.target.value }))} 
-                  className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" 
-                  placeholder="Minimum 6 caractères"
-                  required 
-                  minLength={6} 
-                />
-              </div>
-              <div>
-                <label className="block font-semibold mb-2 text-gray-700">Rôle *</label>
-                <select 
-                  value={addForm.role} 
-                  onChange={e => setAddForm(f => ({ ...f, role: e.target.value }))} 
-                  className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                >
-                  {roles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block font-semibold mb-2 text-gray-700">Genre</label>
-                <select 
-                  value={addForm.gender} 
-                  onChange={e => setAddForm(f => ({ ...f, gender: e.target.value }))} 
-                  className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                >
-                  {genderOptions.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block font-semibold mb-2 text-gray-700">Contact (téléphone)</label>
-                <input 
-                  type="text" 
-                  value={addForm.contact || ''} 
-                  onChange={e => setAddForm(f => ({ ...f, contact: e.target.value }))} 
-                  className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" 
-                  placeholder="+243 123 456 789" 
-                />
-              </div>
-              {addError && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-center font-medium">
-                  {addError}
-                </div>
-              )}
-              <div className="flex gap-3 justify-end mt-4">
-                <button 
-                  type="button" 
-                  className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-md shadow-md transition-colors font-medium" 
-                  onClick={() => setShowAdd(false)}
-                >
-                  Annuler
-                </button>
-                <button 
-                  type="submit" 
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md shadow-md transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed" 
-                  disabled={saving}
-                >
-                  {saving ? 'Création...' : 'Enregistrer'}
-                </button>
-              </div>
-            </form>
+            <UserCreationForm
+              onSubmit={handleAdd}
+              onCancel={() => setShowAdd(false)}
+              isLoading={saving}
+              title="Ajouter un Project Manager"
+              showRoleSelection={false}
+              defaultRole="ANALYST"
+              campaigns={campaigns}
+              loadingCampaigns={loadingCampaigns}
+            />
           </div>
         </div>
       )}

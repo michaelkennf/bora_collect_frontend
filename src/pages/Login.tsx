@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import logo2 from '../assets/images/logo2.jpg';
-import { getApiUrl } from '../config/environment';
+import { environment } from '../config/environment';
 
 const Login = () => {
   const [username, setUsername] = useState('');
@@ -18,7 +18,7 @@ const Login = () => {
 
     try {
       // Utiliser la configuration dual pour l'URL de l'API
-      const loginUrl = getApiUrl('/auth/login');
+      const loginUrl = `${environment.apiBaseUrl}/auth/login`;
       console.log('🔗 Tentative de connexion à:', loginUrl);
       
       const response = await fetch(loginUrl, {
@@ -34,20 +34,31 @@ const Login = () => {
         localStorage.setItem('token', data.access_token);
         localStorage.setItem('user', JSON.stringify(data.user));
         
-        console.log('✅ Connexion réussie, redirection...');
+        console.log('✅ Connexion réussie, données stockées:');
+        console.log('🔍 Token:', !!data.access_token);
+        console.log('🔍 User data:', data.user);
+        console.log('🔍 User role:', data.user.role);
         
         // Rediriger selon le rôle
         switch (data.user.role) {
           case 'ADMIN':
+            console.log('🔄 Redirection vers /admin');
             navigate('/admin');
             break;
           case 'CONTROLLER':
+            console.log('🔄 Redirection vers /controleur');
             navigate('/controleur');
             break;
           case 'ANALYST':
+            console.log('🔄 Redirection vers /analyst-home');
             navigate('/analyst-home');
             break;
+          case 'PROJECT_MANAGER':
+            console.log('🔄 Redirection vers /project-manager');
+            navigate('/project-manager');
+            break;
           default:
+            console.log('🔄 Redirection vers / (rôle inconnu)');
             navigate('/');
         }
       } else {

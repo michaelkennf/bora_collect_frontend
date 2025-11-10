@@ -1,5 +1,6 @@
 import { localStorageService } from './localStorageService';
 import type { LocalRecord } from './localStorageService';
+import { environment } from '../config/environment';
 
 // Service de synchronisation automatique des données locales
 class SyncService {
@@ -84,7 +85,7 @@ class SyncService {
     console.log('Structure des données à envoyer:', dataToSend);
     console.log('Endpoint utilisé:', endpoint);
 
-    const response = await fetch(`https://api.collect.fikiri.co${endpoint}`, {
+    const response = await fetch(`${environment.apiBaseUrl}${endpoint}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -9,7 +9,7 @@ export default function AdminDeletedUsers() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('https://api.collect.fikiri.co/users', {
+      const res = await fetch('http://localhost:3000/users', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) throw new Error('Erreur lors du chargement');
@@ -27,7 +27,7 @@ export default function AdminDeletedUsers() {
   const handleReactivate = async (id: string) => {
     setLoading(true);
     try {
-      const res = await fetch(`https://api.collect.fikiri.co/users/${id}`, {
+      const res = await fetch(`http://localhost:3000/users/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify({ status: 'ACTIVE' }),

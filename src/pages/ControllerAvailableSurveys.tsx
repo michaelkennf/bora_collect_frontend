@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
+import { environment } from '../config/environment';
 
 interface Survey {
   id: string;
@@ -15,15 +16,6 @@ interface Survey {
   applications: any[];
 }
 
-interface FormTemplate {
-  id: string;
-  name: string;
-  description: string;
-  surveyId: string;
-  fields: any[];
-  isActive: boolean;
-  isVisibleToControllers: boolean;
-}
 
 interface Application {
   id: string;
@@ -44,7 +36,6 @@ interface Application {
 const ControllerAvailableSurveys: React.FC = () => {
   const [surveys, setSurveys] = useState<Survey[]>([]);
   const [myApplications, setMyApplications] = useState<Application[]>([]);
-  const [availableForms, setAvailableForms] = useState<FormTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSurvey, setSelectedSurvey] = useState<Survey | null>(null);
   const [showApplicationModal, setShowApplicationModal] = useState(false);
@@ -54,7 +45,7 @@ const ControllerAvailableSurveys: React.FC = () => {
     availability: ''
   });
 
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://api.collect.fikiri.co';
+  const apiBaseUrl = environment.apiBaseUrl;
 
   useEffect(() => {
     fetchData();
@@ -94,24 +85,6 @@ const ControllerAvailableSurveys: React.FC = () => {
         setMyApplications(applicationsData);
       }
 
-      // Charger les formulaires disponibles pour les enquêtes approuvées
-      const formsResponse = await fetch(`${apiBaseUrl}/forms/available-for-controller`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (formsResponse.ok) {
-        const formsData = await formsResponse.json();
-        console.log('📝 Formulaires disponibles reçus:', formsData);
-        console.log('📊 Nombre de formulaires:', formsData.length);
-        setAvailableForms(formsData);
-      } else {
-        console.error('❌ Erreur lors du chargement des formulaires:', formsResponse.status, formsResponse.statusText);
-        const errorData = await formsResponse.json().catch(() => ({}));
-        console.error('📋 Détails de l\'erreur:', errorData);
-      }
     } catch (error) {
       toast.error('Erreur de connexion au serveur');
     } finally {
@@ -155,7 +128,17 @@ const ControllerAvailableSurveys: React.FC = () => {
   };
 
   const hasAppliedToSurvey = (surveyId: string) => {
-    return myApplications.some(app => app.survey.id === surveyId);
+    // Vérifier si l'utilisateur a une candidature active (PENDING ou APPROVED)
+    return myApplications.some(app => 
+      app.survey.id === surveyId && 
+      (app.status === 'PENDING' || app.status === 'APPROVED')
+    );
+  };
+
+  const canReapplyToSurvey = (surveyId: string) => {
+    // Vérifier si l'utilisateur peut repostuler (candidature REJECTED ou WITHDRAWN)
+    const application = myApplications.find(app => app.survey.id === surveyId);
+    return application && (application.status === 'REJECTED' || application.status === 'WITHDRAWN');
   };
 
   const getApplicationStatus = (surveyId: string) => {
@@ -291,7 +274,7 @@ const ControllerAvailableSurveys: React.FC = () => {
               {surveys.map((survey) => {
                 const hasApplied = hasAppliedToSurvey(survey.id);
                 const applicationStatus = getApplicationStatus(survey.id);
-                const isFull = survey.maxApplicants && survey.applications.length >= survey.maxApplicants;
+                const isFull = survey.maxApplicants && survey.maxApplicants > 0 && survey.applications.length >= survey.maxApplicants;
 
                 return (
                   <div key={survey.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-shadow">
@@ -308,23 +291,35 @@ const ControllerAvailableSurveys: React.FC = () => {
 
                       <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
                         {survey.location && (
-                          <div>
-                            <span className="font-medium">📍 Localisation:</span> {survey.location}
+                          <div className="flex items-center gap-1">
+                            <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                            <span className="font-medium">Localisation:</span> {survey.location}
                           </div>
                         )}
                         {survey.duration && (
-                          <div>
-                            <span className="font-medium">⏱️ Durée:</span> {survey.duration}
+                          <div className="flex items-center gap-1">
+                            <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span className="font-medium">Durée:</span> {survey.duration}
                           </div>
                         )}
                         {survey.compensation && (
-                          <div>
-                            <span className="font-medium">💰 Compensation:</span> {survey.compensation}
+                          <div className="flex items-center gap-1">
+                            <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                            </svg>
+                            <span className="font-medium">Compensation:</span> {survey.compensation}
                           </div>
                         )}
-                        <div>
-                          <span className="font-medium">👥 Candidats:</span> {survey.applications.length}
-                          {survey.maxApplicants && ` / ${survey.maxApplicants}`}
+                        <div className="flex items-center gap-1">
+                          <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                          </svg>
+                          <span className="font-medium">Candidats:</span> {survey.maxApplicants ? `${survey.applications.length}/${survey.maxApplicants}` : survey.applications.length}
                         </div>
                       </div>
                     </div>
@@ -336,6 +331,13 @@ const ControllerAvailableSurveys: React.FC = () => {
                             {getStatusLabel(applicationStatus || 'PENDING')}
                           </span>
                         </div>
+                      ) : canReapplyToSurvey(survey.id) ? (
+                        <button
+                          onClick={() => openApplicationModal(survey)}
+                          className="w-full bg-orange-600 text-white px-4 py-2 rounded-md hover:bg-orange-700 transition-colors text-sm font-medium"
+                        >
+                          Repostuler
+                        </button>
                       ) : isFull ? (
                         <div className="text-center">
                           <span className="inline-flex px-3 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
@@ -358,67 +360,6 @@ const ControllerAvailableSurveys: React.FC = () => {
           )}
         </div>
 
-        {/* Section des Formulaires Disponibles */}
-        <div className="mt-8">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">📋 Formulaires Disponibles</h2>
-          
-          {availableForms.length === 0 ? (
-            <div className="text-center py-8 bg-white rounded-lg shadow">
-              <div className="text-4xl mb-4">📝</div>
-              <p className="text-gray-600 mb-2">Aucun formulaire disponible</p>
-              <p className="text-sm text-gray-500">
-                Les formulaires apparaîtront ici une fois que vos candidatures seront approuvées
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {availableForms.map((form) => {
-                const linkedSurvey = surveys.find(s => s.id === form.surveyId);
-                return (
-                  <div key={form.id} className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border-l-4 border-blue-500">
-                    <div className="mb-4">
-                      <h3 className="text-lg font-semibold text-gray-800 mb-2">{form.name}</h3>
-                      <p className="text-gray-600 text-sm mb-3">{form.description}</p>
-                      
-                      {linkedSurvey && (
-                        <div className="mb-3">
-                          <span className="text-xs text-gray-500">Enquête : </span>
-                          <span className="text-sm font-medium text-blue-600">{linkedSurvey.title}</span>
-                        </div>
-                      )}
-                      
-                      <div className="text-sm text-gray-500 mb-3">
-                        {form.fields.length} champ(s) à remplir
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => {
-                          // Ici vous pouvez rediriger vers le formulaire ou l'ouvrir
-                          toast.info('Fonctionnalité en cours de développement');
-                        }}
-                        className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
-                      >
-                        📝 Remplir le formulaire
-                      </button>
-                      
-                      <button
-                        onClick={() => {
-                          // Aperçu du formulaire
-                          toast.info('Aperçu du formulaire');
-                        }}
-                        className="bg-gray-600 text-white px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-sm"
-                      >
-                        👁️ Aperçu
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Modal de candidature */}

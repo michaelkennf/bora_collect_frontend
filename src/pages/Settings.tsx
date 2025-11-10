@@ -1,320 +1,959 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, User, Lock, Mail, Save, X } from 'lucide-react';
-import PNUDFooter from '../components/PNUDFooter';
+import { environment } from '../config/environment';
+import { getCitiesByProvince, getCommunesByCity } from '../data/citiesData';
+import { getQuartiersByCommune } from '../data/quartiersData';
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-}
-
-interface SettingsForm {
-  name: string;
-  email: string;
-  currentPassword: string;
-  newPassword: string;
-  confirmPassword: string;
-}
-
-export default function Settings() {
-  const [user, setUser] = useState<User | null>(null);
-  const [form, setForm] = useState<SettingsForm>({
-    name: '',
-    email: '',
+const Settings: React.FC = () => {
+  const [settings, setSettings] = useState({
     currentPassword: '',
     newPassword: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    email: '',
+    name: '',
+    whatsapp: '',
+    gender: '',
+    contact: '',
+    province: '',
+    city: '',
+    commune: '',
+    quartier: '',
+    organization: '',
+    campaignDescription: '',
+    targetProvince: '',
+    campaignDuration: '',
+    selectedODD: '',
+    numberOfEnumerators: ''
   });
-  const [showPassword, setShowPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const navigate = useNavigate();
+  const [message, setMessage] = useState('');
+  const [messageType, setMessageType] = useState<'success' | 'error'>('success');
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [customQuartier, setCustomQuartier] = useState('');
+  const [showCustomQuartier, setShowCustomQuartier] = useState(false);
+  const [photoDeletedLocally, setPhotoDeletedLocally] = useState(false);
 
+  // Charger les données utilisateur au montage du composant
   useEffect(() => {
-    const userData = localStorage.getItem('user');
-    if (userData) {
-      const userObj = JSON.parse(userData);
-      setUser(userObj);
-      setForm(prev => ({
+    const loadUserData = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        // D'abord charger depuis localStorage pour éviter le flash
+        const localUser = localStorage.getItem('user');
+        if (localUser) {
+          const userData = JSON.parse(localUser);
+          console.log('🔍 Settings - Données utilisateur chargées depuis localStorage:', userData);
+          setUser(userData);
+          setProfilePhoto(userData.profilePhoto || null);
+          setSettings(prev => ({
+            ...prev,
+            email: userData.email || '',
+            name: userData.name || '',
+            whatsapp: userData.whatsapp || '',
+            gender: userData.gender || '',
+            contact: userData.contact || '',
+            province: userData.province || '',
+            city: userData.city || '',
+            commune: userData.commune || '',
+            quartier: userData.quartier || '',
+            organization: userData.organization || '',
+            campaignDescription: userData.campaignDescription || '',
+            targetProvince: userData.targetProvince || '',
+            campaignDuration: userData.campaignDuration || '',
+            selectedODD: userData.selectedODD || '',
+            numberOfEnumerators: userData.numberOfEnumerators || ''
+          }));
+        }
+
+        // Ensuite, mettre à jour depuis le serveur en arrière-plan
+        const response = await fetch(`${environment.apiBaseUrl}/auth/me`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          const userData = await response.json();
+          console.log('🔍 Settings - Données utilisateur mises à jour depuis le serveur:', userData.user);
+          
+          // Si la photo a été supprimée localement, ne pas la restaurer depuis le serveur
+          if (photoDeletedLocally) {
+            console.log('🔍 Settings - Photo supprimée localement, ne pas restaurer depuis le serveur');
+            setUser({ ...userData.user, profilePhoto: null });
+          } else {
+            // Mettre à jour normalement
+            setUser(userData.user);
+            setProfilePhoto(userData.user.profilePhoto || null);
+          }
+          
+          setSettings(prev => ({
+            ...prev,
+            email: userData.user.email || '',
+            name: userData.user.name || '',
+            whatsapp: userData.user.whatsapp || '',
+            gender: userData.user.gender || '',
+            contact: userData.user.contact || '',
+            province: userData.user.province || '',
+            city: userData.user.city || '',
+            commune: userData.user.commune || '',
+            quartier: userData.user.quartier || '',
+            organization: userData.user.organization || '',
+            campaignDescription: userData.user.campaignDescription || '',
+            targetProvince: userData.user.targetProvince || '',
+            campaignDuration: userData.user.campaignDuration || '',
+            selectedODD: userData.user.selectedODD || '',
+            numberOfEnumerators: userData.user.numberOfEnumerators || ''
+          }));
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement des données utilisateur:', error);
+      }
+    };
+
+    loadUserData();
+  }, [photoDeletedLocally]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    
+    if (name === 'province') {
+      // Réinitialiser ville et commune quand la province change
+      setSettings(prev => ({
         ...prev,
-        name: userObj.name || '',
-        email: userObj.email || ''
+        province: value,
+        city: '',
+        commune: '',
+        quartier: ''
+      }));
+    } else if (name === 'city') {
+      // Réinitialiser commune et quartier quand la ville change
+      setSettings(prev => ({
+        ...prev,
+        city: value,
+        commune: '',
+        quartier: ''
+      }));
+      setShowCustomQuartier(false);
+      setCustomQuartier('');
+    } else if (name === 'commune') {
+      // Réinitialiser quartier quand la commune change
+      setSettings(prev => ({
+        ...prev,
+        commune: value,
+        quartier: ''
+      }));
+      setShowCustomQuartier(false);
+      setCustomQuartier('');
+    } else if (name === 'quartier') {
+      if (value === 'CUSTOM') {
+        setShowCustomQuartier(true);
+        setSettings(prev => ({
+          ...prev,
+          quartier: ''
+        }));
+      } else {
+        setShowCustomQuartier(false);
+        setCustomQuartier('');
+        setSettings(prev => ({
+          ...prev,
+          quartier: value
+        }));
+      }
+    } else {
+      setSettings(prev => ({
+        ...prev,
+        [name]: value
       }));
     }
-  }, []);
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setForm(prev => ({
-      ...prev,
-      [name]: value
-    }));
   };
 
-  const validateForm = (): boolean => {
-    if (!form.name.trim()) {
-      setMessage({ type: 'error', text: 'Le nom est requis' });
-      return false;
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Vérifier le type de fichier
+    if (!file.type.match(/^image\/(jpg|jpeg|png|gif)$/)) {
+      setMessage('Seuls les fichiers image (JPG, PNG, GIF) sont autorisés');
+      setMessageType('error');
+      return;
     }
 
-    if (!form.email.trim()) {
-      setMessage({ type: 'error', text: 'L\'email est requis' });
-      return false;
+    // Vérifier la taille du fichier (1MB max)
+    if (file.size > 1 * 1024 * 1024) {
+      setMessage('La taille du fichier ne doit pas dépasser 1MB');
+      setMessageType('error');
+      return;
     }
 
-    if (form.newPassword && form.newPassword !== form.confirmPassword) {
-      setMessage({ type: 'error', text: 'Les mots de passe ne correspondent pas' });
-      return false;
-    }
-
-    if (form.newPassword && form.newPassword.length < 6) {
-      setMessage({ type: 'error', text: 'Le nouveau mot de passe doit contenir au moins 6 caractères' });
-      return false;
-    }
-
-    return true;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!validateForm()) return;
-
-    setLoading(true);
-    setMessage(null);
+    setUploadingPhoto(true);
+    setMessage('');
 
     try {
       const token = localStorage.getItem('token');
-      if (!token) {
-        setMessage({ type: 'error', text: 'Token d\'authentification manquant' });
-        return;
+      if (!token) return;
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(`${environment.apiBaseUrl}/upload/profile-photo`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setProfilePhoto(result.photoUrl);
+        setPhotoDeletedLocally(false);
+        setMessage('Photo de profil mise à jour avec succès');
+        setMessageType('success');
+        
+        // Mettre à jour les données utilisateur dans localStorage
+        const updatedUser = { ...user, profilePhoto: result.photoUrl };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        setUser(updatedUser);
+        
+        // Déclencher l'événement pour mettre à jour l'interface
+        window.dispatchEvent(new CustomEvent('userProfileUpdated', { detail: updatedUser }));
+      } else {
+        const error = await response.json();
+        setMessage(error.message || 'Erreur lors de l\'upload de la photo');
+        setMessageType('error');
       }
+    } catch (error) {
+      setMessage('Erreur de connexion lors de l\'upload');
+      setMessageType('error');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
 
-      const updateData: any = {
-        name: form.name.trim(),
-        email: form.email.trim()
-      };
+  const handleDeletePhoto = async () => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer votre photo de profil ?')) {
+      return;
+    }
 
-      // Ajouter le changement de mot de passe si fourni
-      if (form.newPassword && form.currentPassword) {
-        updateData.currentPassword = form.currentPassword;
-        updateData.newPassword = form.newPassword;
+    setUploadingPhoto(true);
+    setMessage('');
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch(`${environment.apiBaseUrl}/upload/profile-photo`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        setProfilePhoto(null);
+        setPhotoDeletedLocally(true);
+        setMessage('Photo de profil supprimée avec succès');
+        setMessageType('success');
+        
+        // Mettre à jour les données utilisateur dans localStorage
+        const updatedUser = { ...user, profilePhoto: null };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        setUser(updatedUser);
+        
+        // Déclencher l'événement pour mettre à jour l'interface
+        window.dispatchEvent(new CustomEvent('userProfileUpdated', { detail: updatedUser }));
+      } else {
+        const error = await response.json();
+        setMessage(error.message || 'Erreur lors de la suppression de la photo');
+        setMessageType('error');
       }
+    } catch (error) {
+      setMessage('Erreur de connexion lors de la suppression');
+      setMessageType('error');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
 
-                    const response = await fetch(`https://api.collect.fikiri.co/users/me`, {
-         method: 'PATCH',
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage('');
+
+    if (settings.newPassword !== settings.confirmPassword) {
+      setMessage('Les mots de passe ne correspondent pas');
+      setMessageType('error');
+      setLoading(false);
+      return;
+    }
+
+    if (settings.newPassword.length < 6) {
+      setMessage('Le nouveau mot de passe doit contenir au moins 6 caractères');
+      setMessageType('error');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch(`${environment.apiBaseUrl}/auth/change-password`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(updateData)
+        body: JSON.stringify({
+          currentPassword: settings.currentPassword,
+          newPassword: settings.newPassword
+        })
       });
 
       if (response.ok) {
-        const updatedUser = await response.json();
-        
-        // Mettre à jour le localStorage
-        localStorage.setItem('user', JSON.stringify(updatedUser));
-        setUser(updatedUser);
-        
-        setMessage({ 
-          type: 'success', 
-          text: 'Profil mis à jour avec succès !' 
-        });
-
-        // Réinitialiser les champs de mot de passe
-        setForm(prev => ({
+        setMessage('Mot de passe modifié avec succès');
+        setMessageType('success');
+        setSettings(prev => ({
           ...prev,
           currentPassword: '',
           newPassword: '',
           confirmPassword: ''
         }));
       } else {
-        const error = await response.json();
-        setMessage({ 
-          type: 'error', 
-          text: error.message || 'Erreur lors de la mise à jour du profil' 
-        });
+        const errorData = await response.json();
+        setMessage(errorData.message || 'Erreur lors de la modification du mot de passe');
+        setMessageType('error');
       }
     } catch (error) {
-      setMessage({ 
-        type: 'error', 
-        text: 'Erreur de connexion au serveur' 
-      });
+      setMessage('Erreur de connexion au serveur');
+      setMessageType('error');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCancel = () => {
-    // Revenir aux valeurs originales
-    if (user) {
-      setForm(prev => ({
+  const handleProfileUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage('');
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const requestData = {
+        name: settings.name,
+        email: settings.email,
+        whatsapp: settings.whatsapp,
+        gender: settings.gender || undefined,
+        contact: settings.contact || undefined,
+        province: settings.province || undefined,
+        city: settings.city || undefined,
+        commune: settings.commune || undefined,
+        quartier: showCustomQuartier ? customQuartier : (settings.quartier || undefined),
+        organization: settings.organization || undefined,
+        campaignDescription: settings.campaignDescription || undefined,
+        targetProvince: settings.targetProvince || undefined,
+        campaignDuration: settings.campaignDuration || undefined,
+        selectedODD: settings.selectedODD ? parseInt(settings.selectedODD) : undefined,
+        numberOfEnumerators: settings.numberOfEnumerators ? parseInt(settings.numberOfEnumerators) : undefined
+      };
+
+      console.log('🔍 Settings - Tentative de mise à jour du profil');
+      console.log('🔍 Settings - URL:', `${environment.apiBaseUrl}/users/update-profile`);
+      console.log('🔍 Settings - Token:', !!token);
+      console.log('🔍 Settings - Données:', requestData);
+
+      const response = await fetch(`${environment.apiBaseUrl}/users/update-profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(requestData)
+      });
+
+      console.log('🔍 Settings - Réponse status:', response.status);
+      console.log('🔍 Settings - Réponse ok:', response.ok);
+
+      if (response.ok) {
+        setMessage('Identité mise à jour avec succès');
+        setMessageType('success');
+        // Mettre à jour les données utilisateur dans localStorage
+        const userData = localStorage.getItem('user');
+        if (userData) {
+          const userObj = JSON.parse(userData);
+          userObj.name = settings.name;
+          userObj.email = settings.email;
+          userObj.whatsapp = settings.whatsapp;
+          localStorage.setItem('user', JSON.stringify(userObj));
+        }
+      } else {
+        const errorData = await response.json();
+        setMessage(errorData.message || 'Erreur lors de la mise à jour de l\'identité');
+        setMessageType('error');
+      }
+    } catch (error) {
+      setMessage('Erreur de connexion au serveur');
+      setMessageType('error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      const user = JSON.parse(userData);
+      setSettings(prev => ({
         ...prev,
         name: user.name || '',
         email: user.email || '',
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: ''
+        whatsapp: user.whatsapp || ''
       }));
     }
-    setMessage(null);
-  };
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Chargement...</p>
-        </div>
-      </div>
-    );
-  }
+  }, []);
 
   return (
-    <div className="max-w-2xl mx-auto bg-white p-4 sm:p-8 rounded-xl shadow-lg mt-4 sm:mt-8 mx-4">
-      <h2 className="text-xl sm:text-2xl font-bold text-center mb-4 sm:mb-6">Paramètres du compte</h2>
-      
-      {/* Infos principales */}
-      <form onSubmit={handleSubmit} className="mb-6 sm:mb-8 flex flex-col gap-3 sm:gap-4">
-        <h3 className="text-base sm:text-lg font-bold mb-2">Informations personnelles</h3>
-        <div>
-          <label className="block font-semibold mb-1 text-sm sm:text-base">Nom</label>
-          <input 
-            type="text" 
-            value={form.name} 
-            onChange={handleInputChange} 
-            className="w-full border rounded p-2 text-sm sm:text-base" 
-            required 
-          />
+    <div className="space-y-6">
+      {/* Photo de profil */}
+      <div className="bg-white p-6 rounded-lg shadow">
+        <h2 className="text-xl font-semibold mb-4">Photo de profil</h2>
+        
+        <div className="flex items-center space-x-6">
+          {/* Affichage de la photo actuelle */}
+          <div className="relative">
+            {profilePhoto ? (
+              <img 
+                src={`${environment.apiBaseUrl}${profilePhoto}`} 
+                alt="Photo de profil" 
+                className="w-24 h-24 rounded-full object-cover border-4 border-gray-200"
+              />
+            ) : (
+              <div className="w-24 h-24 rounded-full bg-gray-200 border-4 border-gray-300 flex items-center justify-center">
+                <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+            )}
+            {uploadingPhoto && (
+              <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+              </div>
+            )}
+          </div>
+          
+          {/* Boutons d'upload et suppression */}
+          <div className="flex-1">
+            <div className="flex gap-3 mb-2">
+              <label className="cursor-pointer">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoUpload}
+                  className="hidden"
+                  disabled={uploadingPhoto}
+                />
+                <div className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  {uploadingPhoto ? 'Upload en cours...' : 'Changer la photo'}
+                </div>
+              </label>
+              
+              {/* Bouton supprimer */}
+              {profilePhoto && (
+                <button
+                  onClick={handleDeletePhoto}
+                  disabled={uploadingPhoto}
+                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {uploadingPhoto ? 'Suppression...' : 'Supprimer'}
+                </button>
+              )}
+            </div>
+            <p className="text-sm text-gray-500">
+              Formats acceptés: JPG, PNG, GIF (max 1MB)
+            </p>
+          </div>
         </div>
-        <div>
-          <label className="block font-semibold mb-1 text-sm sm:text-base">Email</label>
-          <input 
-            type="email" 
-            value={form.email} 
-            onChange={handleInputChange} 
-            className="w-full border rounded p-2 text-sm sm:text-base" 
-            required 
-          />
-        </div>
+      </div>
+
+      {/* Modification du mot de passe */}
+      <div className="bg-white p-6 rounded-lg shadow">
+        <h2 className="text-xl font-semibold mb-4">Modifier le mot de passe</h2>
+        
         {message && (
-          <div className={`text-center text-sm sm:text-base ${
-            message.type === 'success' 
-              ? 'text-green-600' 
-              : 'text-red-600'
+          <div className={`mb-4 p-4 rounded-md ${
+            messageType === 'success' 
+              ? 'bg-green-100 border border-green-400 text-green-700' 
+              : 'bg-red-100 border border-red-400 text-red-700'
           }`}>
-            {message.text}
+            {message}
           </div>
         )}
-        <button 
-          type="submit" 
-          className="bg-blue-900 text-white px-4 py-2 rounded shadow self-end text-sm sm:text-base hover:bg-blue-800 transition-colors" 
-          disabled={loading}
-        >
-          {loading ? 'Enregistrement...' : 'Enregistrer'}
-        </button>
-      </form>
-      
-      {/* Mot de passe */}
-      <form onSubmit={handleSubmit} className="mb-6 sm:mb-8 flex flex-col gap-3 sm:gap-4">
-        <h3 className="text-base sm:text-lg font-bold mb-2">Changer le mot de passe</h3>
-        <div>
-          <label className="block font-semibold mb-1 text-sm sm:text-base">Mot de passe actuel</label>
-          <div className="relative">
+
+        <form onSubmit={handlePasswordChange} className="space-y-4">
+          <div>
+            <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 mb-2">
+              Mot de passe actuel
+            </label>
             <input
-              type={showPassword ? 'text' : 'password'}
+              type="password"
               id="currentPassword"
               name="currentPassword"
-              value={form.currentPassword}
+              value={settings.currentPassword}
               onChange={handleInputChange}
-              className="w-full border rounded p-2 text-sm sm:text-base pr-10"
-              placeholder="Laissez vide si pas de changement"
+              required
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute inset-y-0 right-0 pr-3 flex items-center"
-            >
-              {showPassword ? (
-                <EyeOff className="h-4 w-4 text-gray-400" />
-              ) : (
-                <Eye className="h-4 w-4 text-gray-400" />
-              )}
-            </button>
           </div>
-        </div>
-        <div>
-          <label className="block font-semibold mb-1 text-sm sm:text-base">Nouveau mot de passe</label>
-          <div className="relative">
+
+          <div>
+            <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-2">
+              Nouveau mot de passe
+            </label>
             <input
-              type={showNewPassword ? 'text' : 'password'}
+              type="password"
               id="newPassword"
               name="newPassword"
-              value={form.newPassword}
+              value={settings.newPassword}
               onChange={handleInputChange}
-              className="w-full border rounded p-2 text-sm sm:text-base pr-10"
-              placeholder="Laissez vide si pas de changement"
+              required
+              minLength={6}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-            <button
-              type="button"
-              onClick={() => setShowNewPassword(!showNewPassword)}
-              className="absolute inset-y-0 right-0 pr-3 flex items-center"
-            >
-              {showNewPassword ? (
-                <EyeOff className="h-4 w-4 text-gray-400" />
-              ) : (
-                <Eye className="h-4 w-4 text-gray-400" />
+          </div>
+
+          <div>
+            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
+              Confirmer le nouveau mot de passe
+            </label>
+            <input
+              type="password"
+              id="confirmPassword"
+              name="confirmPassword"
+              value={settings.confirmPassword}
+              onChange={handleInputChange}
+              required
+              minLength={6}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? 'Modification...' : 'Modifier le mot de passe'}
+          </button>
+        </form>
+      </div>
+
+      {/* Modification du profil */}
+      <div className="bg-white p-6 rounded-lg shadow">
+        <h2 className="text-xl font-semibold mb-4">Modifier identité</h2>
+
+        <form onSubmit={handleProfileUpdate} className="space-y-4">
+          {/* Informations de base */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+                Nom complet *
+              </label>
+              <input
+                type="text"
+                id="name"
+                name="name"
+                value={settings.name}
+                onChange={handleInputChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                Adresse email *
+              </label>
+              <input
+                type="email"
+                id="email"
+                name="email"
+                value={settings.email}
+                onChange={handleInputChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="gender" className="block text-sm font-medium text-gray-700 mb-2">
+                Genre
+              </label>
+              <select
+                id="gender"
+                name="gender"
+                value={settings.gender}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Sélectionnez votre genre</option>
+                <option value="MALE">Masculin</option>
+                <option value="FEMALE">Féminin</option>
+                <option value="OTHER">Autre</option>
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="contact" className="block text-sm font-medium text-gray-700 mb-2">
+                Numéro de téléphone
+              </label>
+              <input
+                type="tel"
+                id="contact"
+                name="contact"
+                value={settings.contact}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Entrez votre numéro de téléphone"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="whatsapp" className="block text-sm font-medium text-gray-700 mb-2">
+              Numéro WhatsApp
+            </label>
+            <input
+              type="tel"
+              id="whatsapp"
+              name="whatsapp"
+              value={settings.whatsapp}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Entrez votre numéro WhatsApp"
+            />
+          </div>
+
+          {/* Informations géographiques */}
+          <div className="border-t pt-4">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Informations géographiques</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="province" className="block text-sm font-medium text-gray-700 mb-2">
+                  Province
+                </label>
+                <select
+                  id="province"
+                  name="province"
+                  value={settings.province}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Sélectionnez votre province</option>
+                  <option value="BAS_UELE">Bas-Uélé</option>
+                  <option value="EQUATEUR">Équateur</option>
+                  <option value="HAUT_KATANGA">Haut-Katanga</option>
+                  <option value="HAUT_LOMAMI">Haut-Lomami</option>
+                  <option value="HAUT_UELE">Haut-Uélé</option>
+                  <option value="ITURI">Ituri</option>
+                  <option value="KASAI">Kasaï</option>
+                  <option value="KASAI_CENTRAL">Kasaï-Central</option>
+                  <option value="KASAI_ORIENTAL">Kasaï-Oriental</option>
+                  <option value="KINSHASA">Kinshasa</option>
+                  <option value="KONGO_CENTRAL">Kongo-Central</option>
+                  <option value="KWANGO">Kwango</option>
+                  <option value="KWILU">Kwilu</option>
+                  <option value="LOMAMI">Lomami</option>
+                  <option value="LUALABA">Lualaba</option>
+                  <option value="MAI_NDOMBE">Maï-Ndombe</option>
+                  <option value="MANIEMA">Maniema</option>
+                  <option value="MONGALA">Mongala</option>
+                  <option value="NORD_KIVU">Nord-Kivu</option>
+                  <option value="NORD_UBANGI">Nord-Ubangi</option>
+                  <option value="SANKURU">Sankuru</option>
+                  <option value="SUD_KIVU">Sud-Kivu</option>
+                  <option value="SUD_UBANGI">Sud-Ubangi</option>
+                  <option value="TANGANYIKA">Tanganyika</option>
+                  <option value="TSHOPO">Tshopo</option>
+                  <option value="TSHUAPA">Tshuapa</option>
+                </select>
+              </div>
+
+              {settings.province && (
+                <div>
+                  <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-2">
+                    Ville
+                  </label>
+                  <select
+                    id="city"
+                    name="city"
+                    value={settings.city}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Sélectionnez votre ville</option>
+                    {getCitiesByProvince(settings.province).map((city, index) => (
+                      <option key={index} value={city.name}>
+                        {city.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               )}
-            </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              {settings.city && (
+                <div>
+                  <label htmlFor="commune" className="block text-sm font-medium text-gray-700 mb-2">
+                    Commune
+                  </label>
+                  <select
+                    id="commune"
+                    name="commune"
+                    value={settings.commune}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Sélectionnez votre commune</option>
+                    {getCommunesByCity(settings.province, settings.city).map((commune, index) => (
+                      <option key={index} value={commune}>
+                        {commune}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {settings.commune && (
+                <div>
+                  <label htmlFor="quartier" className="block text-sm font-medium text-gray-700 mb-2">
+                    Quartier
+                  </label>
+                  <select
+                    id="quartier"
+                    name="quartier"
+                    value={settings.quartier}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Sélectionnez votre quartier</option>
+                    {getQuartiersByCommune(settings.province, settings.city, settings.commune).map((quartier, index) => (
+                      <option key={index} value={quartier}>
+                        {quartier}
+                      </option>
+                    ))}
+                    <option value="CUSTOM">Mon quartier n'est pas dans la liste</option>
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {showCustomQuartier && (
+              <div className="mt-4">
+                <label htmlFor="customQuartier" className="block text-sm font-medium text-gray-700 mb-2">
+                  Nom de votre quartier
+                </label>
+                <input
+                  id="customQuartier"
+                  name="customQuartier"
+                  type="text"
+                  value={customQuartier}
+                  onChange={(e) => setCustomQuartier(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Entrez le nom de votre quartier"
+                />
+              </div>
+            )}
+          </div>
+
+
+          {/* Informations spécifiques aux Project Managers */}
+          {user?.role === 'PROJECT_MANAGER' && (
+            <div className="border-t pt-4">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Informations du projet</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="organization" className="block text-sm font-medium text-gray-700 mb-2">
+                    Organisation
+                  </label>
+                  <input
+                    type="text"
+                    id="organization"
+                    name="organization"
+                    value={settings.organization}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Nom de votre organisation"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="targetProvince" className="block text-sm font-medium text-gray-700 mb-2">
+                    Province cible
+                  </label>
+                  <select
+                    id="targetProvince"
+                    name="targetProvince"
+                    value={settings.targetProvince}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Sélectionnez la province cible</option>
+                    <option value="BAS_UELE">Bas-Uélé</option>
+                    <option value="EQUATEUR">Équateur</option>
+                    <option value="HAUT_KATANGA">Haut-Katanga</option>
+                    <option value="HAUT_LOMAMI">Haut-Lomami</option>
+                    <option value="HAUT_UELE">Haut-Uélé</option>
+                    <option value="ITURI">Ituri</option>
+                    <option value="KASAI">Kasaï</option>
+                    <option value="KASAI_CENTRAL">Kasaï-Central</option>
+                    <option value="KASAI_ORIENTAL">Kasaï-Oriental</option>
+                    <option value="KINSHASA">Kinshasa</option>
+                    <option value="KONGO_CENTRAL">Kongo-Central</option>
+                    <option value="KWANGO">Kwango</option>
+                    <option value="KWILU">Kwilu</option>
+                    <option value="LOMAMI">Lomami</option>
+                    <option value="LUALABA">Lualaba</option>
+                    <option value="MAI_NDOMBE">Maï-Ndombe</option>
+                    <option value="MANIEMA">Maniema</option>
+                    <option value="MONGALA">Mongala</option>
+                    <option value="NORD_KIVU">Nord-Kivu</option>
+                    <option value="NORD_UBANGI">Nord-Ubangi</option>
+                    <option value="SANKURU">Sankuru</option>
+                    <option value="SUD_KIVU">Sud-Kivu</option>
+                    <option value="SUD_UBANGI">Sud-Ubangi</option>
+                    <option value="TANGANYIKA">Tanganyika</option>
+                    <option value="TSHOPO">Tshopo</option>
+                    <option value="TSHUAPA">Tshuapa</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div>
+                  <label htmlFor="campaignDuration" className="block text-sm font-medium text-gray-700 mb-2">
+                    Durée de campagne
+                  </label>
+                  <input
+                    type="text"
+                    id="campaignDuration"
+                    name="campaignDuration"
+                    value={settings.campaignDuration}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Ex: 6 mois, 1 an..."
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="numberOfEnumerators" className="block text-sm font-medium text-gray-700 mb-2">
+                    Nombre d'enquêteurs
+                  </label>
+                  <input
+                    type="number"
+                    id="numberOfEnumerators"
+                    name="numberOfEnumerators"
+                    value={settings.numberOfEnumerators}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Nombre d'enquêteurs prévu"
+                    min="1"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <label htmlFor="campaignDescription" className="block text-sm font-medium text-gray-700 mb-2">
+                  Description de campagne
+                </label>
+                <textarea
+                  id="campaignDescription"
+                  name="campaignDescription"
+                  value={settings.campaignDescription}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleInputChange(e as any)}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Décrivez votre campagne..."
+                />
+              </div>
+
+              <div className="mt-4">
+                <label htmlFor="selectedODD" className="block text-sm font-medium text-gray-700 mb-2">
+                  ODD sélectionné
+                </label>
+                <select
+                  id="selectedODD"
+                  name="selectedODD"
+                  value={settings.selectedODD}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Sélectionnez un ODD</option>
+                  <option value="1">ODD 1 - Éliminer la pauvreté</option>
+                  <option value="2">ODD 2 - Éliminer la faim</option>
+                  <option value="3">ODD 3 - Bonne santé et bien-être</option>
+                  <option value="4">ODD 4 - Éducation de qualité</option>
+                  <option value="5">ODD 5 - Égalité des sexes</option>
+                  <option value="6">ODD 6 - Eau propre et assainissement</option>
+                  <option value="7">ODD 7 - Énergie propre</option>
+                  <option value="8">ODD 8 - Travail décent</option>
+                  <option value="9">ODD 9 - Industrie, innovation</option>
+                  <option value="10">ODD 10 - Inégalités réduites</option>
+                  <option value="11">ODD 11 - Villes durables</option>
+                  <option value="12">ODD 12 - Consommation responsable</option>
+                  <option value="13">ODD 13 - Lutte contre le changement climatique</option>
+                  <option value="14">ODD 14 - Vie aquatique</option>
+                  <option value="15">ODD 15 - Vie terrestre</option>
+                  <option value="16">ODD 16 - Paix et justice</option>
+                  <option value="17">ODD 17 - Partenariats</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? 'Mise à jour...' : 'Mettre à jour l\'identité'}
+          </button>
+        </form>
+      </div>
+
+      {/* Informations système */}
+      <div className="bg-white p-6 rounded-lg shadow">
+        <h2 className="text-xl font-semibold mb-4">Informations système</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Version de l'application
+            </label>
+            <div className="px-3 py-2 bg-gray-100 rounded-md text-sm text-gray-600">
+              FikiriCollect v1.0.0
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Dernière connexion
+            </label>
+            <div className="px-3 py-2 bg-gray-100 rounded-md text-sm text-gray-600">
+              {new Date().toLocaleString('fr-FR')}
+            </div>
           </div>
         </div>
-        <div>
-          <label className="block font-semibold mb-1 text-sm sm:text-base">Confirmer le nouveau mot de passe</label>
-          <input
-            type="password"
-            id="confirmPassword"
-            name="confirmPassword"
-            value={form.confirmPassword}
-            onChange={handleInputChange}
-            className="w-full border rounded p-2 text-sm sm:text-base"
-            placeholder="Confirmez le nouveau mot de passe"
-          />
-        </div>
-        {message && (
-          <div className={`text-center text-sm sm:text-base ${
-            message.type === 'success' 
-              ? 'text-green-600' 
-              : 'text-red-600'
-          }`}>
-            {message.text}
-          </div>
-        )}
-        <button 
-          type="submit" 
-          className="bg-blue-900 text-white px-4 py-2 rounded shadow self-end text-sm sm:text-base hover:bg-blue-800 transition-colors" 
-          disabled={loading}
-        >
-          {loading ? 'Changement...' : 'Changer'}
-        </button>
-      </form>
-      
-      {/* Photo de profil */}
-      <form className="flex flex-col gap-3 sm:gap-4">
-        <h3 className="text-base sm:text-lg font-bold mb-2">Photo de profil</h3>
-        <div className="flex flex-col items-center mb-4 sm:mb-6">
-          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-white text-blue-900 flex items-center justify-center font-bold mx-auto border-2 border-blue-200" style={{ fontSize: '2rem' }}>
-            {user?.name?.[0]?.toUpperCase() || '?'}
-          </div>
-        </div>
-      </form>
-      
-      <PNUDFooter />
+      </div>
     </div>
   );
-}
+};
 
+export default Settings;
