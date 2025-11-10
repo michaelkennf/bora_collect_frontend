@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import axios from "axios";
 import { allProvincesSVGData } from "../data/allProvincesSVG";
 import "./CarteRDCSVG.css";
+import { environment } from "../config/environment";
 
 interface Campaign {
   id: string;
@@ -120,7 +121,7 @@ function CarteRDCSVG({ onProvinceSelect }: CarteRDCSVGProps) {
       }
 
       // Récupérer les statistiques PM pour cette province
-      const pmStatsResponse = await fetch(`http://localhost:3000/users/pm-province-stats?province=${encodeURIComponent(provinceName)}`, {
+      const pmStatsResponse = await fetch(`${environment.apiBaseUrl}/users/pm-province-stats?province=${encodeURIComponent(provinceName)}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',

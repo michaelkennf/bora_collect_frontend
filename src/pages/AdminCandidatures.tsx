@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
+import { environment } from '../config/environment';
 
 interface Application {
   id: string;
@@ -32,7 +33,7 @@ const AdminCandidatures: React.FC = () => {
   const [reviewStatus, setReviewStatus] = useState<'APPROVED' | 'REJECTED'>('APPROVED');
   const [reviewComments, setReviewComments] = useState('');
 
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+  const apiBaseUrl = environment.apiBaseUrl;
 
   useEffect(() => {
     fetchApplications();

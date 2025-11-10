@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { environment } from '../config/environment';
 
 export default function RecordsSyncedList() {
   const [records, setRecords] = useState<any[]>([]);
@@ -13,12 +14,12 @@ export default function RecordsSyncedList() {
     try {
       // Déterminer l'URL selon le rôle
       const user = localStorage.getItem('user');
-      let apiUrl = 'http://localhost:3000/records?status=SENT';
+      let apiUrl = `${environment.apiBaseUrl}/records?status=SENT`;
       
       if (user) {
         const userData = JSON.parse(user);
         if (userData.role === 'CONTROLLER') {
-          apiUrl = 'http://localhost:3000/records/controller?status=SENT';
+          apiUrl = `${environment.apiBaseUrl}/records/controller?status=SENT`;
         }
       }
       

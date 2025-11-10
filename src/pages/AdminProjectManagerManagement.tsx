@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import UserCreationForm from '../components/UserCreationForm';
 import ConfirmModal from '../components/ConfirmModal';
+import { environment } from '../config/environment';
 
 interface ProjectManager {
   id: string;
@@ -43,7 +44,7 @@ const AdminProjectManagerManagement: React.FC = () => {
   const [comments, setComments] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+  const apiBaseUrl = environment.apiBaseUrl;
 
   useEffect(() => {
     fetchProjectManagers();

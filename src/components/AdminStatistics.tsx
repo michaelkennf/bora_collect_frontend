@@ -12,6 +12,7 @@ import {
   PointElement,
   LineElement,
 } from 'chart.js';
+import { environment } from '../config/environment';
 
 ChartJS.register(
   CategoryScale,
@@ -72,14 +73,14 @@ export default function AdminStatistics({ onRefresh }: AdminStatisticsProps) {
     setLoading(true);
     try {
       // Charger les utilisateurs
-      const usersRes = await fetch('http://localhost:3000/users', {
+      const usersRes = await fetch(`${environment.apiBaseUrl}/users`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!usersRes.ok) throw new Error('Erreur lors du chargement des utilisateurs');
       const usersData = await usersRes.json();
 
       // Charger les enregistrements
-      const recordsRes = await fetch('http://localhost:3000/records', {
+      const recordsRes = await fetch(`${environment.apiBaseUrl}/records`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!recordsRes.ok) throw new Error('Erreur lors du chargement des enregistrements');

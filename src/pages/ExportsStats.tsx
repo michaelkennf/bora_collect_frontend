@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { environment } from '../config/environment';
 
 export default function ExportsStats() {
   const [records, setRecords] = useState<any[]>([]);
@@ -9,7 +10,7 @@ export default function ExportsStats() {
   const fetchRecords = async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:3000/records', {
+      const res = await fetch(`${environment.apiBaseUrl}/records`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) throw new Error('Erreur lors du chargement');
@@ -30,7 +31,7 @@ export default function ExportsStats() {
   const exportCSV = async () => {
     try {
       // D'abord récupérer l'ID de la campagne depuis les records
-      const recordsResponse = await fetch('http://localhost:3000/records', {
+      const recordsResponse = await fetch(`${environment.apiBaseUrl}/records`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       
@@ -45,7 +46,7 @@ export default function ExportsStats() {
       // Utiliser l'ID de la campagne du premier record
       const campaignId = recordsData[0].surveyId;
       
-      const res = await fetch(`http://localhost:3000/records/campaign/${campaignId}/export`, {
+      const res = await fetch(`${environment.apiBaseUrl}/records/campaign/${campaignId}/export`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) throw new Error('Erreur lors de l\'export');
@@ -67,7 +68,7 @@ export default function ExportsStats() {
   // Exporter en PDF
   const exportPDF = async () => {
     try {
-      const res = await fetch('http://localhost:3000/records/export/pdf', {
+      const res = await fetch(`${environment.apiBaseUrl}/records/export/pdf`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) throw new Error('Erreur lors de l\'export');

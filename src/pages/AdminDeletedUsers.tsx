@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { environment } from '../config/environment';
 
 export default function AdminDeletedUsers() {
   const [users, setUsers] = useState<any[]>([]);
@@ -9,7 +10,7 @@ export default function AdminDeletedUsers() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('http://localhost:3000/users', {
+      const res = await fetch(`${environment.apiBaseUrl}/users`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) throw new Error('Erreur lors du chargement');
@@ -27,7 +28,7 @@ export default function AdminDeletedUsers() {
   const handleReactivate = async (id: string) => {
     setLoading(true);
     try {
-      const res = await fetch(`http://localhost:3000/users/${id}`, {
+      const res = await fetch(`${environment.apiBaseUrl}/users/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify({ status: 'ACTIVE' }),

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-toastify';
+import { environment } from '../config/environment';
 
 // Types et interfaces
 interface Survey {
@@ -56,7 +57,7 @@ const AdminSurveyPublication: React.FC = () => {
   });
 
   // Configuration
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+  const apiBaseUrl = environment.apiBaseUrl;
 
   // Fonction utilitaire pour la gestion des erreurs
   const handleApiError = useCallback((error: any, context: string) => {

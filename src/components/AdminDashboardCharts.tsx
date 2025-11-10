@@ -13,6 +13,7 @@ import {
   Filler,
 } from 'chart.js';
 import { Bar, Doughnut, Line } from 'react-chartjs-2';
+import { environment } from '../config/environment';
 
 ChartJS.register(
   CategoryScale,
@@ -42,7 +43,7 @@ export default function AdminDashboardCharts({ users }: AdminDashboardChartsProp
         const token = localStorage.getItem('token');
         if (!token) return;
 
-        const response = await fetch(`http://localhost:3000/users/approval-stats`, {
+        const response = await fetch(`${environment.apiBaseUrl}/users/approval-stats`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',

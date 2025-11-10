@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { environment } from '../config/environment';
 
 export default function AdminParametres() {
   const [user, setUser] = useState<any>(null);
@@ -26,7 +27,7 @@ export default function AdminParametres() {
     e.preventDefault();
     setInfoMsg(''); setInfoError(''); setSaving(true);
     try {
-      const res = await fetch('http://localhost:3000/users/me', {
+      const res = await fetch(`${environment.apiBaseUrl}/users/me`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify(form),
@@ -53,7 +54,7 @@ export default function AdminParametres() {
       return;
     }
     try {
-      const res = await fetch('http://localhost:3000/users/me', {
+      const res = await fetch(`${environment.apiBaseUrl}/users/me`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify({ password: pwd.new1 }),

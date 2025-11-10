@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ConfirmModal from '../components/ConfirmModal';
 import UserCreationForm from '../components/UserCreationForm';
+import { environment } from '../config/environment';
 
 // Rôles disponibles pour l'admin (seulement Project Managers)
 const roles = [
@@ -54,7 +55,7 @@ export default function AdminUsers() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('http://localhost:3000/users', {
+      const res = await fetch(`${environment.apiBaseUrl}/users`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) throw new Error('Erreur lors du chargement');
@@ -73,7 +74,7 @@ export default function AdminUsers() {
   const fetchCampaigns = async () => {
     setLoadingCampaigns(true);
     try {
-      const response = await fetch('http://localhost:3000/users/campaigns');
+      const response = await fetch(`${environment.apiBaseUrl}/users/campaigns`);
       if (response.ok) {
         const campaignsData = await response.json();
         setCampaigns(campaignsData);
@@ -103,7 +104,7 @@ export default function AdminUsers() {
         role: 'ANALYST'
       };
       
-      const res = await fetch('http://localhost:3000/users', {
+      const res = await fetch(`${environment.apiBaseUrl}/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify(pmData),
@@ -131,7 +132,7 @@ export default function AdminUsers() {
     if (!confirmDeleteId) return;
     setLoading(true);
     try {
-              const res = await fetch(`http://localhost:3000/users/${confirmDeleteId}`, {
+              const res = await fetch(`${environment.apiBaseUrl}/users/${confirmDeleteId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
@@ -150,7 +151,7 @@ export default function AdminUsers() {
     if (!editRoleId) return;
     setRoleSaving(true);
     try {
-              const res = await fetch(`http://localhost:3000/users/${editRoleId}`, {
+              const res = await fetch(`${environment.apiBaseUrl}/users/${editRoleId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify({ role: editRole }),
@@ -171,7 +172,7 @@ export default function AdminUsers() {
     setResetSaving(true);
     setResetError('');
     try {
-              const res = await fetch(`http://localhost:3000/users/${showReset}`, {
+              const res = await fetch(`${environment.apiBaseUrl}/users/${showReset}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify({ password: resetPwd }),
@@ -199,7 +200,7 @@ export default function AdminUsers() {
   const handleReactivate = async (id: string) => {
     setLoading(true);
     try {
-              const res = await fetch(`http://localhost:3000/users/${id}`, {
+              const res = await fetch(`${environment.apiBaseUrl}/users/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify({ status: 'ACTIVE' }),
@@ -270,7 +271,7 @@ export default function AdminUsers() {
                   <div className="flex items-center">
                     {user.profilePhoto ? (
                       <img 
-                        src={`http://localhost:3000${user.profilePhoto}`} 
+                        src={`${environment.apiBaseUrl}${user.profilePhoto}`} 
                         alt={`Photo de ${user.name}`} 
                         className="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover shadow-md"
                       />

@@ -59,7 +59,7 @@ const FormBuilder: React.FC = () => {
   // Référence pour synchroniser les données des champs
   const fieldDataRef = useRef<Map<string, Partial<FormField>>>(new Map());
 
-  const apiBaseUrl = environment.apiBaseUrl || 'http://localhost:3000';
+  const apiBaseUrl = environment.apiBaseUrl;
 
   // Normalise un schéma de champs (objet imbriqué) en tableau de FormField pour l'éditeur
   const normalizeFormFields = useCallback((fields: any): FormField[] => {

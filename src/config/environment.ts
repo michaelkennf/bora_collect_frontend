@@ -54,7 +54,7 @@ export const environment: EnvironmentConfig = {
 
 // Configuration par défaut pour le développement
 export const defaultConfig: EnvironmentConfig = {
-  apiBaseUrl: 'http://localhost:3000',
+  apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000',
   apiTimeout: 30000,
   appName: 'BoraCollect',
   appVersion: '1.0.0',

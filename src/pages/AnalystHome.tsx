@@ -313,7 +313,7 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
         return 'Token manquant';
       }
 
-      const userRes = await fetch(`http://localhost:3000/users/${userId}`, {
+      const userRes = await fetch(`${environment.apiBaseUrl}/users/${userId}`, {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
