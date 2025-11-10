@@ -215,6 +215,19 @@ const CreateAccount = () => {
         {/* Étape de sélection du rôle */}
         {step === 'select-role' && (
           <div className="space-y-4">
+            {/* Bouton Retour */}
+            <div className="mb-4">
+              <button
+                onClick={() => navigate('/login')}
+                className="flex items-center text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                <span className="font-medium">Retour à la connexion</span>
+              </button>
+            </div>
+
             <div className="text-center mb-6">
               <p className="text-gray-700 font-medium mb-4">
                 Quel type de compte souhaitez-vous créer ?
