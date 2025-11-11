@@ -9,7 +9,7 @@ export const citiesData = {
           "Gombe", "Barumbu", "Lingwala", "Kinshasa", "Kasa-Vubu", 
           "Bandalungwa", "Ngiri-Ngiri", "Selembao", "Bumbu", "Makala", 
           "Kalamu", "Kintambo", "Ngaliema", "Mont-Ngafula", "Lemba", 
-          "Matete", "Kisenso", "Masina", "N'djili", "Kimbanseke", 
+          "Ngaba", "Matete", "Kisenso", "Masina", "N'djili", "Kimbanseke", 
           "N'sele", "Maluku", "Limete"
         ]
       }
