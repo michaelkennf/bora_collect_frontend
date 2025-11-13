@@ -10,9 +10,9 @@ interface Campaign {
   startDate: string;
   endDate: string;
   status: string;
-  publisher?: {
-    name?: string;
-    email?: string;
+  publisher: {
+    name: string;
+    email: string;
   };
   applicationsCount: number;
   isOngoing: boolean;
@@ -692,7 +692,7 @@ function CarteRDCSVG({ onProvinceSelect }: CarteRDCSVGProps) {
                   {provinceData.campaigns.map((campaign) => (
                     <div key={campaign.id} className="bg-gradient-to-r from-gray-50 to-gray-100 p-6 rounded-xl border border-gray-200 hover:shadow-lg hover:scale-[1.02] transition-all duration-300 group">
                       <div className="flex justify-between items-start mb-4">
-                        <h5 className="font-bold text-gray-800 text-xl group-hover:text-gray-900 transition-colors duration-300">{campaign.title || 'Sans titre'}</h5>
+                        <h5 className="font-bold text-gray-800 text-xl group-hover:text-gray-900 transition-colors duration-300">{campaign.title}</h5>
                         <div className="flex space-x-2">
                           {campaign.isOngoing && (
                             <span className="bg-gradient-to-r from-yellow-100 to-yellow-200 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium border border-yellow-300">
@@ -706,7 +706,7 @@ function CarteRDCSVG({ onProvinceSelect }: CarteRDCSVGProps) {
                           )}
                         </div>
                       </div>
-                      <p className="text-gray-600 mb-4 text-lg">{campaign.description || 'Aucune description'}</p>
+                      <p className="text-gray-600 mb-4 text-lg">{campaign.description}</p>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
                         <div className="flex items-center gap-2">
                           <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -716,9 +716,7 @@ function CarteRDCSVG({ onProvinceSelect }: CarteRDCSVGProps) {
                           </div>
                           <div>
                             <span className="text-gray-500 font-medium">Date de début:</span>
-                            <p className="text-gray-800 font-semibold">
-                              {campaign.startDate ? new Date(campaign.startDate).toLocaleDateString('fr-FR') : 'Non définie'}
-                            </p>
+                            <p className="text-gray-800 font-semibold">{new Date(campaign.startDate).toLocaleDateString('fr-FR')}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -729,9 +727,7 @@ function CarteRDCSVG({ onProvinceSelect }: CarteRDCSVGProps) {
                           </div>
                           <div>
                             <span className="text-gray-500 font-medium">Date de fin:</span>
-                            <p className="text-gray-800 font-semibold">
-                              {campaign.endDate ? new Date(campaign.endDate).toLocaleDateString('fr-FR') : 'Non définie'}
-                            </p>
+                            <p className="text-gray-800 font-semibold">{new Date(campaign.endDate).toLocaleDateString('fr-FR')}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -742,7 +738,7 @@ function CarteRDCSVG({ onProvinceSelect }: CarteRDCSVGProps) {
                           </div>
                           <div>
                             <span className="text-gray-500 font-medium">Personnes interviewées:</span>
-                            <p className="text-gray-800 font-bold text-lg">{campaign.applicationsCount ?? 0}</p>
+                            <p className="text-gray-800 font-bold text-lg">{campaign.applicationsCount}</p>
                           </div>
                         </div>
                       </div>

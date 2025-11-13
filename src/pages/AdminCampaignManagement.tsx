@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { toast } from 'react-toastify';
 import { environment } from '../config/environment';
 
 interface Campaign {
@@ -14,7 +15,14 @@ interface Campaign {
   publisher?: {
     id: string;
     name: string;
+    email?: string;
   };
+  campaignUsers?: Array<{
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+  }>;
 }
 
 const AdminCampaignManagement: React.FC = () => {
@@ -27,6 +35,18 @@ const AdminCampaignManagement: React.FC = () => {
     odd: '',
     status: ''
   });
+  // États pour l'assignation de PM
+  const [showAssignPMModal, setShowAssignPMModal] = useState(false);
+  const [selectedCampaignForPM, setSelectedCampaignForPM] = useState<Campaign | null>(null);
+  const [assigningPM, setAssigningPM] = useState(false);
+  const [pmFormData, setPmFormData] = useState({
+    name: '',
+    email: '',
+    contact: '',
+    password: '',
+    confirmPassword: ''
+  });
+  const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
 
   const PROVINCES = [
     'BAS_UELE', 'EQUATEUR', 'HAUT_KATANGA', 'HAUT_LOMAMI', 'HAUT_UELE',
@@ -144,6 +164,111 @@ const AdminCampaignManagement: React.FC = () => {
     ];
     return colors[odd - 1] || '#6C5CE7';
   };
+
+  // Fonction pour ouvrir le modal d'assignation de PM
+  const openAssignPMModal = useCallback((campaign: Campaign) => {
+    setSelectedCampaignForPM(campaign);
+    setPmFormData({
+      name: '',
+      email: '',
+      contact: '',
+      password: '',
+      confirmPassword: ''
+    });
+    setFormErrors({});
+    setShowAssignPMModal(true);
+  }, []);
+
+  // Fonction pour valider le formulaire
+  const validateForm = () => {
+    const errors: { [key: string]: string } = {};
+
+    if (!pmFormData.name.trim()) {
+      errors.name = 'Le nom est requis';
+    }
+
+    if (!pmFormData.email.trim()) {
+      errors.email = 'L\'email est requis';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pmFormData.email)) {
+      errors.email = 'Format d\'email invalide';
+    }
+
+    if (!pmFormData.contact.trim()) {
+      errors.contact = 'Le numéro de téléphone est requis';
+    }
+
+    if (!pmFormData.password) {
+      errors.password = 'Le mot de passe est requis';
+    } else if (pmFormData.password.length < 6) {
+      errors.password = 'Le mot de passe doit contenir au moins 6 caractères';
+    }
+
+    if (!pmFormData.confirmPassword) {
+      errors.confirmPassword = 'La confirmation du mot de passe est requise';
+    } else if (pmFormData.password !== pmFormData.confirmPassword) {
+      errors.confirmPassword = 'Les mots de passe ne correspondent pas';
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // Fonction pour créer et assigner un PM à un projet
+  const createAndAssignPMToCampaign = useCallback(async () => {
+    if (!selectedCampaignForPM) {
+      toast.error('Aucune campagne sélectionnée');
+      return;
+    }
+
+    if (!validateForm()) {
+      toast.error('Veuillez corriger les erreurs du formulaire');
+      return;
+    }
+
+    try {
+      setAssigningPM(true);
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch(`${environment.apiBaseUrl}/surveys/${selectedCampaignForPM.id}/create-and-assign-pm`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: pmFormData.name.trim(),
+          email: pmFormData.email.trim(),
+          password: pmFormData.password,
+          contact: pmFormData.contact.trim()
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      toast.success(result.message || 'PM créé et assigné avec succès !');
+      setShowAssignPMModal(false);
+      setSelectedCampaignForPM(null);
+      setPmFormData({
+        name: '',
+        email: '',
+        contact: '',
+        password: '',
+        confirmPassword: ''
+      });
+      setFormErrors({});
+      await fetchCampaigns(); // Recharger les campagnes
+    } catch (error: any) {
+      console.error('Erreur lors de la création et assignation du PM:', error);
+      toast.error(error.message || 'Erreur lors de la création et assignation du PM');
+    } finally {
+      setAssigningPM(false);
+    }
+  }, [selectedCampaignForPM, pmFormData]);
 
   if (loading) {
     return (
@@ -311,6 +436,9 @@ const AdminCampaignManagement: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Dates
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -323,7 +451,17 @@ const AdminCampaignManagement: React.FC = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {campaign.publisher ? campaign.publisher.name : '-'}
+                    {(() => {
+                      const allPMs: string[] = [];
+                      if (campaign.publisher) {
+                        allPMs.push(campaign.publisher.name);
+                      }
+                      const pmUsers = campaign.campaignUsers?.filter(u => u.role === 'PROJECT_MANAGER' && u.id !== campaign.publisher?.id) || [];
+                      pmUsers.forEach(pm => allPMs.push(pm.name));
+                      return allPMs.length > 0 
+                        ? allPMs.join(', ')
+                        : '-';
+                    })()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {campaign.targetProvince ? campaign.targetProvince.replace(/_/g, ' ') : '-'}
@@ -356,6 +494,14 @@ const AdminCampaignManagement: React.FC = () => {
                       )}
                     </div>
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button
+                      onClick={() => openAssignPMModal(campaign)}
+                      className="text-purple-600 hover:text-purple-900 bg-purple-100 hover:bg-purple-200 px-3 py-1 rounded-md text-sm font-medium transition-colors"
+                    >
+                      Assigner PM
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -374,6 +520,167 @@ const AdminCampaignManagement: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Modal de création et assignation de PM */}
+      {showAssignPMModal && selectedCampaignForPM && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-lg w-full mx-4 my-8">
+            <h2 className="text-xl font-semibold mb-4">
+              Créer et assigner un Project Manager
+            </h2>
+            
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-2">
+                Campagne: <span className="font-semibold">{selectedCampaignForPM.title}</span>
+              </p>
+              {(() => {
+                const allPMs: Array<{id: string, name: string}> = [];
+                if (selectedCampaignForPM.publisher) {
+                  allPMs.push({ id: selectedCampaignForPM.publisher.id, name: selectedCampaignForPM.publisher.name });
+                }
+                const pmUsers = selectedCampaignForPM.campaignUsers?.filter(u => u.role === 'PROJECT_MANAGER' && u.id !== selectedCampaignForPM.publisher?.id) || [];
+                pmUsers.forEach(pm => allPMs.push({ id: pm.id, name: pm.name }));
+                return allPMs.length > 0 ? (
+                  <p className="text-xs text-gray-500">
+                    PM{allPMs.length > 1 ? 's' : ''} assigné{allPMs.length > 1 ? 's' : ''}: {allPMs.map(pm => pm.name).join(', ')}
+                  </p>
+                ) : null;
+              })()}
+            </div>
+
+            <form onSubmit={(e) => { e.preventDefault(); createAndAssignPMToCampaign(); }} className="space-y-4">
+              {/* Nom */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nom complet *
+                </label>
+                <input
+                  type="text"
+                  value={pmFormData.name}
+                  onChange={(e) => setPmFormData({ ...pmFormData, name: e.target.value })}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+                    formErrors.name ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  disabled={assigningPM}
+                  placeholder="Nom et prénom"
+                />
+                {formErrors.name && (
+                  <p className="text-xs text-red-500 mt-1">{formErrors.name}</p>
+                )}
+              </div>
+
+              {/* Email */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Adresse email *
+                </label>
+                <input
+                  type="email"
+                  value={pmFormData.email}
+                  onChange={(e) => setPmFormData({ ...pmFormData, email: e.target.value })}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+                    formErrors.email ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  disabled={assigningPM}
+                  placeholder="email@example.com"
+                />
+                {formErrors.email && (
+                  <p className="text-xs text-red-500 mt-1">{formErrors.email}</p>
+                )}
+              </div>
+
+              {/* Numéro de téléphone */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Numéro de téléphone *
+                </label>
+                <input
+                  type="tel"
+                  value={pmFormData.contact}
+                  onChange={(e) => setPmFormData({ ...pmFormData, contact: e.target.value })}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+                    formErrors.contact ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  disabled={assigningPM}
+                  placeholder="+243 812 345 678"
+                />
+                {formErrors.contact && (
+                  <p className="text-xs text-red-500 mt-1">{formErrors.contact}</p>
+                )}
+              </div>
+
+              {/* Mot de passe */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Mot de passe *
+                </label>
+                <input
+                  type="password"
+                  value={pmFormData.password}
+                  onChange={(e) => setPmFormData({ ...pmFormData, password: e.target.value })}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+                    formErrors.password ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  disabled={assigningPM}
+                  placeholder="Minimum 6 caractères"
+                />
+                {formErrors.password && (
+                  <p className="text-xs text-red-500 mt-1">{formErrors.password}</p>
+                )}
+              </div>
+
+              {/* Confirmation du mot de passe */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Confirmer le mot de passe *
+                </label>
+                <input
+                  type="password"
+                  value={pmFormData.confirmPassword}
+                  onChange={(e) => setPmFormData({ ...pmFormData, confirmPassword: e.target.value })}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+                    formErrors.confirmPassword ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  disabled={assigningPM}
+                  placeholder="Répétez le mot de passe"
+                />
+                {formErrors.confirmPassword && (
+                  <p className="text-xs text-red-500 mt-1">{formErrors.confirmPassword}</p>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAssignPMModal(false);
+                    setSelectedCampaignForPM(null);
+                    setPmFormData({
+                      name: '',
+                      email: '',
+                      contact: '',
+                      password: '',
+                      confirmPassword: ''
+                    });
+                    setFormErrors({});
+                  }}
+                  disabled={assigningPM}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors disabled:opacity-50"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={assigningPM}
+                  className="px-4 py-2 text-white bg-purple-600 rounded-md hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {assigningPM ? 'Création...' : 'Créer et assigner'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

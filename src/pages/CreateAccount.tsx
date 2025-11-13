@@ -23,6 +23,10 @@ const CreateAccount = () => {
     quartier: '',
     campaignId: ''
   });
+  const [customCity, setCustomCity] = useState('');
+  const [showCustomCity, setShowCustomCity] = useState(false);
+  const [customCommune, setCustomCommune] = useState('');
+  const [showCustomCommune, setShowCustomCommune] = useState(false);
   const [customQuartier, setCustomQuartier] = useState('');
   const [showCustomQuartier, setShowCustomQuartier] = useState(false);
   const [campaigns, setCampaigns] = useState([]);
@@ -74,32 +78,70 @@ const CreateAccount = () => {
     const { name, value } = e.target;
     
     if (name === 'province') {
-      // Réinitialiser ville et commune quand la province change
+      // Réinitialiser ville, commune et quartier quand la province change
       setFormData(prev => ({
         ...prev,
         province: value,
         city: '',
-        commune: ''
-      }));
-    } else if (name === 'city') {
-      // Réinitialiser commune et quartier quand la ville change
-      setFormData(prev => ({
-        ...prev,
-        city: value,
         commune: '',
         quartier: ''
       }));
+      setShowCustomCity(false);
+      setCustomCity('');
+      setShowCustomCommune(false);
+      setCustomCommune('');
       setShowCustomQuartier(false);
       setCustomQuartier('');
+    } else if (name === 'city') {
+      if (value === 'CUSTOM') {
+        setShowCustomCity(true);
+        setFormData(prev => ({
+          ...prev,
+          city: '',
+          commune: '',
+          quartier: ''
+        }));
+        setShowCustomCommune(false);
+        setCustomCommune('');
+        setShowCustomQuartier(false);
+        setCustomQuartier('');
+      } else {
+        setShowCustomCity(false);
+        setCustomCity('');
+        // Réinitialiser commune et quartier quand la ville change
+        setFormData(prev => ({
+          ...prev,
+          city: value,
+          commune: '',
+          quartier: ''
+        }));
+        setShowCustomCommune(false);
+        setCustomCommune('');
+        setShowCustomQuartier(false);
+        setCustomQuartier('');
+      }
     } else if (name === 'commune') {
-      // Réinitialiser quartier quand la commune change
-      setFormData(prev => ({
-        ...prev,
-        commune: value,
-        quartier: ''
-      }));
-      setShowCustomQuartier(false);
-      setCustomQuartier('');
+      if (value === 'CUSTOM') {
+        setShowCustomCommune(true);
+        setFormData(prev => ({
+          ...prev,
+          commune: '',
+          quartier: ''
+        }));
+        setShowCustomQuartier(false);
+        setCustomQuartier('');
+      } else {
+        setShowCustomCommune(false);
+        setCustomCommune('');
+        // Réinitialiser quartier quand la commune change
+        setFormData(prev => ({
+          ...prev,
+          commune: value,
+          quartier: ''
+        }));
+        setShowCustomQuartier(false);
+        setCustomQuartier('');
+      }
     } else if (name === 'quartier') {
       if (value === 'CUSTOM') {
         setShowCustomQuartier(true);
@@ -168,8 +210,8 @@ const CreateAccount = () => {
           contact: formData.contact || undefined,
           whatsapp: formData.whatsapp || undefined,
           province: formData.province || undefined,
-          city: formData.city || undefined,
-          commune: formData.commune || undefined,
+          city: showCustomCity ? customCity : (formData.city || undefined),
+          commune: showCustomCommune ? customCommune : (formData.commune || undefined),
           quartier: showCustomQuartier ? customQuartier : (formData.quartier || undefined),
           campaignId: formData.campaignId || undefined
         }),
@@ -443,7 +485,7 @@ const CreateAccount = () => {
               <select
                 id="city"
                 name="city"
-                value={formData.city}
+                value={showCustomCity ? 'CUSTOM' : formData.city}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 required
@@ -454,11 +496,30 @@ const CreateAccount = () => {
                     {city.name}
                   </option>
                 ))}
+                <option value="CUSTOM">Ma ville n'est pas dans la liste</option>
               </select>
             </div>
           )}
 
-          {formData.city && (
+          {showCustomCity && (
+            <div>
+              <label htmlFor="customCity" className="block text-sm font-medium text-gray-700 mb-1">
+                Nom de votre ville *
+              </label>
+              <input
+                id="customCity"
+                name="customCity"
+                type="text"
+                value={customCity}
+                onChange={(e) => setCustomCity(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Entrez le nom de votre ville"
+                required
+              />
+            </div>
+          )}
+
+          {(formData.city || showCustomCity) && (
             <div>
               <label htmlFor="commune" className="block text-sm font-medium text-gray-700 mb-1">
                 Commune *
@@ -466,22 +527,41 @@ const CreateAccount = () => {
               <select
                 id="commune"
                 name="commune"
-                value={formData.commune}
+                value={showCustomCommune ? 'CUSTOM' : formData.commune}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 required
               >
                 <option value="">Sélectionnez votre commune</option>
-                {getCommunesByCity(formData.province, formData.city).map((commune, index) => (
+                {!showCustomCity && getCommunesByCity(formData.province, formData.city).map((commune, index) => (
                   <option key={index} value={commune}>
                     {commune}
                   </option>
                 ))}
+                <option value="CUSTOM">Ma commune n'est pas dans la liste</option>
               </select>
             </div>
           )}
 
-          {formData.commune && (
+          {showCustomCommune && (
+            <div>
+              <label htmlFor="customCommune" className="block text-sm font-medium text-gray-700 mb-1">
+                Nom de votre commune *
+              </label>
+              <input
+                id="customCommune"
+                name="customCommune"
+                type="text"
+                value={customCommune}
+                onChange={(e) => setCustomCommune(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Entrez le nom de votre commune"
+                required
+              />
+            </div>
+          )}
+
+          {(formData.commune || showCustomCommune) && (
             <div>
               <label htmlFor="quartier" className="block text-sm font-medium text-gray-700 mb-1">
                 Quartier *
@@ -489,13 +569,13 @@ const CreateAccount = () => {
               <select
                 id="quartier"
                 name="quartier"
-                value={formData.quartier}
+                value={showCustomQuartier ? 'CUSTOM' : formData.quartier}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 required
               >
                 <option value="">Sélectionnez votre quartier</option>
-                {getQuartiersByCommune(formData.province, formData.city, formData.commune).map((quartier, index) => (
+                {!showCustomCommune && !showCustomCity && getQuartiersByCommune(formData.province, formData.city, formData.commune).map((quartier, index) => (
                   <option key={index} value={quartier}>
                     {quartier}
                   </option>

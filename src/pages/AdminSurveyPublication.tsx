@@ -23,6 +23,12 @@ interface Survey {
     name: string;
     email: string;
   };
+  campaignUsers?: Array<{
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+  }>;
 }
 
 interface CreateSurveyData {
@@ -55,6 +61,13 @@ const AdminSurveyPublication: React.FC = () => {
     startDate: '',
     endDate: ''
   });
+  // États pour l'assignation de PM
+  const [showAssignPMModal, setShowAssignPMModal] = useState(false);
+  const [selectedSurveyForPM, setSelectedSurveyForPM] = useState<Survey | null>(null);
+  const [projectManagers, setProjectManagers] = useState<any[]>([]);
+  const [loadingPMs, setLoadingPMs] = useState(false);
+  const [selectedPMId, setSelectedPMId] = useState<string>('');
+  const [assigningPM, setAssigningPM] = useState(false);
 
   // Configuration
   const apiBaseUrl = environment.apiBaseUrl;
@@ -419,6 +432,84 @@ const AdminSurveyPublication: React.FC = () => {
     }
   }, [apiBaseUrl, getAuthToken, handleApiError, fetchSurveys]);
 
+  // Fonction pour charger la liste des Project Managers actifs
+  const fetchProjectManagers = useCallback(async () => {
+    try {
+      setLoadingPMs(true);
+      const token = getAuthToken();
+      if (!token) return;
+
+      const response = await fetch(`${apiBaseUrl}/users`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const allUsers = await response.json();
+      // Filtrer seulement les Project Managers actifs
+      const pmUsers = allUsers.filter((user: any) => 
+        user.role === 'PROJECT_MANAGER' && user.status === 'ACTIVE'
+      );
+      setProjectManagers(pmUsers);
+    } catch (error) {
+      handleApiError(error, 'du chargement des Project Managers');
+    } finally {
+      setLoadingPMs(false);
+    }
+  }, [apiBaseUrl, getAuthToken, handleApiError]);
+
+  // Fonction pour ouvrir le modal d'assignation de PM
+  const openAssignPMModal = useCallback((survey: Survey) => {
+    setSelectedSurveyForPM(survey);
+    setSelectedPMId(''); // Réinitialiser la sélection
+    setShowAssignPMModal(true);
+    fetchProjectManagers();
+  }, [fetchProjectManagers]);
+
+  // Fonction pour assigner un PM à un projet
+  const assignPMToSurvey = useCallback(async () => {
+    if (!selectedSurveyForPM || !selectedPMId) {
+      toast.error('Veuillez sélectionner un Project Manager');
+      return;
+    }
+
+    try {
+      setAssigningPM(true);
+      const token = getAuthToken();
+      if (!token) return;
+
+      const response = await fetch(`${apiBaseUrl}/surveys/${selectedSurveyForPM.id}/assign-pm`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ pmId: selectedPMId }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      toast.success(result.message || 'PM assigné avec succès !');
+      setShowAssignPMModal(false);
+      setSelectedSurveyForPM(null);
+      setSelectedPMId('');
+      await fetchSurveys();
+    } catch (error) {
+      handleApiError(error, 'de l\'assignation du PM');
+    } finally {
+      setAssigningPM(false);
+    }
+  }, [selectedSurveyForPM, selectedPMId, apiBaseUrl, getAuthToken, handleApiError, fetchSurveys]);
+
   // Fonctions utilitaires pour l'affichage
   const getStatusLabel = useCallback((status: string) => {
     const statusMap: Record<string, string> = {
@@ -739,11 +830,19 @@ const AdminSurveyPublication: React.FC = () => {
                               {survey.description.substring(0, 100)}
                               {survey.description.length > 100 && '...'}
                             </div>
-                            {survey.publisher && (
-                              <div className="text-xs text-gray-400 mt-1">
-                                Par: {survey.publisher.name}
-                              </div>
-                            )}
+                            <div className="text-xs text-gray-400 mt-1">
+                              {(() => {
+                                const allPMs: string[] = [];
+                                if (survey.publisher) {
+                                  allPMs.push(survey.publisher.name);
+                                }
+                                const pmUsers = survey.campaignUsers?.filter(u => u.role === 'PROJECT_MANAGER' && u.id !== survey.publisher?.id) || [];
+                                pmUsers.forEach(pm => allPMs.push(pm.name));
+                                return allPMs.length > 0 
+                                  ? `PM${allPMs.length > 1 ? 's' : ''}: ${allPMs.join(', ')}`
+                                  : 'Aucun PM assigné';
+                              })()}
+                            </div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -808,6 +907,14 @@ const AdminSurveyPublication: React.FC = () => {
                                 Supprimer
                               </button>
                             )}
+
+                            {/* Bouton Assigner PM */}
+                            <button
+                              onClick={() => openAssignPMModal(survey)}
+                              className="text-purple-600 hover:text-purple-900 bg-purple-100 hover:bg-purple-200 px-3 py-1 rounded-md text-sm font-medium transition-colors"
+                            >
+                              Assigner PM
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -816,6 +923,91 @@ const AdminSurveyPublication: React.FC = () => {
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Modal d'assignation de PM */}
+        {showAssignPMModal && selectedSurveyForPM && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+              <h2 className="text-xl font-semibold mb-4">
+                Assigner un Project Manager
+              </h2>
+              
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-2">
+                  Projet: <span className="font-semibold">{selectedSurveyForPM.title}</span>
+                </p>
+                {(() => {
+                  const allPMs: Array<{id: string, name: string}> = [];
+                  if (selectedSurveyForPM.publisher) {
+                    allPMs.push({ id: selectedSurveyForPM.publisher.id, name: selectedSurveyForPM.publisher.name });
+                  }
+                  const pmUsers = selectedSurveyForPM.campaignUsers?.filter(u => u.role === 'PROJECT_MANAGER' && u.id !== selectedSurveyForPM.publisher?.id) || [];
+                  pmUsers.forEach(pm => allPMs.push({ id: pm.id, name: pm.name }));
+                  return allPMs.length > 0 ? (
+                    <p className="text-xs text-gray-500">
+                      PM{allPMs.length > 1 ? 's' : ''} assigné{allPMs.length > 1 ? 's' : ''}: {allPMs.map(pm => pm.name).join(', ')}
+                    </p>
+                  ) : null;
+                })()}
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Sélectionner un Project Manager *
+                </label>
+                {loadingPMs ? (
+                  <div className="text-center py-4 text-gray-500">Chargement...</div>
+                ) : projectManagers.length === 0 ? (
+                  <div className="text-center py-4 text-gray-500">
+                    Aucun Project Manager actif disponible
+                  </div>
+                ) : (
+                  <select
+                    value={selectedPMId}
+                    onChange={(e) => setSelectedPMId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    disabled={assigningPM}
+                  >
+                    <option value="">-- Sélectionner un PM --</option>
+                    {projectManagers
+                      .filter((pm) => {
+                        // Exclure les PMs déjà assignés
+                        if (selectedSurveyForPM.publisher?.id === pm.id) return false;
+                        const pmUsers = selectedSurveyForPM.campaignUsers?.filter(u => u.role === 'PROJECT_MANAGER') || [];
+                        return !pmUsers.some(u => u.id === pm.id);
+                      })
+                      .map((pm) => (
+                        <option key={pm.id} value={pm.id}>
+                          {pm.name} ({pm.email})
+                        </option>
+                      ))}
+                  </select>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setShowAssignPMModal(false);
+                    setSelectedSurveyForPM(null);
+                    setSelectedPMId('');
+                  }}
+                  disabled={assigningPM}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors disabled:opacity-50"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={assignPMToSurvey}
+                  disabled={assigningPM || !selectedPMId}
+                  className="px-4 py-2 text-white bg-purple-600 rounded-md hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {assigningPM ? 'Assignation...' : 'Assigner'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
