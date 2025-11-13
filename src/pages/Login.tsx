@@ -20,6 +20,11 @@ const Login = () => {
       // Utiliser la configuration dual pour l'URL de l'API
       const loginUrl = `${environment.apiBaseUrl}/auth/login`;
       console.log('🔗 Tentative de connexion à:', loginUrl);
+      console.log('🔍 Configuration API:', {
+        apiBaseUrl: environment.apiBaseUrl,
+        envVar: import.meta.env.VITE_API_BASE_URL,
+        default: 'http://localhost:3000'
+      });
       
       const response = await fetch(loginUrl, {
         method: 'POST',

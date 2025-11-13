@@ -231,16 +231,16 @@ const ProjectManagerHome = () => {
             </button>
             
             {/* Menu desktop */}
-            <div className="hidden md:flex items-center gap-0.5 lg:gap-1 overflow-x-auto scrollbar-hide">
+            <div className="hidden md:flex items-center gap-0.5 lg:gap-1">
               <button 
                 onClick={() => handleViewChange('dashboard')} 
-                className={`px-2 lg:px-3 py-2 rounded-lg font-semibold text-xs lg:text-sm transition-all duration-200 whitespace-nowrap ${
+                className={`px-1.5 lg:px-2 py-2 rounded-lg font-semibold text-xs lg:text-sm transition-all duration-200 whitespace-nowrap ${
                   view === 'dashboard' 
                     ? 'bg-white text-blue-900 shadow-lg transform scale-105' 
                     : 'text-white hover:bg-blue-700/50 hover:scale-105'
                 }`}
               >
-                <div className="flex items-center gap-1 lg:gap-2">
+                <div className="flex items-center gap-0.5 lg:gap-1">
                   <svg className="w-4 h-4 lg:w-5 lg:h-5" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
                   </svg>
@@ -250,13 +250,13 @@ const ProjectManagerHome = () => {
               </button>
               <button 
                 onClick={() => handleViewChange('users')} 
-                className={`px-2 lg:px-3 py-2 rounded-lg font-semibold text-xs lg:text-sm transition-all duration-200 whitespace-nowrap ${
+                className={`px-1.5 lg:px-2 py-2 rounded-lg font-semibold text-xs lg:text-sm transition-all duration-200 whitespace-nowrap ${
                   view === 'users' 
                     ? 'bg-white text-blue-900 shadow-lg transform scale-105' 
                     : 'text-white hover:bg-blue-700/50 hover:scale-105'
                 }`}
               >
-                <div className="flex items-center gap-1 lg:gap-2">
+                <div className="flex items-center gap-0.5 lg:gap-1">
                   <svg className="w-4 h-4 lg:w-5 lg:h-5" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
                   </svg>
@@ -266,13 +266,13 @@ const ProjectManagerHome = () => {
               </button>
               <button 
                 onClick={() => handleViewChange('campaigns')} 
-                className={`px-2 lg:px-3 py-2 rounded-lg font-semibold text-xs lg:text-sm transition-all duration-200 whitespace-nowrap ${
+                className={`px-1.5 lg:px-2 py-2 rounded-lg font-semibold text-xs lg:text-sm transition-all duration-200 whitespace-nowrap ${
                   view === 'campaigns' 
                     ? 'bg-white text-blue-900 shadow-lg transform scale-105' 
                     : 'text-white hover:bg-blue-700/50 hover:scale-105'
                 }`}
               >
-                <div className="flex items-center gap-1 lg:gap-2">
+                <div className="flex items-center gap-0.5 lg:gap-1">
                   <svg className="w-4 h-4 lg:w-5 lg:h-5" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
                   </svg>
@@ -282,13 +282,13 @@ const ProjectManagerHome = () => {
               </button>
               <button 
                 onClick={() => handleViewChange('demands')} 
-                className={`px-2 lg:px-3 py-2 rounded-lg font-semibold text-xs lg:text-sm transition-all duration-200 whitespace-nowrap ${
+                className={`px-1.5 lg:px-2 py-2 rounded-lg font-semibold text-xs lg:text-sm transition-all duration-200 whitespace-nowrap ${
                   view === 'demands' 
                     ? 'bg-white text-blue-900 shadow-lg transform scale-105' 
                     : 'text-white hover:bg-blue-700/50 hover:scale-105'
                 }`}
               >
-                <div className="flex items-center gap-1 lg:gap-2">
+                <div className="flex items-center gap-0.5 lg:gap-1">
                   <svg className="w-4 h-4 lg:w-5 lg:h-5" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                   </svg>
@@ -296,30 +296,15 @@ const ProjectManagerHome = () => {
                   <span className="lg:hidden">Demandes</span>
                 </div>
               </button>
-              
-              {/* Panel de notifications */}
-              <NotificationPanel 
-                userRole={user?.role || 'PROJECT_MANAGER'}
-                onNotificationClick={(link) => {
-                  if (link) {
-                    // Extraire la vue de la route
-                    if (link.includes('application-review')) {
-                      handleViewChange('demands');
-                    } else if (link.includes('validated-forms')) {
-                      handleViewChange('validated-forms');
-                    }
-                  }
-                }}
-              />
               <button 
                 onClick={() => handleViewChange('forms')} 
-                className={`px-2 lg:px-3 py-2 rounded-lg font-semibold text-xs lg:text-sm transition-all duration-200 whitespace-nowrap ${
+                className={`px-1.5 lg:px-2 py-2 rounded-lg font-semibold text-xs lg:text-sm transition-all duration-200 whitespace-nowrap ${
                   view === 'forms' 
                     ? 'bg-white text-blue-900 shadow-lg transform scale-105' 
                     : 'text-white hover:bg-blue-700/50 hover:scale-105'
                 }`}
               >
-                <div className="flex items-center gap-1 lg:gap-2">
+                <div className="flex items-center gap-0.5 lg:gap-1">
                   <svg className="w-4 h-4 lg:w-5 lg:h-5" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
                   </svg>
@@ -329,13 +314,13 @@ const ProjectManagerHome = () => {
               </button>
               <button 
                 onClick={() => handleViewChange('validated-forms')} 
-                className={`px-2 lg:px-3 py-2 rounded-lg font-semibold text-xs lg:text-sm transition-all duration-200 whitespace-nowrap ${
+                className={`px-1.5 lg:px-2 py-2 rounded-lg font-semibold text-xs lg:text-sm transition-all duration-200 whitespace-nowrap ${
                   view === 'validated-forms' 
                     ? 'bg-white text-blue-900 shadow-lg transform scale-105' 
                     : 'text-white hover:bg-blue-700/50 hover:scale-105'
                 }`}
               >
-                <div className="flex items-center gap-1 lg:gap-2">
+                <div className="flex items-center gap-0.5 lg:gap-1">
                   <svg className="w-4 h-4 lg:w-5 lg:h-5" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M9,12L11,14L15,10M19,8V19A2,2 0 0,1 17,21H5A2,2 0 0,1 3,19V5A2,2 0 0,1 5,3H16M17,3L19,5L17,7"/>
                   </svg>
@@ -343,48 +328,61 @@ const ProjectManagerHome = () => {
                   <span className="lg:hidden">Validés</span>
                 </div>
               </button>
+              
+              {/* Panel de notifications */}
+              <NotificationPanel 
+                userRole={user?.role || 'PROJECT_MANAGER'}
+                onNotificationClick={(link) => {
+                  if (link) {
+                    if (link.includes('application-review')) {
+                      handleViewChange('demands');
+                    } else if (link.includes('validated-forms')) {
+                      handleViewChange('validated-forms');
+                    }
+                  }
+                }}
+              />
+              
               <button 
                 onClick={() => handleViewChange('settings')} 
-                className={`px-2 lg:px-3 py-2 rounded-lg font-semibold text-xs lg:text-sm transition-all duration-200 whitespace-nowrap ${
+                className={`px-1.5 lg:px-2 py-2 rounded-lg font-semibold text-xs lg:text-sm transition-all duration-200 whitespace-nowrap ${
                   view === 'settings' 
                     ? 'bg-white text-blue-900 shadow-lg transform scale-105' 
                     : 'text-white hover:bg-blue-700/50 hover:scale-105'
                 }`}
               >
-                <div className="flex items-center gap-1 lg:gap-2">
+                <div className="flex items-center gap-0.5 lg:gap-1">
                   <svg className="w-4 h-4 lg:w-5 lg:h-5" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.22,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.22,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.68 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/>
                   </svg>
                   <span className="hidden lg:inline">Paramètres</span>
-                  <span className="lg:hidden">Settings</span>
+                  <span className="lg:hidden">Param</span>
                 </div>
               </button>
               
               {/* Profil utilisateur et déconnexion */}
-              <div className="flex items-center gap-2 lg:gap-3 ml-2 lg:ml-4 pl-2 lg:pl-4 border-l border-blue-700 flex-shrink-0">
+              <div className="flex items-center gap-1 ml-1 pl-1 border-l border-blue-700 min-w-0">
                 {user && (
                   <div className="relative">
                     {user?.profilePhoto ? (
                       <img 
                         src={`${environment.apiBaseUrl}${user.profilePhoto}`} 
                         alt="Photo de profil" 
-                        className="w-6 h-6 lg:w-8 lg:h-8 rounded-full object-cover shadow-md hover:shadow-lg transition-shadow duration-200"
+                        className="w-6 h-6 rounded-full object-cover shadow-md hover:shadow-lg transition-shadow duration-200"
                       />
                     ) : (
-                      <div className="w-6 h-6 lg:w-8 lg:h-8 rounded-full bg-white text-blue-900 flex items-center justify-center font-bold shadow-md hover:shadow-lg transition-shadow duration-200 text-xs lg:text-sm">
-                        {user?.name?.[0]?.toUpperCase() || '?'}
+                      <div className="w-6 h-6 rounded-full bg-white text-blue-900 flex items-center justify-center font-bold text-xs shadow-md hover:shadow-lg transition-shadow duration-200">
+                        {user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
                       </div>
                     )}
-                    <div className="absolute -top-1 -right-1 w-2 h-2 lg:w-3 lg:h-3 bg-green-400 rounded-full border-2 border-white"></div>
+                    <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-green-400 rounded-full border border-white"></div>
                   </div>
                 )}
-                
                 <button 
                   onClick={() => { localStorage.clear(); navigate('/login'); }} 
-                  className="bg-white text-blue-900 px-2 lg:px-4 py-1 lg:py-2 rounded-lg font-semibold text-xs lg:text-sm hover:bg-gray-100 hover:shadow-lg transition-all duration-200 hover:scale-105 active:scale-95 whitespace-nowrap"
+                  className="bg-white text-blue-900 px-1.5 py-1 rounded-lg font-semibold text-xs hover:bg-gray-100 hover:shadow-lg transition-all duration-200 hover:scale-105 active:scale-95 whitespace-nowrap"
                 >
-                  <span className="hidden lg:inline">Déconnexion</span>
-                  <span className="lg:hidden">Logout</span>
+                  Déconnexion
                 </button>
               </div>
             </div>

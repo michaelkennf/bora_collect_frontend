@@ -280,42 +280,41 @@ const PMApprovalRequests: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Styles CSS pour les animations */}
-        <style dangerouslySetInnerHTML={{ __html: flipCardStyles }} />
+    <div className="space-y-6">
+      {/* Styles CSS pour les animations */}
+      <style dangerouslySetInnerHTML={{ __html: flipCardStyles }} />
         
-        {/* En-tête */}
-        <div className="mb-8">
-          <div className="flex items-center gap-4 mb-4">
-            {onBack && (
-              <button
-                onClick={onBack}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 hover:shadow-lg active:scale-95"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-                Retour
-              </button>
-            )}
-            <h1 className="text-3xl font-bold text-gray-900">
-              Demandes d'inscription - Ma Campagne
-            </h1>
-          </div>
-          <p className="text-gray-600">
-            Gérez les demandes d'inscription pour votre campagne
-          </p>
+      {/* En-tête */}
+      <div className="bg-white p-6 rounded-lg shadow">
+        <div className="flex items-center gap-4 mb-4">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 hover:shadow-lg active:scale-95"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Retour
+            </button>
+          )}
+          <h1 className="text-3xl font-bold text-gray-900">
+            Demandes d'inscription - Ma Campagne
+          </h1>
         </div>
+        <p className="text-gray-600">
+          Gérez les demandes d'inscription pour votre campagne
+        </p>
+      </div>
 
-        {/* Compteur unique avec effet de retournement */}
-        {stats && (
-          <div className="mb-8">
-            <div className="max-w-md mx-auto">
-              <div 
-                className={`flip-card cursor-pointer hover:scale-105 transition-transform duration-200 ${flippedCards['inscriptions'] ? 'flipped' : ''}`}
-                onClick={() => toggleCardFlip('inscriptions')}
-              >
+      {/* Compteur unique avec effet de retournement */}
+      {stats && (
+        <div className="bg-white p-6 rounded-lg shadow">
+          <div className="max-w-md mx-auto">
+            <div 
+              className={`flip-card cursor-pointer hover:scale-105 transition-transform duration-200 ${flippedCards['inscriptions'] ? 'flipped' : ''}`}
+              onClick={() => toggleCardFlip('inscriptions')}
+            >
                 <div className="flip-card-inner">
                   {/* Face avant */}
                   <div className="flip-card-front">
@@ -374,74 +373,74 @@ const PMApprovalRequests: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
               </div>
             </div>
           </div>
-        )}
+      )}
 
-        {/* Liste des demandes */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-            <h2 className="text-lg font-medium text-gray-900">
-              {statusFilter === 'all' ? 'Toutes les demandes' : 
-               statusFilter === 'PENDING' ? 'Demandes en attente' :
-               statusFilter === 'APPROVED' ? 'Demandes approuvées' :
-               'Demandes rejetées'} ({pendingUsers.length})
-            </h2>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setStatusFilter('all')}
-                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                  statusFilter === 'all' 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Toutes
-              </button>
-              <button
-                onClick={() => setStatusFilter('PENDING')}
-                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                  statusFilter === 'PENDING' 
-                    ? 'bg-yellow-600 text-white' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                En attente
-              </button>
-              <button
-                onClick={() => setStatusFilter('APPROVED')}
-                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                  statusFilter === 'APPROVED' 
-                    ? 'bg-green-600 text-white' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Approuvées
-              </button>
-              <button
-                onClick={() => setStatusFilter('REJECTED')}
-                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                  statusFilter === 'REJECTED' 
-                    ? 'bg-red-600 text-white' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Rejetées
-              </button>
-            </div>
+      {/* Liste des demandes */}
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+          <h2 className="text-lg font-medium text-gray-900">
+            {statusFilter === 'all' ? 'Toutes les demandes' : 
+             statusFilter === 'PENDING' ? 'Demandes en attente' :
+             statusFilter === 'APPROVED' ? 'Demandes approuvées' :
+             'Demandes rejetées'} ({pendingUsers.length})
+          </h2>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setStatusFilter('all')}
+              className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                statusFilter === 'all' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Toutes
+            </button>
+            <button
+              onClick={() => setStatusFilter('PENDING')}
+              className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                statusFilter === 'PENDING' 
+                  ? 'bg-yellow-600 text-white' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              En attente
+            </button>
+            <button
+              onClick={() => setStatusFilter('APPROVED')}
+              className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                statusFilter === 'APPROVED' 
+                  ? 'bg-green-600 text-white' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Approuvées
+            </button>
+            <button
+              onClick={() => setStatusFilter('REJECTED')}
+              className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                statusFilter === 'REJECTED' 
+                  ? 'bg-red-600 text-white' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Rejetées
+            </button>
           </div>
+        </div>
 
-          {pendingUsers.length === 0 ? (
-            <div className="px-6 py-12 text-center">
-              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <h3 className="mt-2 text-sm font-medium text-gray-900">Aucune demande en attente</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                Toutes les demandes d'inscription pour votre campagne ont été traitées.
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
+        {pendingUsers.length === 0 ? (
+          <div className="px-6 py-12 text-center">
+            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <h3 className="mt-2 text-sm font-medium text-gray-900">Aucune demande en attente</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              Toutes les demandes d'inscription pour votre campagne ont été traitées.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -555,7 +554,6 @@ const PMApprovalRequests: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
             </div>
           )}
         </div>
-      </div>
 
       {/* Modal d'approbation/rejet */}
       {showModal && selectedUser && (

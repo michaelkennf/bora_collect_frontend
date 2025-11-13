@@ -16,6 +16,7 @@ interface User {
   targetProvince?: string;
   city?: string;
   commune?: string;
+  quartier?: string;
   campaignId?: string;
   campaign?: {
     id: string;
@@ -264,6 +265,106 @@ const AdminUserManagement: React.FC = () => {
     }
   };
 
+  const renderLocation = (user: User) => {
+    const hasProvince = !!user.province;
+    const hasCity = !!user.city;
+    const hasCommune = !!user.commune;
+    const hasQuartier = !!user.quartier;
+
+    if (!hasProvince && !hasCity && !hasCommune && !hasQuartier) {
+      return <span className="text-gray-400 text-sm">Non renseigné</span>;
+    }
+
+    return (
+      <div className="text-xs text-gray-600 space-y-1">
+        {hasProvince && (
+          <div className="flex items-center gap-1">
+            <span className="text-blue-500">•</span>
+            <span className="font-medium">{user.province?.replace(/_/g, ' ')}</span>
+          </div>
+        )}
+        {hasCity && (
+          <div className="flex items-center gap-1">
+            <span className="text-blue-500">•</span>
+            <span>{user.city}</span>
+          </div>
+        )}
+        {hasCommune && (
+          <div className="flex items-center gap-1">
+            <span className="text-blue-500">•</span>
+            <span>{user.commune}</span>
+          </div>
+        )}
+        {hasQuartier && (
+          <div className="flex items-center gap-1">
+            <span className="text-blue-500">•</span>
+            <span>{user.quartier}</span>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const formatCSVValue = (value: any) => {
+    if (value === null || value === undefined) return '';
+    const stringValue = String(value).replace(/"/g, '""');
+    return `"${stringValue}"`;
+  };
+
+  const handleExportCSV = () => {
+    if (filteredUsers.length === 0) {
+      showError('Aucun utilisateur à exporter');
+      return;
+    }
+
+    const headers = [
+      'Nom',
+      'Email',
+      'Rôle',
+      'Statut',
+      'Genre',
+      'Contact',
+      'WhatsApp',
+      'Province',
+      'Ville',
+      'Commune',
+      'Quartier',
+      'Campagne',
+      'Date inscription'
+    ];
+
+    const rows = filteredUsers.map((user) => [
+      user.name || '',
+      user.email || '',
+      getRoleLabel(user.role),
+      getStatusLabel(user.status),
+      user.gender ? (user.gender === 'MALE' ? 'Homme' : user.gender === 'FEMALE' ? 'Femme' : 'Autre') : '',
+      user.contact || '',
+      user.whatsapp || '',
+      user.province ? user.province.replace(/_/g, ' ') : '',
+      user.city || '',
+      user.commune || '',
+      user.quartier || '',
+      user.campaign?.title || '',
+      user.createdAt ? new Date(user.createdAt).toLocaleString('fr-FR') : ''
+    ]);
+
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map(formatCSVValue).join(';'))
+      .join('\n');
+
+    const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `utilisateurs_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    showSuccess('Export CSV généré avec succès');
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -422,10 +523,19 @@ const AdminUserManagement: React.FC = () => {
 
       {/* Liste des utilisateurs */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
           <h2 className="text-lg font-medium text-gray-900">
             Utilisateurs ({filteredUsers.length})
           </h2>
+          <button
+            onClick={handleExportCSV}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v13a1 1 0 001 1h14a1 1 0 001-1V7M12 3v12m0 0l-4-4m4 4l4-4" />
+            </svg>
+            Exporter en CSV
+          </button>
         </div>
 
         <div className="overflow-x-auto">
@@ -448,7 +558,7 @@ const AdminUserManagement: React.FC = () => {
                   Province
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Ville
+                  Localisation
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Statut
@@ -508,7 +618,7 @@ const AdminUserManagement: React.FC = () => {
                     {user.province ? user.province.replace(/_/g, ' ') : 'Non renseigné'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {user.city || 'Non renseigné'}
+                    {renderLocation(user)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(user.status)}`}>
@@ -635,7 +745,7 @@ const AdminUserManagement: React.FC = () => {
           </div>
         </div>
       )}
-      
+
       {/* Container pour les notifications */}
       <NotificationContainer 
         notifications={notifications} 

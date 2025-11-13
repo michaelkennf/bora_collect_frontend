@@ -1,5 +1,4 @@
-import React, { useState } from "react";
-import axios from "axios";
+import React, { useMemo, useState } from "react";
 import { allProvincesSVGData } from "../data/allProvincesSVG";
 import "./CarteRDCSVG.css";
 import { environment } from "../config/environment";
@@ -28,15 +27,20 @@ interface ProvinceData {
   region?: string;
   message?: string;
   statistics?: {
+    totalUsers: number;
+    totalProjectManagers: number;
+    totalEnumerators: number;
+    totalAnalysts: number;
     totalCampaigns: number;
     ongoingCampaigns: number;
     completedCampaigns: number;
-    enumerators: number;
-    projectManagers: number;
-    totalInterviews: number;
+    totalRespondentsMasculin: number;
+    totalRespondentsFeminin: number;
   };
   pmStatistics?: {
     totalCampaigns: number;
+    ongoingCampaigns?: number;
+    completedCampaigns?: number;
     totalEnumerators: number;
     totalRespondentsMasculin: number;
     totalRespondentsFeminin: number;
@@ -50,11 +54,54 @@ interface CarteRDCSVGProps {
 }
 
 function CarteRDCSVG({ onProvinceSelect }: CarteRDCSVGProps) {
+  const [currentRole] = useState<string | null>(() => {
+    try {
+      const storedUser = localStorage.getItem("user");
+      if (!storedUser) return null;
+      const parsed = JSON.parse(storedUser);
+      return parsed?.role || null;
+    } catch {
+      return null;
+    }
+  });
+
+  const statsEndpoint = useMemo(() => {
+    return currentRole === "PROJECT_MANAGER" ? "/users/pm-province-stats" : "/users/province-stats";
+  }, [currentRole]);
+  const isProjectManager = currentRole === "PROJECT_MANAGER";
+
+  const convertProvinceNameToCode = (provinceName: string): string | null => {
+    if (!provinceName) return null;
+    const normalized = provinceName
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/['’\- ]+/g, "_")
+      .toUpperCase();
+    return normalized || null;
+  };
+
   const [selectedProvince, setSelectedProvince] = useState<string | null>(null);
   const [hoveredProvince, setHoveredProvince] = useState<string | null>(null);
   const [provinceData, setProvinceData] = useState<ProvinceData | null>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [isCardFlipped, setIsCardFlipped] = useState(false);
+  
+  // Déterminer les stats à utiliser selon le rôle
+  const pmStats = useMemo(() => {
+    if (currentRole === 'PROJECT_MANAGER') {
+      return provinceData?.pmStatistics || null;
+    } else {
+      // Pour Admin, utiliser statistics pour les stats générales
+      return provinceData?.statistics ? {
+        totalCampaigns: provinceData.statistics.totalCampaigns,
+        ongoingCampaigns: provinceData.statistics.ongoingCampaigns,
+        completedCampaigns: provinceData.statistics.completedCampaigns,
+        totalEnumerators: provinceData.statistics.totalEnumerators,
+        totalRespondentsMasculin: provinceData.statistics.totalRespondentsMasculin,
+        totalRespondentsFeminin: provinceData.statistics.totalRespondentsFeminin
+      } : null;
+    }
+  }, [provinceData, currentRole]);
 
   // Fonction pour calculer le zoom et le centrage adaptatif pour chaque province
   const getProvinceTransform = (provinceName: string) => {
@@ -109,9 +156,7 @@ function CarteRDCSVG({ onProvinceSelect }: CarteRDCSVGProps) {
     }
     
     try {
-      // Récupérer le token d'authentification depuis le localStorage
       const token = localStorage.getItem('token');
-      
       if (!token) {
         setProvinceData({
           province: provinceName,
@@ -120,25 +165,56 @@ function CarteRDCSVG({ onProvinceSelect }: CarteRDCSVGProps) {
         return;
       }
 
-      // Récupérer les statistiques PM pour cette province
-      const pmStatsResponse = await fetch(`${environment.apiBaseUrl}/users/pm-province-stats?province=${encodeURIComponent(provinceName)}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (pmStatsResponse.ok) {
-        const pmStats = await pmStatsResponse.json();
+      const provinceCode = convertProvinceNameToCode(provinceName);
+      if (!provinceCode) {
         setProvinceData({
           province: provinceName,
-          pmStatistics: pmStats,
-          message: `Statistiques PM pour ${provinceName}`
+          message: "Province inconnue. Impossible de récupérer les données."
         });
+        return;
+      }
+
+      const response = await fetch(
+        `${environment.apiBaseUrl}${statsEndpoint}?province=${encodeURIComponent(provinceName)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (response.ok) {
+        const stats = await response.json();
+        console.log('📊 Données reçues du backend:', stats);
+        console.log('👤 Rôle actuel:', currentRole);
+        
+        // Pour PM, utiliser pmStatistics directement
+        // Pour Admin, utiliser statistics
+        const dataToSet: ProvinceData = {
+          province: stats.province || provinceName,
+          campaigns: stats.campaigns || [],
+          message: stats.message || `Statistiques pour ${stats.province || provinceName}`,
+          lastUpdated: stats.lastUpdated
+        };
+
+        if (currentRole === 'PROJECT_MANAGER') {
+          // Pour PM, prioriser pmStatistics
+          dataToSet.pmStatistics = stats.pmStatistics || undefined;
+          dataToSet.statistics = undefined; // PM n'a pas besoin de statistics
+        } else {
+          // Pour Admin, utiliser statistics
+          dataToSet.statistics = stats.statistics || undefined;
+          dataToSet.pmStatistics = stats.pmStatistics || undefined; // Garder aussi pmStatistics si disponible
+        }
+
+        console.log('📦 Données à définir:', dataToSet);
+        setProvinceData(dataToSet);
       } else {
+        const errorPayload = await response.json().catch(() => null);
         setProvinceData({
           province: provinceName,
-          message: "Erreur lors de la récupération des statistiques PM."
+          message: errorPayload?.message || "Erreur lors de la récupération des statistiques."
         });
       }
     } catch (err) {
@@ -346,6 +422,67 @@ function CarteRDCSVG({ onProvinceSelect }: CarteRDCSVGProps) {
               </div>
             </div>
             
+            {/* Statistiques globales pour l'administrateur */}
+            {provinceData.statistics && !isProjectManager && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 p-6 rounded-xl border border-indigo-200 hover:shadow-lg hover:scale-105 transition-all duration-300 group">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 bg-indigo-500 rounded-lg flex items-center justify-center group-hover:bg-indigo-600 transition-colors duration-300">
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    </div>
+                    <span className="text-gray-600 font-semibold">Total utilisateurs</span>
+                  </div>
+                  <span className="font-bold text-indigo-700 text-xl">
+                    {provinceData.statistics.totalUsers ?? 0}
+                  </span>
+                </div>
+
+                <div className="bg-gradient-to-br from-teal-50 to-teal-100 p-6 rounded-xl border border-teal-200 hover:shadow-lg hover:scale-105 transition-all duration-300 group">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 bg-teal-500 rounded-lg flex items-center justify-center group-hover:bg-teal-600 transition-colors duration-300">
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857" />
+                      </svg>
+                    </div>
+                    <span className="text-gray-600 font-semibold">Project Managers</span>
+                  </div>
+                  <span className="font-bold text-teal-700 text-xl">
+                    {provinceData.statistics.totalProjectManagers ?? 0}
+                  </span>
+                </div>
+
+                <div className="bg-gradient-to-br from-amber-50 to-amber-100 p-6 rounded-xl border border-amber-200 hover:shadow-lg hover:scale-105 transition-all duration-300 group">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 bg-amber-500 rounded-lg flex items-center justify-center group-hover:bg-amber-600 transition-colors duration-300">
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197" />
+                      </svg>
+                    </div>
+                    <span className="text-gray-600 font-semibold">Enquêteurs</span>
+                  </div>
+                  <span className="font-bold text-amber-700 text-xl">
+                    {provinceData.statistics.totalEnumerators ?? 0}
+                  </span>
+                </div>
+
+                <div className="bg-gradient-to-br from-pink-50 to-pink-100 p-6 rounded-xl border border-pink-200 hover:shadow-lg hover:scale-105 transition-all duration-300 group">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 bg-pink-500 rounded-lg flex items-center justify-center group-hover:bg-pink-600 transition-colors duration-300">
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197" />
+                      </svg>
+                    </div>
+                    <span className="text-gray-600 font-semibold">Analystes</span>
+                  </div>
+                  <span className="font-bold text-pink-700 text-xl">
+                    {provinceData.statistics.totalAnalysts ?? 0}
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Informations générales de la province */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-xl border border-blue-200 hover:shadow-lg hover:scale-105 transition-all duration-300 group">
@@ -357,7 +494,9 @@ function CarteRDCSVG({ onProvinceSelect }: CarteRDCSVGProps) {
                   </div>
                   <span className="text-gray-600 font-semibold">Campagnes</span>
                 </div>
-                <span className="font-bold text-blue-700 text-xl">{provinceData.pmStatistics?.totalCampaigns || "0"}</span>
+                <span className="font-bold text-blue-700 text-xl">
+                  {pmStats?.totalCampaigns ?? 0}
+                </span>
               </div>
               
               <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-6 rounded-xl border border-purple-200 hover:shadow-lg hover:scale-105 transition-all duration-300 group">
@@ -369,7 +508,9 @@ function CarteRDCSVG({ onProvinceSelect }: CarteRDCSVGProps) {
                   </div>
                   <span className="text-gray-600 font-semibold">Enquêteurs</span>
                 </div>
-                <span className="font-bold text-purple-700 text-xl">{provinceData.pmStatistics?.totalEnumerators || "0"}</span>
+                <span className="font-bold text-purple-700 text-xl">
+                  {pmStats?.totalEnumerators ?? 0}
+                </span>
               </div>
               
               <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-6 rounded-xl border border-orange-200 hover:shadow-lg hover:scale-105 transition-all duration-300 group">
@@ -381,7 +522,9 @@ function CarteRDCSVG({ onProvinceSelect }: CarteRDCSVGProps) {
                   </div>
                   <span className="text-gray-600 font-semibold">Masculin</span>
                 </div>
-                <span className="font-bold text-orange-700 text-xl">{provinceData.pmStatistics?.totalRespondentsMasculin || "0"}</span>
+                <span className="font-bold text-orange-700 text-xl">
+                  {pmStats?.totalRespondentsMasculin ?? 0}
+                </span>
               </div>
               
               <div className="bg-gradient-to-br from-red-50 to-red-100 p-6 rounded-xl border border-red-200 hover:shadow-lg hover:scale-105 transition-all duration-300 group">
@@ -393,12 +536,14 @@ function CarteRDCSVG({ onProvinceSelect }: CarteRDCSVGProps) {
                   </div>
                   <span className="text-gray-600 font-semibold">Féminin</span>
                 </div>
-                <span className="font-bold text-red-700 text-xl">{provinceData.pmStatistics?.totalRespondentsFeminin || "0"}</span>
+                <span className="font-bold text-red-700 text-xl">
+                  {pmStats?.totalRespondentsFeminin ?? 0}
+                </span>
               </div>
             </div>
 
             {/* Statistiques des campagnes et utilisateurs */}
-            {provinceData.pmStatistics && (
+            {pmStats && (
               <div className="mb-8">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center shadow-lg">
@@ -406,7 +551,9 @@ function CarteRDCSVG({ onProvinceSelect }: CarteRDCSVGProps) {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
                   </div>
-                  <h4 className="text-2xl font-bold text-gray-800">Statistiques PM</h4>
+                  <h4 className="text-2xl font-bold text-gray-800">
+                    {currentRole === 'PROJECT_MANAGER' ? 'Statistiques PM' : 'Statistiques Générales'}
+                  </h4>
                 </div>
                 
                 {/* Styles CSS pour les animations 3D */}
@@ -458,12 +605,12 @@ function CarteRDCSVG({ onProvinceSelect }: CarteRDCSVGProps) {
                         <div className="text-center text-white">
                           <div className="text-4xl font-bold mb-3">
                             <span className="animate-bounce hover:animate-pulse transition-all duration-300 hover:scale-110 hover:text-yellow-200">
-                              {provinceData.pmStatistics.totalCampaigns}
+                              {pmStats?.totalCampaigns ?? 0}
                             </span>
                           </div>
                           <div className="text-sm space-y-1">
-                            <div>Enquêteurs: <span className="animate-bounce font-bold">{provinceData.pmStatistics.totalEnumerators}</span></div>
-                            <div>Répondants: <span className="animate-bounce font-bold">{provinceData.pmStatistics.totalRespondentsMasculin + provinceData.pmStatistics.totalRespondentsFeminin}</span></div>
+                            <div>Enquêteurs: <span className="animate-bounce font-bold">{pmStats?.totalEnumerators ?? 0}</span></div>
+                            <div>Répondants: <span className="animate-bounce font-bold">{(pmStats?.totalRespondentsMasculin ?? 0) + (pmStats?.totalRespondentsFeminin ?? 0)}</span></div>
                           </div>
                         </div>
                       </div>
@@ -502,19 +649,24 @@ function CarteRDCSVG({ onProvinceSelect }: CarteRDCSVGProps) {
                               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                                 <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
                               </svg>
-                              <span>Masculin: <span className="animate-bounce font-bold">{provinceData.pmStatistics.totalRespondentsMasculin}</span></span>
+                              <span>Masculin: <span className="animate-bounce font-bold">{pmStats?.totalRespondentsMasculin ?? 0}</span></span>
                             </div>
                             <div className="flex items-center justify-center gap-2">
                               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                                 <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
                               </svg>
-                              <span>Féminin: <span className="animate-bounce font-bold">{provinceData.pmStatistics.totalRespondentsFeminin}</span></span>
                             </div>
                             <div className="flex items-center justify-center gap-2">
                               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                                 <path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/>
                               </svg>
-                              <span>Total Enquêteurs: <span className="animate-bounce font-bold">{provinceData.pmStatistics.totalEnumerators}</span></span>
+                              <span>Féminin: <span className="animate-bounce font-bold">{pmStats?.totalRespondentsFeminin ?? 0}</span></span>
+                            </div>
+                            <div className="flex items-center justify-center gap-2">
+                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197" />
+                              </svg>
+                              <span>Total Enquêteurs: <span className="animate-bounce font-bold">{pmStats?.totalEnumerators ?? 0}</span></span>
                             </div>
                           </div>
                         </div>

@@ -28,7 +28,10 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ userRole, onNotif
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      if (!token) return;
+      if (!token) {
+        console.warn('⚠️ NotificationPanel - Aucun token trouvé');
+        return;
+      }
 
       const response = await fetch(`${environment.apiBaseUrl}/notifications`, {
         headers: {
@@ -39,10 +42,15 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ userRole, onNotif
 
       if (response.ok) {
         const data = await response.json();
-        setNotifications(data);
+        console.log(`✅ NotificationPanel - ${data.length} notifications chargées pour ${userRole}`);
+        setNotifications(data || []);
+      } else {
+        console.error(`❌ NotificationPanel - Erreur HTTP ${response.status}:`, response.statusText);
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ Détails de l\'erreur:', errorData);
       }
     } catch (error) {
-      console.error('Erreur lors de la récupération des notifications:', error);
+      console.error('❌ NotificationPanel - Erreur lors de la récupération des notifications:', error);
     } finally {
       setLoading(false);
     }
@@ -51,7 +59,10 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ userRole, onNotif
   const fetchUnreadCount = async () => {
     try {
       const token = localStorage.getItem('token');
-      if (!token) return;
+      if (!token) {
+        console.warn('⚠️ NotificationPanel - Aucun token trouvé pour le compteur');
+        return;
+      }
 
       const response = await fetch(`${environment.apiBaseUrl}/notifications/unread-count`, {
         headers: {
@@ -62,10 +73,14 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ userRole, onNotif
 
       if (response.ok) {
         const data = await response.json();
-        setUnreadCount(data.count || 0);
+        const count = data.count || 0;
+        console.log(`✅ NotificationPanel - ${count} notifications non lues pour ${userRole}`);
+        setUnreadCount(count);
+      } else {
+        console.error(`❌ NotificationPanel - Erreur HTTP ${response.status} pour le compteur:`, response.statusText);
       }
     } catch (error) {
-      console.error('Erreur lors de la récupération du compteur:', error);
+      console.error('❌ NotificationPanel - Erreur lors de la récupération du compteur:', error);
     }
   };
 
