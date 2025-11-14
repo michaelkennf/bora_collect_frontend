@@ -539,6 +539,27 @@ export default function SchoolForm() {
       toast.error('Veuillez remplir tous les champs d\'identification du ménage.');
       return false;
     }
+    
+    // VALIDATION GPS OBLIGATOIRE
+    const hasGPS = geolocation.latitude !== null && 
+                   geolocation.longitude !== null && 
+                   !isNaN(geolocation.latitude) && 
+                   !isNaN(geolocation.longitude);
+    
+    const gpsInFormData = form.formData.household.geolocalisation && 
+                          form.formData.household.geolocalisation.trim() !== '';
+    
+    if (!hasGPS && !gpsInFormData) {
+      toast.error('❌ Veuillez capturer votre position GPS avant de soumettre le formulaire.');
+      // Faire défiler vers le champ GPS si visible
+      const gpsField = document.querySelector('[placeholder*="GPS"], [placeholder*="gps"], [placeholder*="Géolocalisation"]');
+      if (gpsField) {
+        gpsField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        (gpsField as HTMLElement).focus();
+      }
+      return false;
+    }
+    
     if (form.formData.cooking.combustibles.length === 0) {
       toast.error('Veuillez sélectionner au moins un type de combustible.');
       return false;
@@ -548,20 +569,6 @@ export default function SchoolForm() {
       return false;
     }
     
-    // Validation GPS obligatoire
-    if (!geolocation.latitude) {
-      toast.warning('⚠️ La capture GPS est obligatoire. Veuillez utiliser le bouton "Capturer ma position GPS" pour obtenir vos coordonnées automatiquement.');
-      return false;
-    }
-    
-    // Validation du format GPS
-    const gpsRegex = /^-?\d+\.\d+,\s*-?\d+\.\d+$/;
-    if (!gpsRegex.test(form.formData.household.geolocalisation.trim())) {
-      toast.warning('⚠️ Format GPS invalide. Utilisez le bouton de capture automatique ou respectez le format "latitude, longitude" (ex: -4.4419, 15.2663)');
-      return false;
-    }
-    
-    toast.success('✅ Formulaire valide !');
     return true;
   };
 
@@ -1187,8 +1194,32 @@ export default function SchoolForm() {
           </div>
         </div>
 
-        <button type="submit" className="w-full py-3 rounded-xl text-base sm:text-lg font-bold shadow-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors" disabled={isSubmitting}>
-          {isSubmitting ? 'Enregistrement...' : 'Soumettre'}
+        {/* Indicateur GPS */}
+        {!(geolocation.latitude && geolocation.longitude) && (
+          <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span className="font-medium">⚠️ La capture GPS est obligatoire avant la soumission</span>
+            </div>
+          </div>
+        )}
+        <button 
+          type="submit" 
+          className={`w-full py-3 rounded-xl text-base sm:text-lg font-bold shadow-lg transition-colors ${
+            geolocation.latitude && geolocation.longitude
+              ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
+              : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+          }`}
+          disabled={isSubmitting || !(geolocation.latitude && geolocation.longitude)}
+        >
+          {isSubmitting 
+            ? 'Enregistrement...' 
+            : geolocation.latitude && geolocation.longitude 
+              ? 'Soumettre' 
+              : 'GPS requis pour soumettre'
+          }
         </button>
       </form>
     </div>

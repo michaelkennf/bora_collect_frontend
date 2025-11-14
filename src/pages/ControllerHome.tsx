@@ -36,6 +36,22 @@ export function DashboardController({ setView }: { setView: (view: string) => vo
   const [dailyObjectives, setDailyObjectives] = useState<any[]>([]);
   const [objectivesLoading, setObjectivesLoading] = useState(false);
 
+  // Fonction pour formater les nombres (ajoute des séparateurs de milliers)
+  const formatNumber = (num: number): string => {
+    if (num === null || num === undefined || isNaN(num)) return '0';
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  };
+
+  // Fonction pour déterminer la taille de police en fonction du nombre de chiffres
+  const getFontSizeClass = (num: number): string => {
+    const numStr = num.toString();
+    const length = numStr.length;
+    if (length <= 3) return 'text-2xl';
+    if (length <= 5) return 'text-xl';
+    if (length <= 7) return 'text-lg';
+    return 'text-base';
+  };
+
   // Fonction pour gérer le retournement des cartes
   const toggleCardFlip = (cardId: string) => {
     setFlippedCards(prev => ({
@@ -361,7 +377,7 @@ export function DashboardController({ setView }: { setView: (view: string) => vo
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 max-w-5xl mx-auto">
         {/* Carte Total de sondages */}
         <div 
-          className="relative w-full h-24 cursor-pointer perspective-1000 hover:scale-105 transition-transform duration-300"
+          className="relative w-full h-28 sm:h-32 cursor-pointer perspective-1000 hover:scale-105 transition-transform duration-300"
           onClick={() => toggleCardFlip('totalSurveys')}
         >
           <div className={`relative w-full h-full transition-transform duration-700 transform-style-preserve-3d ${
@@ -381,16 +397,18 @@ export function DashboardController({ setView }: { setView: (view: string) => vo
               </div>
             </div>
             {/* Verso */}
-            <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg flex items-center justify-center rotate-y-180">
-              <div className="text-center text-white">
-                <div className="text-2xl font-bold mb-1">
+            <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg flex items-center justify-center rotate-y-180 overflow-hidden">
+              <div className="text-center text-white w-full px-2">
+                <div className={`${getFontSizeClass(dashboardStats?.totalSurveys || 0)} font-bold mb-1 overflow-hidden text-ellipsis whitespace-nowrap`}>
                   {statsLoading ? (
                     <div className="animate-pulse bg-white/20 rounded w-12 h-8 mx-auto"></div>
                   ) : (
-                    <span className="animate-bounce hover:animate-pulse transition-all duration-300 hover:scale-110 hover:text-yellow-200">{dashboardStats?.totalSurveys || 0}</span>
+                    <span className="inline-block max-w-full overflow-hidden text-ellipsis animate-bounce hover:animate-pulse transition-all duration-300 hover:scale-110 hover:text-yellow-200">
+                      {formatNumber(dashboardStats?.totalSurveys || 0)}
+                    </span>
                   )}
                 </div>
-                <div className="text-sm">Sondages réalisés</div>
+                <div className="text-xs">Sondages réalisés</div>
               </div>
             </div>
           </div>
@@ -398,7 +416,7 @@ export function DashboardController({ setView }: { setView: (view: string) => vo
 
         {/* Carte Mes campagnes */}
         <div 
-          className="relative w-full h-24 cursor-pointer perspective-1000 hover:scale-105 transition-transform duration-300"
+          className="relative w-full h-28 sm:h-32 cursor-pointer perspective-1000 hover:scale-105 transition-transform duration-300"
           onClick={() => toggleCardFlip('totalCampaigns')}
         >
           <div className={`relative w-full h-full transition-transform duration-700 transform-style-preserve-3d ${
@@ -418,25 +436,27 @@ export function DashboardController({ setView }: { setView: (view: string) => vo
               </div>
             </div>
             {/* Verso */}
-            <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg flex items-center justify-center rotate-y-180">
-              <div className="text-center text-white">
-                <div className="text-2xl font-bold mb-1">
+            <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg flex items-center justify-center rotate-y-180 overflow-hidden">
+              <div className="text-center text-white w-full px-2">
+                <div className={`${getFontSizeClass(dashboardStats?.totalCampaigns || 0)} font-bold mb-1 overflow-hidden text-ellipsis whitespace-nowrap`}>
                   {statsLoading ? (
                     <div className="animate-pulse bg-white/20 rounded w-12 h-8 mx-auto"></div>
                   ) : (
-                    <span className="animate-bounce hover:animate-pulse transition-all duration-300 hover:scale-110 hover:text-yellow-200">{dashboardStats?.totalCampaigns || 0}</span>
+                    <span className="inline-block max-w-full overflow-hidden text-ellipsis animate-bounce hover:animate-pulse transition-all duration-300 hover:scale-110 hover:text-yellow-200">
+                      {formatNumber(dashboardStats?.totalCampaigns || 0)}
+                    </span>
                   )}
                 </div>
-                <div className="text-xs">
-                  <div>En cours: {statsLoading ? (
+                <div className="text-xs space-y-0.5">
+                  <div className="overflow-hidden text-ellipsis whitespace-nowrap">En cours: {statsLoading ? (
                     <span className="animate-pulse bg-white/20 rounded w-8 h-4 inline-block"></span>
                   ) : (
-                    <span className="animate-bounce">{dashboardStats?.totalOngoingCampaigns || 0}</span>
+                    <span className="animate-bounce">{formatNumber(dashboardStats?.totalOngoingCampaigns || 0)}</span>
                   )}</div>
-                  <div>Terminées: {statsLoading ? (
+                  <div className="overflow-hidden text-ellipsis whitespace-nowrap">Terminées: {statsLoading ? (
                     <span className="animate-pulse bg-white/20 rounded w-8 h-4 inline-block"></span>
                   ) : (
-                    <span className="animate-bounce">{dashboardStats?.totalCompletedCampaigns || 0}</span>
+                    <span className="animate-bounce">{formatNumber(dashboardStats?.totalCompletedCampaigns || 0)}</span>
                   )}</div>
                 </div>
               </div>
@@ -446,7 +466,7 @@ export function DashboardController({ setView }: { setView: (view: string) => vo
 
         {/* Carte Formulaires soumis */}
         <div 
-          className="relative w-full h-24 cursor-pointer perspective-1000 hover:scale-105 transition-transform duration-300"
+          className="relative w-full h-32 sm:h-40 cursor-pointer perspective-1000 hover:scale-105 transition-transform duration-300"
           onClick={() => toggleCardFlip('totalFormsSubmitted')}
         >
           <div className={`relative w-full h-full transition-transform duration-700 transform-style-preserve-3d ${
@@ -467,21 +487,23 @@ export function DashboardController({ setView }: { setView: (view: string) => vo
               </div>
             </div>
             {/* Verso */}
-            <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg flex items-center justify-center rotate-y-180">
-              <div className="text-center text-white">
-                <div className="text-2xl font-bold mb-1">
+            <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg flex items-center justify-center rotate-y-180 overflow-hidden">
+              <div className="text-center text-white w-full px-2">
+                <div className={`${getFontSizeClass(dashboardStats?.totalFormsSubmitted || 0)} font-bold mb-1 overflow-hidden text-ellipsis whitespace-nowrap`}>
                   {statsLoading ? (
                     <div className="animate-pulse bg-white/20 rounded w-12 h-8 mx-auto"></div>
                   ) : (
-                    <span className="animate-bounce hover:animate-pulse transition-all duration-300 hover:scale-110 hover:text-yellow-200">{dashboardStats?.totalFormsSubmitted || 0}</span>
+                    <span className="inline-block max-w-full overflow-hidden text-ellipsis animate-bounce hover:animate-pulse transition-all duration-300 hover:scale-110 hover:text-yellow-200">
+                      {formatNumber(dashboardStats?.totalFormsSubmitted || 0)}
+                    </span>
                   )}
                 </div>
-                <div className="text-sm">Formulaires complétés</div>
+                <div className="text-xs">Formulaires complétés</div>
                 {!statsLoading && (
-                  <div className="mt-1 text-xs text-purple-100 space-y-1">
-                    <div>Aujourd'hui : <strong>{dashboardStats?.todaySubmitted || 0}</strong> / {(dashboardStats?.totalDailyTarget || 0)}</div>
-                    <div>Moyenne : <strong>{dashboardStats?.averagePerDay ? Number(dashboardStats.averagePerDay).toFixed(1) : '0.0'}</strong> / jour</div>
-                    <div>Jours actifs : <strong>{dashboardStats?.workedDays || 0}</strong>{dashboardStats?.plannedDays ? ` / ${dashboardStats.plannedDays}` : ''}</div>
+                  <div className="mt-1 text-xs text-purple-100 space-y-0.5">
+                    <div className="overflow-hidden text-ellipsis whitespace-nowrap">Aujourd'hui : <strong>{formatNumber(dashboardStats?.todaySubmitted || 0)}</strong> / {formatNumber(dashboardStats?.totalDailyTarget || 0)}</div>
+                    <div className="overflow-hidden text-ellipsis whitespace-nowrap">Moyenne : <strong>{dashboardStats?.averagePerDay ? Number(dashboardStats.averagePerDay).toFixed(1) : '0.0'}</strong> / jour</div>
+                    <div className="overflow-hidden text-ellipsis whitespace-nowrap">Jours actifs : <strong>{formatNumber(dashboardStats?.workedDays || 0)}</strong>{dashboardStats?.plannedDays ? ` / ${formatNumber(dashboardStats.plannedDays)}` : ''}</div>
                   </div>
                 )}
               </div>
@@ -491,7 +513,7 @@ export function DashboardController({ setView }: { setView: (view: string) => vo
 
         {/* Carte Objectif personnel */}
         <div 
-          className="relative w-full h-24 cursor-pointer perspective-1000 hover:scale-105 transition-transform duration-300"
+          className="relative w-full h-32 sm:h-40 cursor-pointer perspective-1000 hover:scale-105 transition-transform duration-300"
           onClick={() => toggleCardFlip('personalTarget')}
         >
           <div className={`relative w-full h-full transition-transform duration-700 transform-style-preserve-3d ${
@@ -512,34 +534,34 @@ export function DashboardController({ setView }: { setView: (view: string) => vo
               </div>
             </div>
             {/* Verso */}
-            <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl shadow-lg flex items-center justify-center rotate-y-180">
-              <div className="text-center text-white space-y-1">
-                <div className="text-2xl font-bold mb-1">
+            <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl shadow-lg flex items-center justify-center rotate-y-180 overflow-hidden">
+              <div className="text-center text-white w-full px-2 space-y-1">
+                <div className={`${getFontSizeClass(personalTotal)} font-bold mb-1 overflow-hidden text-ellipsis whitespace-nowrap`}>
                   {statsLoading ? (
                     <div className="animate-pulse bg-white/20 rounded w-12 h-8 mx-auto"></div>
                   ) : (
-                    <span className="animate-bounce hover:animate-pulse transition-all duration-300 hover:scale-110 hover:text-yellow-200">
-                      {personalTotal}
+                    <span className="inline-block max-w-full overflow-hidden text-ellipsis animate-bounce hover:animate-pulse transition-all duration-300 hover:scale-110 hover:text-yellow-200">
+                      {formatNumber(personalTotal)}
                     </span>
                   )}
                 </div>
-                <div className="text-sm">Objectif total (toutes campagnes)</div>
+                <div className="text-xs">Objectif total (toutes campagnes)</div>
                 {!statsLoading && (
-                  <div className="text-xs text-indigo-100 space-y-1">
-                    <div>
-                      Réalisé : <strong>{dashboardStats?.totalFormsSubmitted || 0}</strong> /{' '}
-                      {personalTotal}
+                  <div className="text-xs text-indigo-100 space-y-0.5">
+                    <div className="overflow-hidden text-ellipsis whitespace-nowrap">
+                      Réalisé : <strong>{formatNumber(dashboardStats?.totalFormsSubmitted || 0)}</strong> /{' '}
+                      {formatNumber(personalTotal)}
                     </div>
-                    <div>
-                      Reste à faire : <strong>{dashboardStats?.remainingToReach || 0}</strong>
+                    <div className="overflow-hidden text-ellipsis whitespace-nowrap">
+                      Reste à faire : <strong>{formatNumber(dashboardStats?.remainingToReach || 0)}</strong>
                     </div>
                     {personalDailyTarget ? (
-                      <div>
-                        Objectif quotidien combiné : {personalDailyTarget} formulaires
+                      <div className="overflow-hidden text-ellipsis whitespace-nowrap">
+                        Objectif quotidien combiné : {formatNumber(personalDailyTarget)} formulaires
                       </div>
                     ) : null}
                     {dashboardStats?.plannedDays ? (
-                      <div>Durée prévue : {dashboardStats.plannedDays} jours</div>
+                      <div className="overflow-hidden text-ellipsis whitespace-nowrap">Durée prévue : {formatNumber(dashboardStats.plannedDays)} jours</div>
                     ) : null}
                   </div>
                 )}
