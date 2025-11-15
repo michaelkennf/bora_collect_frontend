@@ -272,7 +272,7 @@ const PMApplicationReview: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-full mx-auto">
         {/* Styles CSS pour les animations */}
         <style dangerouslySetInnerHTML={{ __html: flipCardStyles }} />
         
@@ -386,8 +386,8 @@ const PMApplicationReview: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
+            <div className="w-full">
+              <table className="w-full divide-y divide-gray-200 table-auto">
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -422,7 +422,7 @@ const PMApplicationReview: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {applications.map((application) => (
                     <tr key={application.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-6 py-4">
                         <div>
                           <div className="text-sm font-medium text-gray-900">{application.user.name}</div>
                           <div className="text-sm text-gray-500">{application.user.email}</div>
@@ -437,8 +437,8 @@ const PMApplicationReview: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                         <div>
                           <div className="text-sm font-medium text-gray-900">{application.survey.title}</div>
                           <div className="text-sm text-gray-500">
-                            {application.survey.description.substring(0, 50)}
-                            {application.survey.description.length > 50 && '...'}
+                            {application.survey.description.substring(0, 80)}
+                            {application.survey.description.length > 80 && '...'}
                           </div>
                           {application.survey.compensation && (
                             <div className="text-xs text-green-600 font-medium">
@@ -447,21 +447,21 @@ const PMApplicationReview: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">
                         {application.user.contact || 'Non renseigné'}
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
-                        <div className="truncate" title={application.motivation || 'Non renseigné'}>
+                      <td className="px-6 py-4 text-sm text-gray-900 max-w-md">
+                        <div className="break-words" title={application.motivation || 'Non renseigné'}>
                           {application.motivation || 'Non renseigné'}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
-                        <div className="truncate" title={application.experience || 'Non renseigné'}>
+                      <td className="px-6 py-4 text-sm text-gray-900 max-w-md">
+                        <div className="break-words" title={application.experience || 'Non renseigné'}>
                           {application.experience || 'Non renseigné'}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
-                        <div className="truncate" title={application.availability || 'Non renseigné'}>
+                      <td className="px-6 py-4 text-sm text-gray-900 max-w-md">
+                        <div className="break-words" title={application.availability || 'Non renseigné'}>
                           {application.availability || 'Non renseigné'}
                         </div>
                       </td>
@@ -470,12 +470,12 @@ const PMApplicationReview: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                           {getStatusLabel(application.status)}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">
                         {formatDate(application.appliedAt)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <td className="px-6 py-4 text-sm font-medium whitespace-nowrap">
                         {application.status === 'PENDING' ? (
-                          <div className="flex space-x-2">
+                          <div className="flex gap-2">
                             <button
                               onClick={() => openReviewModal(application, 'approve')}
                               className="text-green-600 hover:text-green-900 bg-green-100 hover:bg-green-200 px-3 py-1 rounded-md text-sm font-medium transition-colors"
@@ -495,7 +495,7 @@ const PMApplicationReview: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                               <div>Révisée le {formatDate(application.reviewedAt)}</div>
                             )}
                             {application.reviewComments && (
-                              <div className="text-xs mt-1 max-w-xs truncate" title={application.reviewComments}>
+                              <div className="text-xs mt-1 max-w-md break-words" title={application.reviewComments}>
                                 {application.reviewComments}
                               </div>
                             )}
