@@ -44,6 +44,7 @@ const AdminUserManagement: React.FC = () => {
     campaign: '',
     role: ''
   });
+  const [searchTerm, setSearchTerm] = useState('');
 
   const { notifications, showSuccess, showError, removeNotification } = useNotification();
 
@@ -74,7 +75,7 @@ const AdminUserManagement: React.FC = () => {
 
   useEffect(() => {
     applyFilters();
-  }, [users, filters]);
+  }, [users, filters, searchTerm]);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -121,6 +122,24 @@ const AdminUserManagement: React.FC = () => {
 
   const applyFilters = () => {
     let filtered = [...users];
+
+    // Filtrage par recherche textuelle
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter(user => 
+        user.name?.toLowerCase().includes(searchLower) ||
+        user.email?.toLowerCase().includes(searchLower) ||
+        user.contact?.toLowerCase().includes(searchLower) ||
+        user.whatsapp?.toLowerCase().includes(searchLower) ||
+        user.province?.toLowerCase().includes(searchLower) ||
+        user.city?.toLowerCase().includes(searchLower) ||
+        user.commune?.toLowerCase().includes(searchLower) ||
+        user.quartier?.toLowerCase().includes(searchLower) ||
+        user.campaign?.title?.toLowerCase().includes(searchLower) ||
+        getRoleLabel(user.role).toLowerCase().includes(searchLower) ||
+        getStatusLabel(user.status).toLowerCase().includes(searchLower)
+      );
+    }
 
     if (filters.gender) {
       filtered = filtered.filter(user => user.gender === filters.gender);
@@ -378,6 +397,31 @@ const AdminUserManagement: React.FC = () => {
       {/* Filtres */}
       <div className="bg-white p-6 rounded-lg shadow">
         <h2 className="text-xl font-semibold mb-4">Filtres</h2>
+        {/* Barre de recherche */}
+        <div className="relative mb-4">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Rechercher par nom, email, contact, localisation, campagne, rôle..."
+            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+          />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center"
+            >
+              <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">

@@ -35,6 +35,7 @@ const AdminCampaignManagement: React.FC = () => {
     odd: '',
     status: ''
   });
+  const [searchTerm, setSearchTerm] = useState('');
   // États pour l'assignation de PM
   const [showAssignPMModal, setShowAssignPMModal] = useState(false);
   const [selectedCampaignForPM, setSelectedCampaignForPM] = useState<Campaign | null>(null);
@@ -73,7 +74,7 @@ const AdminCampaignManagement: React.FC = () => {
 
   useEffect(() => {
     applyFilters();
-  }, [campaigns, filters]);
+  }, [campaigns, filters, searchTerm]);
 
   const fetchCampaigns = async () => {
     setLoading(true);
@@ -98,6 +99,24 @@ const AdminCampaignManagement: React.FC = () => {
 
   const applyFilters = () => {
     let filtered = [...campaigns];
+
+    // Filtrage par recherche textuelle
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter(campaign => 
+        campaign.title?.toLowerCase().includes(searchLower) ||
+        campaign.description?.toLowerCase().includes(searchLower) ||
+        campaign.targetProvince?.toLowerCase().includes(searchLower) ||
+        campaign.publisher?.name?.toLowerCase().includes(searchLower) ||
+        campaign.publisher?.email?.toLowerCase().includes(searchLower) ||
+        campaign.campaignUsers?.some(cu => 
+          cu.name?.toLowerCase().includes(searchLower) ||
+          cu.email?.toLowerCase().includes(searchLower)
+        ) ||
+        getStatusLabel(campaign.status).toLowerCase().includes(searchLower) ||
+        (campaign.selectedODD && `odd ${campaign.selectedODD}`.includes(searchLower))
+      );
+    }
 
     if (filters.province) {
       filtered = filtered.filter(campaign => campaign.targetProvince === filters.province);
@@ -283,6 +302,31 @@ const AdminCampaignManagement: React.FC = () => {
       {/* Filtres */}
       <div className="bg-white p-6 rounded-lg shadow">
         <h2 className="text-xl font-semibold mb-4">Filtres</h2>
+        {/* Barre de recherche */}
+        <div className="relative mb-4">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Rechercher par titre, description, PM, province, statut, ODD..."
+            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+          />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center"
+            >
+              <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">

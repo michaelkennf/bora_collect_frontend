@@ -32,6 +32,7 @@ const AdminCandidatures: React.FC = () => {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewStatus, setReviewStatus] = useState<'APPROVED' | 'REJECTED'>('APPROVED');
   const [reviewComments, setReviewComments] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
   const apiBaseUrl = environment.apiBaseUrl;
 
@@ -142,6 +143,23 @@ const AdminCandidatures: React.FC = () => {
     }
   };
 
+  // Filtrer les candidatures selon le terme de recherche
+  const filteredApplications = applications.filter((application) => {
+    if (!searchTerm.trim()) return true;
+    
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      application.user.name?.toLowerCase().includes(searchLower) ||
+      application.user.email?.toLowerCase().includes(searchLower) ||
+      application.user.contact?.toLowerCase().includes(searchLower) ||
+      application.survey.title?.toLowerCase().includes(searchLower) ||
+      application.motivation?.toLowerCase().includes(searchLower) ||
+      application.experience?.toLowerCase().includes(searchLower) ||
+      application.availability?.toLowerCase().includes(searchLower) ||
+      getStatusLabel(application.status).toLowerCase().includes(searchLower)
+    );
+  });
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -234,9 +252,36 @@ const AdminCandidatures: React.FC = () => {
         {/* Liste des candidatures */}
         <div className="bg-white rounded-lg shadow">
           <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-medium text-gray-900">
-              Candidatures ({applications.length})
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-medium text-gray-900">
+                Candidatures ({filteredApplications.length} / {applications.length})
+              </h2>
+            </div>
+            {/* Barre de recherche */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Rechercher par nom, email, contact, sondage, statut, motivation..."
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                >
+                  <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
           </div>
 
           {applications.length === 0 ? (
@@ -244,9 +289,14 @@ const AdminCandidatures: React.FC = () => {
               <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
-              <h3 className="mt-2 text-sm font-medium text-gray-900">Aucune candidature</h3>
+              <h3 className="mt-2 text-sm font-medium text-gray-900">
+                {searchTerm ? 'Aucune candidature trouvée' : 'Aucune candidature'}
+              </h3>
               <p className="mt-1 text-sm text-gray-500">
-                Aucun enquêteur n'a encore postulé aux sondages.
+                {searchTerm 
+                  ? `Aucune candidature ne correspond à votre recherche "${searchTerm}".`
+                  : 'Aucun enquêteur n\'a encore postulé aux sondages.'
+                }
               </p>
             </div>
           ) : (
@@ -272,7 +322,7 @@ const AdminCandidatures: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {applications.map((application) => (
+                  {filteredApplications.map((application) => (
                     <tr key={application.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">
                         <div>
