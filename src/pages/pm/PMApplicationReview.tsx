@@ -46,6 +46,7 @@ const PMApplicationReview: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   const [showModal, setShowModal] = useState(false);
   const [action, setAction] = useState<'approve' | 'reject'>('approve');
   const [comments, setComments] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   
   // États pour l'effet de retournement
   const [flippedCards, setFlippedCards] = useState<Record<string, boolean>>({});
@@ -257,7 +258,25 @@ const PMApplicationReview: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
     }
   };
 
-  const filteredApplications = applications;
+  // Filtrer les candidatures selon le terme de recherche
+  const filteredApplications = applications.filter((application) => {
+    if (!searchTerm.trim()) return true;
+    
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      application.user.name.toLowerCase().includes(searchLower) ||
+      application.user.email.toLowerCase().includes(searchLower) ||
+      application.user.contact?.toLowerCase().includes(searchLower) ||
+      application.survey.title.toLowerCase().includes(searchLower) ||
+      application.survey.description.toLowerCase().includes(searchLower) ||
+      application.motivation?.toLowerCase().includes(searchLower) ||
+      application.experience?.toLowerCase().includes(searchLower) ||
+      application.availability?.toLowerCase().includes(searchLower) ||
+      getStatusLabel(application.status).toLowerCase().includes(searchLower) ||
+      (application.user.province && application.user.province.toLowerCase().includes(searchLower)) ||
+      (application.user.city && application.user.city.toLowerCase().includes(searchLower))
+    );
+  });
 
   if (loading) {
     return (
@@ -370,9 +389,36 @@ const PMApplicationReview: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
         {/* Liste des candidatures */}
         <div className="bg-white rounded-lg shadow">
           <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-medium text-gray-900">
-              Candidatures ({applications.length})
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-medium text-gray-900">
+                Candidatures ({filteredApplications.length} / {applications.length})
+              </h2>
+            </div>
+            {/* Barre de recherche */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Rechercher par nom, email, enquête, statut, localisation..."
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                >
+                  <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
           </div>
 
           {applications.length === 0 ? (
@@ -383,6 +429,16 @@ const PMApplicationReview: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
               <h3 className="mt-2 text-sm font-medium text-gray-900">Aucune candidature</h3>
               <p className="mt-1 text-sm text-gray-500">
                 Aucune candidature reçue pour vos enquêtes.
+              </p>
+            </div>
+          ) : filteredApplications.length === 0 ? (
+            <div className="px-6 py-12 text-center">
+              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <h3 className="mt-2 text-sm font-medium text-gray-900">Aucune candidature trouvée</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                Aucune candidature ne correspond à votre recherche "{searchTerm}".
               </p>
             </div>
           ) : (
@@ -420,7 +476,7 @@ const PMApplicationReview: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {applications.map((application) => (
+                  {filteredApplications.map((application) => (
                     <tr key={application.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">
                         <div>

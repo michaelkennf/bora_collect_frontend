@@ -48,6 +48,7 @@ const PMApprovalRequests: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   const [action, setAction] = useState<'approve' | 'reject'>('approve');
   const [comments, setComments] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'PENDING' | 'APPROVED' | 'REJECTED'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
   
   // États pour l'effet de retournement
   const [flippedCards, setFlippedCards] = useState<Record<string, boolean>>({});
@@ -268,6 +269,28 @@ const PMApprovalRequests: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
     }
   };
 
+  // Filtrer les utilisateurs selon le terme de recherche
+  const filteredUsers = pendingUsers.filter((user) => {
+    if (!searchTerm.trim()) return true;
+    
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      user.name.toLowerCase().includes(searchLower) ||
+      user.email.toLowerCase().includes(searchLower) ||
+      user.contact?.toLowerCase().includes(searchLower) ||
+      user.province?.toLowerCase().includes(searchLower) ||
+      user.city?.toLowerCase().includes(searchLower) ||
+      user.commune?.toLowerCase().includes(searchLower) ||
+      user.quartier?.toLowerCase().includes(searchLower) ||
+      user.campaign?.title.toLowerCase().includes(searchLower) ||
+      user.surveyApplications?.some((app: any) => 
+        app.survey.title.toLowerCase().includes(searchLower)
+      ) ||
+      getRoleLabel(user.role).toLowerCase().includes(searchLower) ||
+      getGenderLabel(user.gender).toLowerCase().includes(searchLower)
+    );
+  });
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -378,14 +401,15 @@ const PMApprovalRequests: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
 
         {/* Liste des demandes */}
         <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-lg font-medium text-gray-900">
-            {statusFilter === 'all' ? 'Toutes les demandes' : 
-             statusFilter === 'PENDING' ? 'Demandes en attente' :
-             statusFilter === 'APPROVED' ? 'Demandes approuvées' :
-             'Demandes rejetées'} ({pendingUsers.length})
-          </h2>
-          <div className="flex gap-2">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-medium text-gray-900">
+              {statusFilter === 'all' ? 'Toutes les demandes' : 
+               statusFilter === 'PENDING' ? 'Demandes en attente' :
+               statusFilter === 'APPROVED' ? 'Demandes approuvées' :
+               'Demandes rejetées'} ({filteredUsers.length} / {pendingUsers.length})
+            </h2>
+            <div className="flex gap-2">
             <button
               onClick={() => setStatusFilter('all')}
               className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
@@ -427,6 +451,32 @@ const PMApprovalRequests: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
               Rejetées
             </button>
           </div>
+          </div>
+          {/* Barre de recherche */}
+          <div className="relative mt-4">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Rechercher par nom, email, contact, localisation, campagne..."
+              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center"
+              >
+                <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
 
         {pendingUsers.length === 0 ? (
@@ -437,6 +487,16 @@ const PMApprovalRequests: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
             <h3 className="mt-2 text-sm font-medium text-gray-900">Aucune demande en attente</h3>
             <p className="mt-1 text-sm text-gray-500">
               Toutes les demandes d'inscription pour votre campagne ont été traitées.
+            </p>
+          </div>
+        ) : filteredUsers.length === 0 ? (
+          <div className="px-6 py-12 text-center">
+            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <h3 className="mt-2 text-sm font-medium text-gray-900">Aucune demande trouvée</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              Aucune demande ne correspond à votre recherche "{searchTerm}".
             </p>
           </div>
         ) : (
@@ -471,7 +531,7 @@ const PMApprovalRequests: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {pendingUsers.map((user) => {
+                  {filteredUsers.map((user) => {
                     const applicationStatus = user.surveyApplications?.[0]?.status || 'PENDING';
                     return (
                     <tr key={user.id} className="hover:bg-gray-50">
