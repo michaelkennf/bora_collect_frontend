@@ -304,7 +304,7 @@ const PMApprovalRequests: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-full mx-auto">
         {/* Styles CSS pour les animations */}
         <style dangerouslySetInnerHTML={{ __html: flipCardStyles }} />
           
@@ -500,8 +500,8 @@ const PMApprovalRequests: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full divide-y divide-gray-200">
+          <div className="w-full">
+            <table className="w-full divide-y divide-gray-200 table-auto">
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -557,9 +557,9 @@ const PMApprovalRequests: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                           {user.quartier && <div className="text-xs">{user.quartier}</div>}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-6 py-4 text-sm text-gray-900 max-w-md">
                         {user.surveyApplications && user.surveyApplications.length > 0 ? (
-                          <div>
+                          <div className="break-words">
                             {user.surveyApplications.map((app: any, index: number) => (
                               <div key={app.id} className="text-xs">
                                 <span className="font-medium text-blue-600">{app.survey.title}</span>
