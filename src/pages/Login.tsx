@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import logo2 from '../assets/images/logo2.jpg';
 import { environment } from '../config/environment';
 
@@ -85,7 +85,9 @@ const Login = () => {
         {/* Logo et titre */}
         <div className="text-center mb-6 sm:mb-8">
           <div className="flex justify-center mb-4">
-            <img src={logo2} alt="Logo" className="h-16 w-16 sm:h-20 sm:w-20 object-contain" />
+            <Link to="/" className="cursor-pointer hover:opacity-80 transition-opacity">
+              <img src={logo2} alt="Logo" className="h-16 w-16 sm:h-20 sm:w-20 object-contain" />
+            </Link>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">FikiriCollect</h1>
           <p className="text-sm sm:text-base text-gray-600">Plateforme de collecte de données</p>

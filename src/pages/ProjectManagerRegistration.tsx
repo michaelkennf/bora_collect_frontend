@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import logo2 from '../assets/images/logo2.jpg';
 import ProjectManagerForm from '../components/ProjectManagerForm';
 
@@ -10,7 +10,9 @@ const ProjectManagerRegistration: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl w-full space-y-8">
         <div className="text-center">
-          <img className="mx-auto h-20 w-auto" src={logo2} alt="Logo" />
+          <Link to="/" className="inline-block cursor-pointer hover:opacity-80 transition-opacity">
+            <img className="mx-auto h-20 w-auto" src={logo2} alt="Logo" />
+          </Link>
           <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
             Inscription Project Manager
           </h2>

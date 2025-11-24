@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import logo2 from '../assets/images/logo2.jpg';
 import { environment } from '../config/environment';
 import { getCitiesByProvince, getCommunesByCity } from '../data/citiesData';
@@ -238,11 +238,13 @@ const CreateAccount = () => {
       <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl px-6 py-8">
         {/* Logo et Titre */}
         <div className="text-center mb-8">
-          <img 
-            src={logo2} 
-            alt="Logo FikiriCollect" 
-            className="mx-auto h-16 w-auto mb-4"
-          />
+          <Link to="/" className="inline-block cursor-pointer hover:opacity-80 transition-opacity">
+            <img 
+              src={logo2} 
+              alt="Logo FikiriCollect" 
+              className="mx-auto h-16 w-auto mb-4"
+            />
+          </Link>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">
             {step === 'select-role' ? 'Choisissez votre rôle' : 'Créer votre profil'}
           </h1>
