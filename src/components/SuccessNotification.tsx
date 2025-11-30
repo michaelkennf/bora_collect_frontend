@@ -23,6 +23,7 @@ const SuccessNotification: React.FC<SuccessNotificationProps> = ({
       }, duration);
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [show, duration, onClose]);
 
   if (!show) return null;

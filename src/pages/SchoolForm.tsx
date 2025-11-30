@@ -380,6 +380,8 @@ export default function SchoolForm() {
           timestamp: null,
           isCapturing: false,
           error: errorMessage,
+          province: null,
+          provinceStatus: 'idle',
         });
 
         toast.error(toastMessage);

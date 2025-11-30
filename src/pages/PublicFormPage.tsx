@@ -13,6 +13,8 @@ interface FormField {
   options?: string[];
   placeholder?: string;
   description?: string;
+  section?: string; // Pour les champs dans des sections
+  fieldKey?: string; // Clé originale du champ
 }
 
 interface FormTemplate {

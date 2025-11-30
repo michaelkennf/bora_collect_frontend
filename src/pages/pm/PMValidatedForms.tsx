@@ -39,12 +39,16 @@ interface ValidatedForm {
   survey: {
     id: string;
     title: string;
+    description?: string;
   } | null;
   analystValidator?: {
     id: string;
     name: string;
     email: string;
   } | null; // Analyste qui a validé le formulaire
+  submitterName?: string; // Pour les soumissions publiques
+  submitterContact?: string; // Pour les soumissions publiques
+  source?: 'application' | 'public_link'; // Source de la soumission
 }
 
 const PMValidatedForms: React.FC = () => {
@@ -114,7 +118,7 @@ const PMValidatedForms: React.FC = () => {
         // Extraire les campagnes uniques
         const uniqueCampaigns = Array.from(
           new Map(data.map((form: ValidatedForm) => [form.surveyId, form.survey])).values()
-        ).filter(Boolean);
+        ).filter(Boolean) as Array<{ id: string; title: string; description?: string }>;
         setCampaigns(uniqueCampaigns);
         
         // Sélectionner automatiquement la première campagne si disponible
@@ -618,7 +622,7 @@ const PMValidatedForms: React.FC = () => {
         </div>
       )}
 
-      {/* Modal de détails */}
+      {/* Cartes de statistiques */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 max-w-6xl mx-auto">
         {/* Carte Total */}
         <div 
@@ -794,7 +798,8 @@ const PMValidatedForms: React.FC = () => {
             ))}
           </div>
         )}
-      </div>
+        </div>
+      )}
 
       {/* Modal de détails */}
       {selectedForm && (
@@ -887,11 +892,10 @@ const PMValidatedForms: React.FC = () => {
                     <div>
                       <div className="text-sm text-gray-600 mb-1">Validé par l'analyste</div>
                       <div className="font-medium text-gray-800">{selectedForm.analystValidator.name}</div>
-                      <div className="text-xs text-gray-500">{selectedForm.analystValidator.email}            </div>
-          </div>
-        )}
-        </div>
-      )}
+                      <div className="text-xs text-gray-500">{selectedForm.analystValidator.email}</div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Contenu du formulaire */}
