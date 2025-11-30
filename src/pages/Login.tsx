@@ -179,8 +179,15 @@ const Login = () => {
           </button>
         </form>
 
+        {/* Lien mot de passe oublié */}
+        <div className="mt-4 text-center">
+          <a href="/forgot-password" className="text-sm text-blue-600 hover:text-blue-500 transition-colors">
+            Mot de passe oublié ?
+          </a>
+        </div>
+
         {/* Lien de création de compte */}
-        <div className="mt-6 sm:mt-8 text-center">
+        <div className="mt-4 sm:mt-6 text-center">
           <p className="text-sm sm:text-base text-gray-600">
             Pas encore de compte ?{' '}
             <a href="/create-account" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">

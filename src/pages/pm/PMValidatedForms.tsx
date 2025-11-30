@@ -3,6 +3,8 @@ import { environment } from '../../config/environment';
 import { toast } from 'react-toastify';
 import { extractFormEntries, flattenFormDataToObject } from '../../utils/formDataUtils';
 import { exportEnquetesToExcel } from '../../utils/excelExport';
+import { Download } from 'lucide-react';
+import SuccessNotification from '../../components/SuccessNotification';
 
 // Styles CSS pour les animations de retournement
 const flipCardStyles = `
@@ -53,6 +55,22 @@ const PMValidatedForms: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState<'all' | 'VALIDATED' | 'NEEDS_REVIEW'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [flippedCards, setFlippedCards] = useState<{ [key: string]: boolean }>({});
+  const [enumeratorStats, setEnumeratorStats] = useState<any[]>([]);
+  const [enumeratorStatsLoading, setEnumeratorStatsLoading] = useState(false);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+  const [selectedEnumeratorId, setSelectedEnumeratorId] = useState<string | null>(null);
+  const [enumeratorSubmissions, setEnumeratorSubmissions] = useState<any>(null);
+  const [enumeratorSubmissionsLoading, setEnumeratorSubmissionsLoading] = useState(false);
+  const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [successNotification, setSuccessNotification] = useState<{
+    show: boolean;
+    message: string;
+    type: 'success' | 'error' | 'warning';
+  }>({
+    show: false,
+    message: '',
+    type: 'success'
+  });
 
   // Fonction pour gérer le retournement des cartes
   const toggleCardFlip = (cardId: string) => {
@@ -64,11 +82,97 @@ const PMValidatedForms: React.FC = () => {
 
   useEffect(() => {
     fetchValidatedForms();
+    fetchCampaigns();
   }, []);
 
   useEffect(() => {
     filterForms();
   }, [validatedForms, filterStatus, searchTerm]);
+
+  // Charger les stats des enquêteurs quand une campagne est sélectionnée
+  useEffect(() => {
+    if (selectedCampaignId && !selectedEnumeratorId) {
+      fetchEnumeratorStats(selectedCampaignId);
+    }
+  }, [selectedCampaignId, selectedEnumeratorId]);
+
+  // Fonction pour récupérer les campagnes
+  const fetchCampaigns = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch(`${environment.apiBaseUrl}/surveys/pm-validated-forms`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Extraire les campagnes uniques
+        const uniqueCampaigns = Array.from(
+          new Map(data.map((form: ValidatedForm) => [form.surveyId, form.survey])).values()
+        ).filter(Boolean);
+        setCampaigns(uniqueCampaigns);
+        
+        // Sélectionner automatiquement la première campagne si disponible
+        if (uniqueCampaigns.length > 0 && !selectedCampaignId) {
+          setSelectedCampaignId(uniqueCampaigns[0].id);
+        }
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des campagnes:', error);
+    }
+  };
+
+  // Fonction pour récupérer les statistiques des enquêteurs par campagne
+  const fetchEnumeratorStats = async (campaignId: string) => {
+    setEnumeratorStatsLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const res = await fetch(`${environment.apiBaseUrl}/records/campaign/${campaignId}/enumerators/stats`, {
+        headers: { 
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (!res.ok) throw new Error('Erreur lors du chargement');
+      const data = await res.json();
+      setEnumeratorStats(data);
+    } catch (err: any) {
+      console.error('Erreur lors de la récupération des stats des enquêteurs:', err);
+    } finally {
+      setEnumeratorStatsLoading(false);
+    }
+  };
+
+  // Fonction pour récupérer les soumissions d'un enquêteur
+  const fetchEnumeratorSubmissions = async (enumeratorId: string, campaignId: string) => {
+    setEnumeratorSubmissionsLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const res = await fetch(`${environment.apiBaseUrl}/records/campaign/${campaignId}/enumerator/${enumeratorId}/submissions`, {
+        headers: { 
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (!res.ok) throw new Error('Erreur lors du chargement');
+      const data = await res.json();
+      setEnumeratorSubmissions(data);
+      setSelectedEnumeratorId(enumeratorId);
+    } catch (err: any) {
+      console.error('Erreur lors de la récupération des soumissions:', err);
+    } finally {
+      setEnumeratorSubmissionsLoading(false);
+    }
+  };
 
   const fetchValidatedForms = async () => {
     try {
@@ -258,51 +362,263 @@ const PMValidatedForms: React.FC = () => {
       {/* En-tête */}
       <div className="bg-white rounded-xl shadow-lg p-6">
         <h1 className="text-2xl font-bold text-gray-800 mb-2">
-          Formulaires Validés par l'Analyste
+          {selectedEnumeratorId ? 'Formulaires de l\'enquêteur' : 'Formulaires Validés par l\'Analyste'}
         </h1>
         <p className="text-gray-600">
-          Visualisez et consultez les formulaires validés ou nécessitant une révision
+          {selectedEnumeratorId 
+            ? 'Visualisez les formulaires soumis par cet enquêteur'
+            : 'Visualisez et consultez les formulaires validés ou nécessitant une révision'}
         </p>
       </div>
 
-      {/* Filtres */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
-            <input
-              type="text"
-              placeholder="Rechercher par enquêteur, campagne ou nom..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          <div className="flex gap-2">
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value as any)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="all">Tous les statuts</option>
-              <option value="VALIDATED">Validés</option>
-              <option value="NEEDS_REVIEW">À revoir</option>
-            </select>
-          </div>
-        </div>
-        <div className="mt-4 flex justify-end">
+      {/* Bouton de retour si un enquêteur est sélectionné */}
+      {selectedEnumeratorId && enumeratorSubmissions && (
+        <div>
           <button
-            onClick={handleExportAll}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            onClick={() => {
+              setSelectedEnumeratorId(null);
+              setEnumeratorSubmissions(null);
+              if (selectedCampaignId) {
+                fetchEnumeratorStats(selectedCampaignId);
+              }
+            }}
+            className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            Exporter en Excel
+            Retour à la liste des enquêteurs
           </button>
         </div>
-      </div>
+      )}
 
-      {/* Statistiques de validation avec animations */}
+      {/* Si un enquêteur est sélectionné, afficher ses formulaires */}
+      {selectedEnumeratorId && enumeratorSubmissions ? (
+        <div>
+          {/* Statistiques de l'enquêteur */}
+          <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg mb-4 sm:mb-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 flex-1">
+                <div className="text-center p-4 bg-blue-50 rounded-lg">
+                  <div className="text-2xl font-bold text-blue-600 mb-2">
+                    {enumeratorSubmissions.appSubmissions?.length || 0}
+                  </div>
+                  <div className="text-blue-800 font-medium">Par application</div>
+                </div>
+                <div className="text-center p-4 bg-green-50 rounded-lg">
+                  <div className="text-2xl font-bold text-green-600 mb-2">
+                    {enumeratorSubmissions.publicSubmissions?.length || 0}
+                  </div>
+                  <div className="text-green-800 font-medium">Par lien public</div>
+                </div>
+                <div className="text-center p-4 bg-purple-50 rounded-lg">
+                  <div className="text-2xl font-bold text-purple-600 mb-2">
+                    {enumeratorSubmissions.total || 0}
+                  </div>
+                  <div className="text-purple-800 font-medium">Total</div>
+                </div>
+              </div>
+              {/* Bouton d'export Excel */}
+              <button
+                onClick={() => {
+                  const allSubmissions = [
+                    ...(enumeratorSubmissions.appSubmissions || []).map((s: any) => ({
+                      ...s,
+                      authorName: s.author?.name || 'N/A',
+                      source: 'application'
+                    })),
+                    ...(enumeratorSubmissions.publicSubmissions || []).map((s: any) => ({
+                      ...s,
+                      authorName: s.author?.name || s.submitterName || 'N/A',
+                      source: 'public_link'
+                    }))
+                  ];
+                  const fileName = `formulaires_pm_${enumeratorSubmissions.enumeratorName || 'enqueteur'}_${new Date().toISOString().split('T')[0]}`;
+                  const success = exportEnquetesToExcel(allSubmissions, fileName);
+                  if (success) {
+                    setSuccessNotification({
+                      show: true,
+                      message: '✅ Export Excel réussi !',
+                      type: 'success'
+                    });
+                  }
+                }}
+                className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors font-semibold"
+              >
+                <Download className="h-4 w-4" />
+                Exporter en Excel
+              </button>
+            </div>
+          </div>
+
+          {/* Liste des formulaires par application */}
+          {enumeratorSubmissions.appSubmissions && enumeratorSubmissions.appSubmissions.length > 0 && (
+            <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 mb-4 sm:mb-6">
+              <h3 className="text-lg font-semibold mb-4 text-blue-800">Formulaires soumis par application ({enumeratorSubmissions.appSubmissions.length})</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {enumeratorSubmissions.appSubmissions.map((submission: any) => (
+                  <div
+                    key={submission.id}
+                    className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
+                    onClick={() => {
+                      setSelectedForm(submission);
+                    }}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">Application</span>
+                      {getStatusBadge(submission.analystValidationStatus || submission.status)}
+                    </div>
+                    <p className="text-sm font-medium text-gray-900 mt-2">
+                      {submission.formData?.['identification.nomOuCode'] || submission.formData?.household?.nomOuCode || 'N/A'}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {new Date(submission.createdAt).toLocaleDateString('fr-FR')}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Liste des formulaires par lien public */}
+          {enumeratorSubmissions.publicSubmissions && enumeratorSubmissions.publicSubmissions.length > 0 && (
+            <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6">
+              <h3 className="text-lg font-semibold mb-4 text-green-800">Formulaires soumis par lien public ({enumeratorSubmissions.publicSubmissions.length})</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {enumeratorSubmissions.publicSubmissions.map((submission: any) => (
+                  <div
+                    key={submission.id}
+                    className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
+                    onClick={() => {
+                      setSelectedForm(submission);
+                    }}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Lien public</span>
+                      {submission.submitterName && (
+                        <span className="text-xs text-gray-600">{submission.submitterName}</span>
+                      )}
+                    </div>
+                    <p className="text-sm font-medium text-gray-900 mt-2">
+                      {submission.formData?.['identification.nomOuCode'] || submission.formData?.household?.nomOuCode || 'N/A'}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {new Date(submission.createdAt).toLocaleDateString('fr-FR')}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {enumeratorSubmissionsLoading && (
+            <div className="text-center py-8">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <p className="mt-2 text-gray-600">Chargement des formulaires...</p>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Liste des enquêteurs avec leurs stats OU liste des formulaires validés */
+        <div>
+          {/* Sélection de campagne */}
+          {campaigns.length > 0 && (
+            <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg mb-4 sm:mb-6">
+              <label className="block font-semibold mb-2 text-sm text-gray-700">Sélectionner une campagne</label>
+              <select
+                value={selectedCampaignId || ''}
+                onChange={(e) => {
+                  const campaignId = e.target.value;
+                  setSelectedCampaignId(campaignId);
+                  if (campaignId) {
+                    fetchEnumeratorStats(campaignId);
+                  } else {
+                    // Si aucune campagne n'est sélectionnée, réinitialiser les stats
+                    setEnumeratorStats([]);
+                  }
+                }}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Toutes les campagnes (voir tous les formulaires validés)</option>
+                {campaigns.map((campaign) => (
+                  <option key={campaign.id} value={campaign.id}>
+                    {campaign.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Si une campagne est sélectionnée, afficher les enquêteurs */}
+          {selectedCampaignId ? (
+            <>
+              {/* Chargement des stats */}
+              {enumeratorStatsLoading ? (
+                <div className="text-center py-8">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <p className="mt-2 text-gray-600">Chargement des enquêteurs...</p>
+                </div>
+              ) : enumeratorStats.length > 0 ? (
+            <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6">
+              <h3 className="text-lg font-semibold mb-4">Enquêteurs ({enumeratorStats.length})</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {enumeratorStats.map((enumerator: any) => (
+                  <div
+                    key={enumerator.id}
+                    className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
+                    onClick={() => {
+                      if (selectedCampaignId) {
+                        fetchEnumeratorSubmissions(enumerator.id, selectedCampaignId);
+                      }
+                    }}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                          <span className="text-blue-600 font-bold">
+                            {enumerator.name.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="font-semibold text-gray-900">{enumerator.name}</p>
+                          <p className="text-xs text-gray-500">{enumerator.email}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 mt-3">
+                      <div className="text-center p-2 bg-blue-50 rounded">
+                        <div className="text-lg font-bold text-blue-600">{enumerator.appSubmissionsCount || 0}</div>
+                        <div className="text-xs text-blue-800">Par app</div>
+                      </div>
+                      <div className="text-center p-2 bg-green-50 rounded">
+                        <div className="text-lg font-bold text-green-600">{enumerator.publicLinkSubmissionsCount || 0}</div>
+                        <div className="text-xs text-green-800">Par lien</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : selectedCampaignId ? (
+            <div className="text-center py-8 text-gray-500">
+              Aucun enquêteur trouvé pour cette campagne
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              Veuillez sélectionner une campagne pour voir les enquêteurs
+            </div>
+          )}
+            </>
+          ) : (
+            /* Si aucune campagne n'est sélectionnée, afficher tous les formulaires validés */
+            <div className="text-center py-8 text-gray-500">
+              <p className="mb-4">Sélectionnez une campagne pour voir les enquêteurs, ou consultez tous les formulaires validés ci-dessous.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Modal de détails */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 max-w-6xl mx-auto">
         {/* Carte Total */}
         <div 
@@ -417,11 +733,12 @@ const PMValidatedForms: React.FC = () => {
         </div>
       </div>
 
-      {/* Liste des formulaires */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h2 className="text-xl font-bold text-gray-800 mb-4">
-          Liste des Formulaires ({filteredForms.length})
-        </h2>
+      {/* Liste des formulaires validés - toujours visible sauf si un enquêteur spécifique est sélectionné */}
+      {!selectedEnumeratorId && (
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">
+            Liste des Formulaires Validés ({filteredForms.length})
+          </h2>
 
         {filteredForms.length === 0 ? (
           <div className="text-center py-12">
@@ -518,16 +835,27 @@ const PMValidatedForms: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <div className="text-sm text-gray-600 mb-1">Enquêteur</div>
-                    <div className="font-medium text-gray-800">{selectedForm.author.name}</div>
+                    <div className="font-medium text-gray-800">
+                      {selectedForm.author?.name || selectedForm.submitterName || 'N/A'}
                   </div>
-                  <div>
-                    <div className="text-sm text-gray-600 mb-1">Email</div>
-                    <div className="font-medium text-gray-800">{selectedForm.author.email}</div>
+                    {selectedForm.author?.email && (
+                      <div className="text-xs text-gray-500 mt-1">{selectedForm.author.email}</div>
+                    )}
+                    {selectedForm.source === 'public_link' && selectedForm.submitterContact && (
+                      <div className="text-xs text-gray-500 mt-1">Contact soumetteur : {selectedForm.submitterContact}</div>
+                    )}
                   </div>
                   <div>
                     <div className="text-sm text-gray-600 mb-1">Date de soumission</div>
                     <div className="font-medium text-gray-800">
-                      {new Date(selectedForm.createdAt).toLocaleString('fr-FR')}
+                      {selectedForm.createdAt ? new Date(selectedForm.createdAt).toLocaleString('fr-FR', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit'
+                      }) : 'N/A'}
                     </div>
                   </div>
                   <div>
@@ -538,16 +866,32 @@ const PMValidatedForms: React.FC = () => {
                     <div>
                       <div className="text-sm text-gray-600 mb-1">Campagne</div>
                       <div className="font-medium text-gray-800">{selectedForm.survey.title}</div>
+                      {selectedForm.survey.description && (
+                        <div className="text-xs text-gray-500 mt-1">{selectedForm.survey.description}</div>
+                      )}
+                    </div>
+                  )}
+                  {selectedForm.source && (
+                    <div>
+                      <div className="text-sm text-gray-600 mb-1">Source</div>
+                      <span className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold ${
+                        selectedForm.source === 'public_link' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-blue-100 text-blue-800'
+                      }`}>
+                        {selectedForm.source === 'public_link' ? 'Lien public' : 'Application'}
+                      </span>
                     </div>
                   )}
                   {selectedForm.analystValidator && (
                     <div>
                       <div className="text-sm text-gray-600 mb-1">Validé par l'analyste</div>
                       <div className="font-medium text-gray-800">{selectedForm.analystValidator.name}</div>
-                      <div className="text-xs text-gray-500">{selectedForm.analystValidator.email}</div>
-                    </div>
-                  )}
-                </div>
+                      <div className="text-xs text-gray-500">{selectedForm.analystValidator.email}            </div>
+          </div>
+        )}
+        </div>
+      )}
               </div>
 
               {/* Contenu du formulaire */}
@@ -559,6 +903,14 @@ const PMValidatedForms: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Notification de succès */}
+      <SuccessNotification
+        show={successNotification.show}
+        message={successNotification.message}
+        type={successNotification.type}
+        onClose={() => setSuccessNotification({ show: false, message: '', type: 'success' })}
+      />
     </div>
   );
 };

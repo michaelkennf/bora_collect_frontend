@@ -3,6 +3,8 @@ import { toast } from 'react-toastify';
 import { environment } from '../config/environment';
 import { extractFormEntries } from '../utils/formDataUtils';
 import { exportEnquetesToExcel } from '../utils/excelExport';
+import { Download } from 'lucide-react';
+import SuccessNotification from '../components/SuccessNotification';
 
 interface Campaign {
   id: string;
@@ -31,16 +33,20 @@ interface CampaignResponse {
   authorId: string;
   validatedBy: string | null;
   isSystemForm: boolean;
-  author: {
+  author?: {
     id: string;
     name: string;
     email: string;
-  };
-  survey: {
+  } | null;
+  survey?: {
     id: string;
     title: string;
     description: string;
-  };
+  } | null;
+  // Pour les soumissions publiques
+  submitterName?: string;
+  submitterContact?: string;
+  source?: 'application' | 'public_link';
 }
 
 interface AdminCampaignDataProps {
@@ -56,6 +62,20 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
   const [flippedCards, setFlippedCards] = useState<{ [key: string]: boolean }>({});
   const [selectedResponse, setSelectedResponse] = useState<CampaignResponse | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [enumeratorStats, setEnumeratorStats] = useState<any[]>([]);
+  const [enumeratorStatsLoading, setEnumeratorStatsLoading] = useState(false);
+  const [selectedEnumeratorId, setSelectedEnumeratorId] = useState<string | null>(null);
+  const [enumeratorSubmissions, setEnumeratorSubmissions] = useState<any>(null);
+  const [enumeratorSubmissionsLoading, setEnumeratorSubmissionsLoading] = useState(false);
+  const [successNotification, setSuccessNotification] = useState<{
+    show: boolean;
+    message: string;
+    type: 'success' | 'error' | 'warning';
+  }>({
+    show: false,
+    message: '',
+    type: 'success'
+  });
 
   // Styles CSS pour les animations 3D
   const flipCardStyles = `
@@ -88,8 +108,56 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
   useEffect(() => {
     if (selectedCampaign) {
       fetchCampaignResponses(selectedCampaign);
+      fetchEnumeratorStats(selectedCampaign);
     }
   }, [selectedCampaign]);
+
+  // Fonction pour récupérer les statistiques des enquêteurs par campagne
+  const fetchEnumeratorStats = async (campaignId: string) => {
+    setEnumeratorStatsLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const res = await fetch(`${environment.apiBaseUrl}/records/campaign/${campaignId}/enumerators/stats`, {
+        headers: { 
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (!res.ok) throw new Error('Erreur lors du chargement');
+      const data = await res.json();
+      setEnumeratorStats(data);
+    } catch (err: any) {
+      console.error('Erreur lors de la récupération des stats des enquêteurs:', err);
+    } finally {
+      setEnumeratorStatsLoading(false);
+    }
+  };
+
+  // Fonction pour récupérer les soumissions d'un enquêteur
+  const fetchEnumeratorSubmissions = async (enumeratorId: string, campaignId: string) => {
+    setEnumeratorSubmissionsLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const res = await fetch(`${environment.apiBaseUrl}/records/campaign/${campaignId}/enumerator/${enumeratorId}/submissions`, {
+        headers: { 
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (!res.ok) throw new Error('Erreur lors du chargement');
+      const data = await res.json();
+      setEnumeratorSubmissions(data);
+      setSelectedEnumeratorId(enumeratorId);
+    } catch (err: any) {
+      console.error('Erreur lors de la récupération des soumissions:', err);
+    } finally {
+      setEnumeratorSubmissionsLoading(false);
+    }
+  };
 
   const fetchCampaigns = async () => {
     setLoading(true);
@@ -142,9 +210,14 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
   // Convertir les réponses au format attendu par exportEnquetesToExcel
   const convertResponsesToEnquetes = (responses: CampaignResponse[]) => {
     return responses.map((response) => {
+      // Pour les soumissions publiques, utiliser submitterName si disponible
+      const authorName = response.source === 'public_link' 
+        ? (response.submitterName || response.author?.name || 'N/A')
+        : (response.author?.name || 'N/A');
+      
       return {
         ...response,
-        authorName: response.author?.name || 'N/A',
+        authorName,
         formData: response.formData || {}
       };
     });
@@ -506,8 +579,230 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
           </div>
         )}
 
-        {/* Liste des réponses */}
+        {/* Liste des enquêteurs ou des réponses */}
         {selectedCampaign && (
+          <div className="bg-white rounded-lg shadow">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-medium text-gray-900">
+                {selectedEnumeratorId ? 'Formulaires de l\'enquêteur' : `Enquêteurs (${enumeratorStats.length})`}
+              </h2>
+            </div>
+
+            {/* Bouton de retour si un enquêteur est sélectionné */}
+            {selectedEnumeratorId && enumeratorSubmissions && (
+              <div className="px-6 py-4 border-b border-gray-200">
+                <button
+                  onClick={() => {
+                    setSelectedEnumeratorId(null);
+                    setEnumeratorSubmissions(null);
+                    if (selectedCampaign) {
+                      fetchEnumeratorStats(selectedCampaign);
+                    }
+                  }}
+                  className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                  </svg>
+                  Retour à la liste des enquêteurs
+                </button>
+              </div>
+            )}
+
+            {/* Si un enquêteur est sélectionné, afficher ses formulaires */}
+            {selectedEnumeratorId && enumeratorSubmissions ? (
+              <div className="p-6">
+                {/* Statistiques de l'enquêteur */}
+                <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg mb-4 sm:mb-6">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 flex-1">
+                      <div className="text-center p-4 bg-blue-50 rounded-lg">
+                        <div className="text-2xl font-bold text-blue-600 mb-2">
+                          {enumeratorSubmissions.appSubmissions?.length || 0}
+                        </div>
+                        <div className="text-blue-800 font-medium">Par application</div>
+                      </div>
+                      <div className="text-center p-4 bg-green-50 rounded-lg">
+                        <div className="text-2xl font-bold text-green-600 mb-2">
+                          {enumeratorSubmissions.publicSubmissions?.length || 0}
+                        </div>
+                        <div className="text-green-800 font-medium">Par lien public</div>
+                      </div>
+                      <div className="text-center p-4 bg-purple-50 rounded-lg">
+                        <div className="text-2xl font-bold text-purple-600 mb-2">
+                          {enumeratorSubmissions.total || 0}
+                        </div>
+                        <div className="text-purple-800 font-medium">Total</div>
+                      </div>
+                    </div>
+                    {/* Bouton d'export Excel */}
+                    <button
+                      onClick={() => {
+                        const allSubmissions = [
+                          ...(enumeratorSubmissions.appSubmissions || []).map((s: any) => ({
+                            ...s,
+                            authorName: s.author?.name || 'N/A',
+                            source: 'application'
+                          })),
+                          ...(enumeratorSubmissions.publicSubmissions || []).map((s: any) => ({
+                            ...s,
+                            authorName: s.author?.name || s.submitterName || 'N/A',
+                            source: 'public_link'
+                          }))
+                        ];
+                        const fileName = `formulaires_admin_${enumeratorSubmissions.enumeratorName || 'enqueteur'}_${new Date().toISOString().split('T')[0]}`;
+                        const success = exportEnquetesToExcel(allSubmissions, fileName);
+                        if (success) {
+                          setSuccessNotification({
+                            show: true,
+                            message: '✅ Export Excel réussi !',
+                            type: 'success'
+                          });
+                        }
+                      }}
+                      className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors font-semibold"
+                    >
+                      <Download className="h-4 w-4" />
+                      Exporter en Excel
+                    </button>
+                  </div>
+                </div>
+
+                {/* Liste des formulaires par application */}
+                {enumeratorSubmissions.appSubmissions && enumeratorSubmissions.appSubmissions.length > 0 && (
+                  <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 mb-4 sm:mb-6">
+                    <h3 className="text-lg font-semibold mb-4 text-blue-800">Formulaires soumis par application ({enumeratorSubmissions.appSubmissions.length})</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {enumeratorSubmissions.appSubmissions.map((submission: any) => (
+                        <div
+                          key={submission.id}
+                          className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
+                          onClick={() => {
+                            setSelectedResponse(submission);
+                            setShowDetailModal(true);
+                          }}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">Application</span>
+                            <span className={`text-xs px-2 py-1 rounded-full ${
+                              submission.analystValidationStatus === 'VALIDATED' ? 'bg-green-100 text-green-800' :
+                              submission.analystValidationStatus === 'NEEDS_REVIEW' ? 'bg-orange-100 text-orange-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {submission.analystValidationStatus === 'VALIDATED' ? 'Validé' :
+                               submission.analystValidationStatus === 'NEEDS_REVIEW' ? 'À revoir' :
+                               'En attente'}
+                            </span>
+                          </div>
+                          <p className="text-sm font-medium text-gray-900 mt-2">
+                            {submission.formData?.['identification.nomOuCode'] || submission.formData?.household?.nomOuCode || 'N/A'}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {new Date(submission.createdAt).toLocaleDateString('fr-FR')}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Liste des formulaires par lien public */}
+                {enumeratorSubmissions.publicSubmissions && enumeratorSubmissions.publicSubmissions.length > 0 && (
+                  <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6">
+                    <h3 className="text-lg font-semibold mb-4 text-green-800">Formulaires soumis par lien public ({enumeratorSubmissions.publicSubmissions.length})</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {enumeratorSubmissions.publicSubmissions.map((submission: any) => (
+                        <div
+                          key={submission.id}
+                          className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
+                          onClick={() => {
+                            setSelectedResponse(submission);
+                            setShowDetailModal(true);
+                          }}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Lien public</span>
+                            {submission.submitterName && (
+                              <span className="text-xs text-gray-600">{submission.submitterName}</span>
+                            )}
+                          </div>
+                          <p className="text-sm font-medium text-gray-900 mt-2">
+                            {submission.formData?.['identification.nomOuCode'] || submission.formData?.household?.nomOuCode || 'N/A'}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {new Date(submission.createdAt).toLocaleDateString('fr-FR')}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {enumeratorSubmissionsLoading && (
+                  <div className="text-center py-8">
+                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <p className="mt-2 text-gray-600">Chargement des formulaires...</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Liste des enquêteurs avec leurs stats */
+              <div className="p-6">
+                {enumeratorStatsLoading ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-600">Chargement des enquêteurs...</p>
+                  </div>
+                ) : enumeratorStats.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {enumeratorStats.map((enumerator: any) => (
+                      <div
+                        key={enumerator.id}
+                        className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
+                        onClick={() => {
+                          if (selectedCampaign) {
+                            fetchEnumeratorSubmissions(enumerator.id, selectedCampaign);
+                          }
+                        }}
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                              <span className="text-blue-600 font-bold">
+                                {enumerator.name.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="font-semibold text-gray-900">{enumerator.name}</p>
+                              <p className="text-xs text-gray-500">{enumerator.email}</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 mt-3">
+                          <div className="text-center p-2 bg-blue-50 rounded">
+                            <div className="text-lg font-bold text-blue-600">{enumerator.appSubmissionsCount || 0}</div>
+                            <div className="text-xs text-blue-800">Par app</div>
+                          </div>
+                          <div className="text-center p-2 bg-green-50 rounded">
+                            <div className="text-lg font-bold text-green-600">{enumerator.publicLinkSubmissionsCount || 0}</div>
+                            <div className="text-xs text-green-800">Par lien</div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    Aucun enquêteur trouvé pour cette campagne
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Ancienne liste des réponses - masquée pour l'instant */}
+        {false && selectedCampaign && (
           <div className="bg-white rounded-lg shadow">
             <div className="px-6 py-4 border-b border-gray-200">
               <h2 className="text-lg font-medium text-gray-900">
@@ -620,7 +915,15 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="bg-gray-50 p-3 rounded-lg">
                         <span className="font-medium text-gray-700">Enquêteur :</span>
-                        <div className="mt-1 text-gray-900 font-semibold">{selectedResponse.author?.name || selectedResponse.authorId || 'N/A'}</div>
+                        <div className="mt-1 text-gray-900 font-semibold">
+                          {selectedResponse.author?.name || selectedResponse.submitterName || selectedResponse.authorId || 'N/A'}
+                        </div>
+                        {selectedResponse.author?.email && (
+                          <div className="mt-1 text-xs text-gray-600">{selectedResponse.author.email}</div>
+                        )}
+                        {selectedResponse.source === 'public_link' && selectedResponse.submitterContact && (
+                          <div className="mt-1 text-xs text-gray-600">Contact soumetteur : {selectedResponse.submitterContact}</div>
+                        )}
                       </div>
                       <div className="bg-gray-50 p-3 rounded-lg">
                         <span className="font-medium text-gray-700">Date et heure de soumission :</span>
@@ -635,6 +938,29 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
                           }) : 'N/A'}
                         </div>
                       </div>
+                      {selectedResponse.survey && (
+                        <div className="bg-gray-50 p-3 rounded-lg">
+                          <span className="font-medium text-gray-700">Campagne :</span>
+                          <div className="mt-1 text-gray-900 font-semibold">{selectedResponse.survey.title}</div>
+                          {selectedResponse.survey.description && (
+                            <div className="mt-1 text-xs text-gray-600">{selectedResponse.survey.description}</div>
+                          )}
+                        </div>
+                      )}
+                      {selectedResponse.source && (
+                        <div className="bg-gray-50 p-3 rounded-lg">
+                          <span className="font-medium text-gray-700">Source :</span>
+                          <div className="mt-1">
+                            <span className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold ${
+                              selectedResponse.source === 'public_link' 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              {selectedResponse.source === 'public_link' ? 'Lien public' : 'Application'}
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -662,6 +988,14 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
           </div>
         )}
       </div>
+
+      {/* Notification de succès */}
+      <SuccessNotification
+        show={successNotification.show}
+        message={successNotification.message}
+        type={successNotification.type}
+        onClose={() => setSuccessNotification({ show: false, message: '', type: 'success' })}
+      />
     </div>
   );
 };

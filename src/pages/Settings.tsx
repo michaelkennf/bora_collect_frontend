@@ -1,7 +1,32 @@
 import React, { useState, useEffect } from 'react';
+import { Link2, Copy, Check, Trash2, RefreshCw, ExternalLink } from 'lucide-react';
 import { environment } from '../config/environment';
 import { getCitiesByProvince, getCommunesByCity } from '../data/citiesData';
 import { getQuartiersByCommune } from '../data/quartiersData';
+
+interface PublicLink {
+  id: string;
+  token: string;
+  isActive: boolean;
+  createdAt: string;
+  expiresAt: string | null;
+  survey: {
+    id: string;
+    title: string;
+    description: string;
+    status: string;
+  };
+  _count: {
+    submissions: number;
+  };
+}
+
+interface AvailableSurvey {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+}
 
 const Settings: React.FC = () => {
   const [settings, setSettings] = useState({
@@ -33,6 +58,16 @@ const Settings: React.FC = () => {
   const [customQuartier, setCustomQuartier] = useState('');
   const [showCustomQuartier, setShowCustomQuartier] = useState(false);
   const [photoDeletedLocally, setPhotoDeletedLocally] = useState(false);
+
+  // États pour les liens publics (enquêteurs uniquement)
+  const [publicLinks, setPublicLinks] = useState<PublicLink[]>([]);
+  const [availableSurveys, setAvailableSurveys] = useState<AvailableSurvey[]>([]);
+  const [selectedSurveyId, setSelectedSurveyId] = useState('');
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const [loadingLinks, setLoadingLinks] = useState(false);
+  const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
+  const [submissionStats, setSubmissionStats] = useState<{ appSubmissions: number; publicSubmissions: number; total: number } | null>(null);
+  const [loadingStats, setLoadingStats] = useState(false);
 
   // Charger les données utilisateur au montage du composant
   useEffect(() => {
@@ -115,6 +150,187 @@ const Settings: React.FC = () => {
 
     loadUserData();
   }, [photoDeletedLocally]);
+
+  // Charger les liens publics et campagnes disponibles pour les enquêteurs
+  useEffect(() => {
+    const loadPublicLinksData = async () => {
+      const localUser = localStorage.getItem('user');
+      if (!localUser) return;
+      
+      const userData = JSON.parse(localUser);
+      if (userData.role !== 'CONTROLLER') return;
+
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      setLoadingLinks(true);
+      try {
+        // Charger les liens existants
+        const linksResponse = await fetch(`${environment.apiBaseUrl}/public-links/my-links`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (linksResponse.ok) {
+          const linksData = await linksResponse.json();
+          setPublicLinks(linksData);
+        }
+
+        // Charger les campagnes disponibles
+        const surveysResponse = await fetch(`${environment.apiBaseUrl}/public-links/available-surveys`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (surveysResponse.ok) {
+          const surveysData = await surveysResponse.json();
+          setAvailableSurveys(surveysData);
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement des liens publics:', error);
+      } finally {
+        setLoadingLinks(false);
+      }
+    };
+
+    loadPublicLinksData();
+    loadSubmissionStats();
+  }, []);
+
+  // Charger les statistiques de soumission pour l'enquêteur
+  const loadSubmissionStats = async () => {
+    const localUser = localStorage.getItem('user');
+    if (!localUser) return;
+    
+    const userData = JSON.parse(localUser);
+    if (userData.role !== 'CONTROLLER') return;
+
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    setLoadingStats(true);
+    try {
+      // Récupérer toutes les campagnes de l'enquêteur
+      const surveysResponse = await fetch(`${environment.apiBaseUrl}/public-links/available-surveys`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!surveysResponse.ok) return;
+      
+      const surveys = await surveysResponse.json();
+      let totalAppSubmissions = 0;
+      let totalPublicSubmissions = 0;
+
+      // Pour chaque campagne, récupérer les stats
+      for (const survey of surveys) {
+        try {
+          // Stats des soumissions par app
+          const appResponse = await fetch(`${environment.apiBaseUrl}/records/controller?campaignId=${survey.id}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (appResponse.ok) {
+            const appData = await appResponse.json();
+            totalAppSubmissions += Array.isArray(appData) ? appData.length : 0;
+          }
+
+          // Stats des soumissions par lien public (depuis les liens de l'utilisateur)
+          const linksResponse = await fetch(`${environment.apiBaseUrl}/public-links/my-links`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (linksResponse.ok) {
+            const linksData = await linksResponse.json();
+            const surveyLinks = linksData.filter((link: PublicLink) => link.survey?.id === survey.id);
+            totalPublicSubmissions += surveyLinks.reduce((sum: number, link: PublicLink) => sum + (link._count?.submissions || 0), 0);
+          }
+        } catch (error) {
+          console.error(`Erreur lors du chargement des stats pour la campagne ${survey.id}:`, error);
+        }
+      }
+
+      setSubmissionStats({
+        appSubmissions: totalAppSubmissions,
+        publicSubmissions: totalPublicSubmissions,
+        total: totalAppSubmissions + totalPublicSubmissions
+      });
+    } catch (error) {
+      console.error('Erreur lors du chargement des statistiques:', error);
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
+  // Générer un nouveau lien public
+  const generatePublicLink = async () => {
+    if (!selectedSurveyId) {
+      setMessage('Veuillez sélectionner une campagne');
+      setMessageType('error');
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    setGeneratingLink(true);
+    try {
+      const response = await fetch(`${environment.apiBaseUrl}/public-links/generate`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ surveyId: selectedSurveyId })
+      });
+
+      if (response.ok) {
+        const newLink = await response.json();
+        setPublicLinks(prev => [newLink, ...prev]);
+        setSelectedSurveyId('');
+        setMessage('Lien généré avec succès !');
+        setMessageType('success');
+      } else {
+        const errorData = await response.json();
+        setMessage(errorData.message || 'Erreur lors de la génération du lien');
+        setMessageType('error');
+      }
+    } catch (error) {
+      setMessage('Erreur lors de la génération du lien');
+      setMessageType('error');
+    } finally {
+      setGeneratingLink(false);
+    }
+  };
+
+  // Copier le lien dans le presse-papier
+  const copyLinkToClipboard = async (link: PublicLink) => {
+    const fullUrl = `${window.location.origin}/form/${link.token}`;
+    try {
+      await navigator.clipboard.writeText(fullUrl);
+      setCopiedLinkId(link.id);
+      setTimeout(() => setCopiedLinkId(null), 2000);
+    } catch (error) {
+      console.error('Erreur lors de la copie:', error);
+    }
+  };
+
+  // Désactiver/réactiver un lien
+  const toggleLinkStatus = async (linkId: string, isActive: boolean) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    try {
+      const endpoint = isActive ? 'deactivate' : 'reactivate';
+      const response = await fetch(`${environment.apiBaseUrl}/public-links/${linkId}/${endpoint}`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        setPublicLinks(prev =>
+          prev.map(link =>
+            link.id === linkId ? { ...link, isActive: !isActive } : link
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Erreur lors de la modification du lien:', error);
+    }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -929,6 +1145,216 @@ const Settings: React.FC = () => {
           </button>
         </form>
       </div>
+
+      {/* Section Statistiques - Uniquement pour les enquêteurs (CONTROLLER) */}
+      {user?.role === 'CONTROLLER' && (
+        <div className="bg-white p-6 rounded-lg shadow">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <svg className="h-6 w-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Mes statistiques</h2>
+              <p className="text-sm text-gray-500">Vue d'ensemble de vos soumissions de formulaires</p>
+            </div>
+          </div>
+
+          {loadingStats ? (
+            <div className="text-center py-8">
+              <RefreshCw className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-2" />
+              <p className="text-gray-500">Chargement des statistiques...</p>
+            </div>
+          ) : submissionStats ? (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="text-center p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="text-3xl font-bold text-blue-600 mb-2">
+                  {submissionStats.appSubmissions}
+                </div>
+                <div className="text-blue-800 font-medium">Par application</div>
+                <div className="text-xs text-blue-600 mt-1">
+                  {submissionStats.total > 0 
+                    ? `${Math.round((submissionStats.appSubmissions / submissionStats.total) * 100)}% du total`
+                    : '0%'}
+                </div>
+              </div>
+              <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
+                <div className="text-3xl font-bold text-green-600 mb-2">
+                  {submissionStats.publicSubmissions}
+                </div>
+                <div className="text-green-800 font-medium">Par lien public</div>
+                <div className="text-xs text-green-600 mt-1">
+                  {submissionStats.total > 0 
+                    ? `${Math.round((submissionStats.publicSubmissions / submissionStats.total) * 100)}% du total`
+                    : '0%'}
+                </div>
+              </div>
+              <div className="text-center p-4 bg-purple-50 rounded-lg border border-purple-200">
+                <div className="text-3xl font-bold text-purple-600 mb-2">
+                  {submissionStats.total}
+                </div>
+                <div className="text-purple-800 font-medium">Total</div>
+                <div className="text-xs text-purple-600 mt-1">Toutes soumissions</div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              Aucune statistique disponible pour le moment
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Section Liens Publics - Uniquement pour les enquêteurs (CONTROLLER) */}
+      {user?.role === 'CONTROLLER' && (
+        <div className="bg-white p-6 rounded-lg shadow">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Link2 className="h-6 w-6 text-blue-600" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Liens de partage</h2>
+              <p className="text-sm text-gray-500">Générez des liens pour permettre à d'autres personnes de remplir vos formulaires</p>
+            </div>
+          </div>
+
+          {/* Générer un nouveau lien */}
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6">
+            <h3 className="font-medium text-blue-900 mb-3">Générer un nouveau lien</h3>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <select
+                value={selectedSurveyId}
+                onChange={(e) => setSelectedSurveyId(e.target.value)}
+                className="flex-1 px-4 py-2 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                disabled={generatingLink || availableSurveys.length === 0}
+              >
+                <option value="">
+                  {availableSurveys.length === 0 
+                    ? 'Aucune campagne disponible' 
+                    : 'Sélectionner une campagne...'}
+                </option>
+                {availableSurveys.map((survey) => (
+                  <option key={survey.id} value={survey.id}>
+                    {survey.title}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={generatePublicLink}
+                disabled={generatingLink || !selectedSurveyId}
+                className="flex items-center justify-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {generatingLink ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Link2 className="h-4 w-4" />
+                )}
+                Générer
+              </button>
+            </div>
+          </div>
+
+          {/* Liste des liens existants */}
+          <div>
+            <h3 className="font-medium text-gray-900 mb-3">Mes liens ({publicLinks.length})</h3>
+            
+            {loadingLinks ? (
+              <div className="text-center py-8">
+                <RefreshCw className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-2" />
+                <p className="text-gray-500">Chargement des liens...</p>
+              </div>
+            ) : publicLinks.length === 0 ? (
+              <div className="text-center py-8 bg-gray-50 rounded-xl">
+                <Link2 className="h-12 w-12 text-gray-300 mx-auto mb-2" />
+                <p className="text-gray-500">Aucun lien généré pour le moment</p>
+                <p className="text-sm text-gray-400">Sélectionnez une campagne ci-dessus pour créer votre premier lien</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {publicLinks.map((link) => (
+                  <div
+                    key={link.id}
+                    className={`border rounded-xl p-4 transition-all ${
+                      link.isActive 
+                        ? 'border-green-200 bg-green-50/50' 
+                        : 'border-gray-200 bg-gray-50 opacity-60'
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium text-gray-900">{link.survey?.title || 'Campagne inconnue'}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            link.isActive 
+                              ? 'bg-green-100 text-green-700' 
+                              : 'bg-gray-200 text-gray-600'
+                          }`}>
+                            {link.isActive ? 'Actif' : 'Désactivé'}
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          <span className="font-medium text-blue-600">{link._count?.submissions || 0}</span> soumission(s) via ce lien
+                        </div>
+                        <div className="text-xs text-gray-400 mt-1">
+                          Créé le {new Date(link.createdAt).toLocaleDateString('fr-FR')}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => copyLinkToClipboard(link)}
+                          className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                            copiedLinkId === link.id
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                          }`}
+                          title="Copier le lien"
+                        >
+                          {copiedLinkId === link.id ? (
+                            <>
+                              <Check className="h-4 w-4" />
+                              Copié !
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-4 w-4" />
+                              Copier
+                            </>
+                          )}
+                        </button>
+                        <a
+                          href={`/form/${link.token}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
+                          title="Ouvrir le lien"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                        <button
+                          onClick={() => toggleLinkStatus(link.id, link.isActive)}
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            link.isActive
+                              ? 'bg-red-100 text-red-600 hover:bg-red-200'
+                              : 'bg-green-100 text-green-600 hover:bg-green-200'
+                          }`}
+                          title={link.isActive ? 'Désactiver' : 'Réactiver'}
+                        >
+                          {link.isActive ? (
+                            <Trash2 className="h-4 w-4" />
+                          ) : (
+                            <RefreshCw className="h-4 w-4" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Informations système */}
       <div className="bg-white p-6 rounded-lg shadow">

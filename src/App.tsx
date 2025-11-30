@@ -23,6 +23,8 @@ import AdminSurveyPublication from './pages/AdminSurveyPublication';
 import AdminCandidatures from './pages/AdminCandidatures';
 import ControllerAvailableSurveys from './pages/ControllerAvailableSurveys';
 import Settings from './pages/Settings';
+import PublicFormPage from './pages/PublicFormPage';
+import ForgotPassword from './pages/ForgotPassword';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -88,6 +90,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/create-account" element={<CreateAccount />} />
           <Route path="/project-manager-registration" element={<ProjectManagerRegistration />} />
           <Route path="/account-created" element={<AccountCreatedSuccess />} />
@@ -137,6 +140,8 @@ export default function App() {
               <Settings />
             </PrivateRoute>
           } />
+          {/* Route publique pour formulaires via lien partagé */}
+          <Route path="/form/:token" element={<PublicFormPage />} />
           <Route path="*" element={<Navigate to="/login" />} />
         </Routes>
       </Router>

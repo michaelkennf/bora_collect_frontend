@@ -4,9 +4,10 @@ import logo2 from '../assets/images/logo2.jpg';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import Settings from './Settings';
 import { exportEnquetesToExcel, exportStatsToExcel, exportStatsSexeToExcel } from '../utils/excelExport';
-import { Download } from 'lucide-react';
+import { Download, RefreshCw } from 'lucide-react';
 import EnumeratorListWithDailyStats from '../components/EnumeratorListWithDailyStats';
 import ExportNotification from '../components/ExportNotification';
+import SuccessNotification from '../components/SuccessNotification';
 import PNUDFooter from '../components/PNUDFooter';
 import { environment } from '../config/environment';
 import {
@@ -66,6 +67,11 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
   const [communeFilter, setCommuneFilter] = useState('');
   const [campaignData, setCampaignData] = useState<any>(null);
   const [campaignLoading, setCampaignLoading] = useState(false);
+  const [enumeratorStats, setEnumeratorStats] = useState<any[]>([]);
+  const [enumeratorStatsLoading, setEnumeratorStatsLoading] = useState(false);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+  const [enumeratorSubmissions, setEnumeratorSubmissions] = useState<any>(null);
+  const [enumeratorSubmissionsLoading, setEnumeratorSubmissionsLoading] = useState(false);
   const [analystStats, setAnalystStats] = useState<any>(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [exportNotification, setExportNotification] = useState<{
@@ -76,6 +82,15 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
     isVisible: false,
     isSuccess: false,
     message: ''
+  });
+  const [successNotification, setSuccessNotification] = useState<{
+    show: boolean;
+    message: string;
+    type: 'success' | 'error' | 'warning';
+  }>({
+    show: false,
+    message: '',
+    type: 'success'
   });
   
   // États pour l'effet de retournement des cartes
@@ -293,6 +308,30 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
     }
   }, []); // Dépendances vides = ne change jamais
 
+  // Charger les stats des enquêteurs quand on arrive sur la page enquetes
+  useEffect(() => {
+    if (view === 'enquetes' && !selectedEnumeratorId) {
+      // Utiliser la campagne de campaignData si disponible
+      if (campaignData?.campaign?.id) {
+        const campaignId = campaignData.campaign.id;
+        if (!selectedCampaignId) {
+          setSelectedCampaignId(campaignId);
+          fetchEnumeratorStats(campaignId);
+        } else if (selectedCampaignId === campaignId && enumeratorStats.length === 0) {
+          // Recharger les stats si la campagne est déjà sélectionnée mais qu'il n'y a pas de stats
+          fetchEnumeratorStats(campaignId);
+        }
+      } else if (records.length > 0 && !selectedCampaignId) {
+        // Fallback: utiliser la première campagne trouvée dans les records
+        const firstRecordWithSurvey = records.find((r: any) => r.surveyId);
+        if (firstRecordWithSurvey?.surveyId) {
+          setSelectedCampaignId(firstRecordWithSurvey.surveyId);
+          fetchEnumeratorStats(firstRecordWithSurvey.surveyId);
+        }
+      }
+    }
+  }, [view, campaignData, records, selectedCampaignId, selectedEnumeratorId, enumeratorStats.length]);
+
   // Récupérer les enquêtes (chargement automatique dès la connexion)
   useEffect(() => {
     console.log('🔍 AnalystHome: useEffect déclenché - chargement initial');
@@ -422,7 +461,13 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
       );
 
       if (response.ok) {
-        alert(status === 'VALIDATED' ? 'Formulaire validé avec succès' : 'Formulaire marqué comme "À revoir"');
+        setSuccessNotification({
+          show: true,
+          message: status === 'VALIDATED' 
+            ? '✅ Formulaire validé avec succès !' 
+            : '⚠️ Formulaire marqué comme "À revoir". Le Project Manager sera notifié.',
+          type: status === 'VALIDATED' ? 'success' : 'warning'
+        });
         setRecordActionLocked(true);
         setRecordActionMessage(
           status === 'VALIDATED'
@@ -538,10 +583,145 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
     setExportNotification(prev => ({ ...prev, isVisible: false }));
   };
 
+  // Fonction pour récupérer les statistiques des enquêteurs par campagne
+  // Fonction pour exporter tous les formulaires de tous les enquêteurs
+  const exportAllEnumeratorsSubmissions = async (campaignId: string) => {
+    try {
+      setExportNotification({
+        isVisible: true,
+        isSuccess: false,
+        message: 'Récupération des formulaires en cours...'
+      });
+
+      // Récupérer tous les enquêteurs de la campagne
+      const statsResponse = await fetch(
+        `${environment.apiBaseUrl}/records/campaign/${campaignId}/enumerators/stats`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          },
+        }
+      );
+
+      if (!statsResponse.ok) {
+        throw new Error('Erreur lors de la récupération des enquêteurs');
+      }
+
+      const enumerators = await statsResponse.json();
+
+      // Récupérer les soumissions de chaque enquêteur
+      const allSubmissions: any[] = [];
+      
+      for (const enumerator of enumerators) {
+        try {
+          const submissionsResponse = await fetch(
+            `${environment.apiBaseUrl}/records/campaign/${campaignId}/enumerator/${enumerator.id}/submissions`,
+            {
+              headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`,
+              },
+            }
+          );
+
+          if (submissionsResponse.ok) {
+            const submissions = await submissionsResponse.json();
+            
+            // Ajouter les soumissions par application
+            if (submissions.appSubmissions && submissions.appSubmissions.length > 0) {
+              allSubmissions.push(...submissions.appSubmissions.map((s: any) => ({
+                ...s,
+                authorName: s.author?.name || 'N/A',
+                source: 'application'
+              })));
+            }
+            
+            // Ajouter les soumissions par lien public
+            if (submissions.publicSubmissions && submissions.publicSubmissions.length > 0) {
+              allSubmissions.push(...submissions.publicSubmissions.map((s: any) => ({
+                ...s,
+                authorName: s.author?.name || s.submitterName || 'N/A',
+                source: 'public_link'
+              })));
+            }
+          }
+        } catch (error) {
+          console.error(`Erreur lors de la récupération des soumissions pour ${enumerator.name}:`, error);
+        }
+      }
+
+      // Exporter en Excel
+      const campaignTitle = campaignData?.campaign?.title || 'campagne';
+      const fileName = `tous_formulaires_${campaignTitle.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}`;
+      const success = exportEnquetesToExcel(allSubmissions, fileName);
+
+      if (success) {
+        setExportNotification({
+          isVisible: true,
+          isSuccess: true,
+          message: `✅ Export réussi ! ${allSubmissions.length} formulaire(s) exporté(s)`
+        });
+      } else {
+        throw new Error('Erreur lors de l\'export Excel');
+      }
+    } catch (error: any) {
+      console.error('Erreur lors de l\'export de tous les formulaires:', error);
+      setExportNotification({
+        isVisible: true,
+        isSuccess: false,
+        message: `❌ Erreur: ${error.message || 'Impossible d\'exporter les formulaires'}`
+      });
+    }
+  };
+
+  const fetchEnumeratorStats = async (campaignId: string) => {
+    setEnumeratorStatsLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const res = await fetch(`${environment.apiBaseUrl}/records/campaign/${campaignId}/enumerators/stats`, {
+        headers: { 
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (!res.ok) throw new Error('Erreur lors du chargement');
+      const data = await res.json();
+      setEnumeratorStats(data);
+    } catch (err: any) {
+      console.error('Erreur lors de la récupération des stats des enquêteurs:', err);
+    } finally {
+      setEnumeratorStatsLoading(false);
+    }
+  };
+
+  // Fonction pour récupérer les soumissions d'un enquêteur
+  const fetchEnumeratorSubmissions = async (enumeratorId: string, campaignId: string) => {
+    setEnumeratorSubmissionsLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const res = await fetch(`${environment.apiBaseUrl}/records/campaign/${campaignId}/enumerator/${enumeratorId}/submissions`, {
+        headers: { 
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (!res.ok) throw new Error('Erreur lors du chargement');
+      const data = await res.json();
+      setEnumeratorSubmissions(data);
+      setSelectedEnumeratorId(enumeratorId);
+    } catch (err: any) {
+      console.error('Erreur lors de la récupération des soumissions:', err);
+    } finally {
+      setEnumeratorSubmissionsLoading(false);
+    }
+  };
+
   // Fonction pour gérer le clic sur un enquêteur
-  const handleEnumeratorClick = (enumeratorId: string) => {
-    setSelectedEnumeratorId(enumeratorId);
-    setView('enquetes'); // Passer à la vue des enquêtes pour afficher les formulaires
+  const handleEnumeratorClick = async (enumeratorId: string, campaignId: string) => {
+    await fetchEnumeratorSubmissions(enumeratorId, campaignId);
   };
 
   // Fonction d'export des enquêtes avec gestion d'erreur
@@ -1424,18 +1604,22 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
         {view === 'enquetes' && (
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6 text-center">
-              Liste des Enquêtes
+              {selectedEnumeratorId ? 'Formulaires de l\'enquêteur' : 'Liste des Enquêteurs'}
             </h1>
             
             {/* Bouton de retour si un enquêteur est sélectionné */}
-            {selectedEnumeratorId && (
+            {selectedEnumeratorId && enumeratorSubmissions && (
               <div className="mb-4">
                 <button
                   onClick={() => {
                     setSelectedEnumeratorId(null);
+                    setEnumeratorSubmissions(null);
                     setSearch('');
                     setCommuneFilter('');
-                    setView('statistiques');
+                    // Recharger les stats des enquêteurs
+                    if (selectedCampaignId) {
+                      fetchEnumeratorStats(selectedCampaignId);
+                    }
                   }}
                   className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
                 >
@@ -1446,243 +1630,247 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
                 </button>
               </div>
             )}
-            
-            {/* Filtres */}
-            <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg mb-4 sm:mb-6">
-              <h4 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Filtres de recherche</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-                <div>
-                  <label className="block font-semibold mb-2 text-sm text-gray-700">Recherche par nom du ménage</label>
-                  <input
-                    type="text"
-                    placeholder="Nom du ménage..."
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold mb-2 text-sm text-gray-700">Commune</label>
-                  <select
-                    value={communeFilter}
-                    onChange={e => setCommuneFilter(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Toutes les communes</option>
-                    {communesKinshasa.map(commune => <option key={commune} value={commune}>{commune}</option>)}
-                  </select>
-                </div>
-              </div>
-                             <div className="mt-4 flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-0">
-                 <button
-                   onClick={() => {
-                     setSearch('');
-                     setCommuneFilter('');
-                   }}
-                   className="bg-gray-500 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors text-sm sm:text-base"
-                 >
-                   Réinitialiser les filtres
-                 </button>
-                 
-                 {/* Bouton d'export Excel */}
-                 <button
-                   onClick={handleExportEnquetes}
-                   disabled={records.length === 0}
-                   className="bg-green-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm sm:text-base"
-                 >
-                   <Download className="h-4 w-4" />
-                   Exporter en Excel
-                 </button>
-               </div>
-            </div>
 
-            {/* NOUVEAU : Statistiques par sexe des enquêtes filtrées */}
-            {records.length > 0 && (() => {
-              // Compter par sexe
-              const hommes = records.filter(r => {
-                const sexe = getSexeFromRecord(r);
-                return sexe === 'Homme' || sexe === 'Masculin' || sexe === 'masculin' || sexe === 'male' || sexe === 'MALE';
-              }).length;
-
-              const femmes = records.filter(r => {
-                const sexe = getSexeFromRecord(r);
-                return sexe === 'Femme' || sexe === 'Féminin' || sexe === 'feminin' || sexe === 'female' || sexe === 'FEMALE';
-              }).length;
-
-              const autre = records.filter(r => {
-                const sexe = getSexeFromRecord(r);
-                return sexe === 'Autre' || sexe === 'autre' || sexe === 'other' || sexe === 'OTHER';
-              }).length;
-
-              const total = records.length;
-              const hommesPercent = total > 0 ? ((hommes / total) * 100).toFixed(1) : '0.0';
-              const femmesPercent = total > 0 ? ((femmes / total) * 100).toFixed(1) : '0.0';
-              const autrePercent = total > 0 ? ((autre / total) * 100).toFixed(1) : '0.0';
-
-              return (
+            {/* Si un enquêteur est sélectionné, afficher ses formulaires */}
+            {selectedEnumeratorId && enumeratorSubmissions ? (
+              <div>
+                {/* Statistiques de l'enquêteur */}
                 <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg mb-4 sm:mb-6">
-                  <h4 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-center">Répartition par Sexe des Enquêtes Filtrées</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
-                    {/* Hommes */}
-                    <div className="text-center p-3 sm:p-4 bg-blue-50 rounded-lg">
-                      <div className="text-2xl sm:text-3xl font-bold text-blue-600 mb-2">
-                        {hommes}
-                      </div>
-                      <div className="text-blue-800 font-medium text-sm sm:text-base">Hommes</div>
-                      <div className="text-xs sm:text-sm text-blue-600">
-                        {hommesPercent}%
-                      </div>
-                    </div>
-
-                    {/* Femmes */}
-                    <div className="text-center p-3 sm:p-4 bg-pink-50 rounded-lg">
-                      <div className="text-2xl sm:text-3xl font-bold text-pink-600 mb-2">
-                        {femmes}
-                      </div>
-                      <div className="text-pink-800 font-medium text-sm sm:text-base">Femmes</div>
-                      <div className="text-xs sm:text-sm text-pink-600">
-                        {femmesPercent}%
-                      </div>
-                    </div>
-
-                    {/* Autre */}
-                    <div className="text-center p-3 sm:p-4 bg-green-50 rounded-lg">
-                      <div className="text-2xl sm:text-3xl font-bold text-green-600 mb-2">
-                        {autre}
-                      </div>
-                      <div className="text-green-800 font-medium text-sm sm:text-base">Autre</div>
-                      <div className="text-xs sm:text-sm text-green-600">
-                        {autrePercent}%
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Affichage des erreurs */}
-            {recordsError && (
-              <div className="text-red-600 mb-4 text-center bg-red-50 p-3 rounded-lg">
-                {recordsError}
-              </div>
-            )}
-
-            {/* Chargement */}
-            {recordsLoading ? (
-              <div className="text-center py-8">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <p className="mt-2 text-gray-600">Chargement des enquêtes...</p>
-              </div>
-            ) : (
-              /* Liste des enquêtes - Version Cartes */
-              <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6">
-                <div className="mb-4 sm:mb-6">
-                  <h3 className="text-base sm:text-lg font-semibold text-gray-800">
-                    Enquêtes trouvées : {filteredRecords.length}
-                  </h3>
-                </div>
-                
-                {filteredRecords.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    Aucune enquête trouvée avec les critères sélectionnés
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                    {filteredRecords.map((record, index) => (
-                      <div
-                        key={record.id || index}
-                        className="bg-white border border-gray-200 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-4 sm:p-5"
-                        onClick={() => {
-                          setSelectedRecord(record);
-                          setRecordActionLocked(false);
-                          setRecordActionMessage(null);
-                          setReviewComment('');
-                          setShowCommentField(false);
-                          setShowDetailModal(true);
-                        }}
-                      >
-                        {/* En-tête de la carte */}
-                        <div className="flex items-start justify-between mb-3 sm:mb-4">
-                          <div className="flex-1">
-                            <h4 className="text-sm sm:text-base font-bold text-gray-900 mb-1">
-                              {record.formData?.['identification.nomOuCode'] || record.formData?.household?.nomOuCode || 'N/A'}
-                            </h4>
-                            <p className="text-xs text-gray-500">
-                              {record.formData?.['identification.communeQuartier'] || record.formData?.household?.communeQuartier || 'N/A'}
-                            </p>
-                          </div>
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full flex-shrink-0 ml-2 ${
-                            record.analystValidationStatus === 'VALIDATED' ? 'bg-green-100 text-green-800' : 
-                            record.analystValidationStatus === 'NEEDS_REVIEW' ? 'bg-orange-100 text-orange-800' : 
-                            'bg-blue-100 text-blue-800'
-                          }`}>
-                            {record.analystValidationStatus === 'VALIDATED' ? 'Validé' : 
-                             record.analystValidationStatus === 'NEEDS_REVIEW' ? 'À revoir' : 
-                             'En attente'}
-                          </span>
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 flex-1">
+                      <div className="text-center p-4 bg-blue-50 rounded-lg">
+                        <div className="text-2xl font-bold text-blue-600 mb-2">
+                          {enumeratorSubmissions.appSubmissions?.length || 0}
                         </div>
+                        <div className="text-blue-800 font-medium">Par application</div>
+                      </div>
+                      <div className="text-center p-4 bg-green-50 rounded-lg">
+                        <div className="text-2xl font-bold text-green-600 mb-2">
+                          {enumeratorSubmissions.publicSubmissions?.length || 0}
+                        </div>
+                        <div className="text-green-800 font-medium">Par lien public</div>
+                      </div>
+                      <div className="text-center p-4 bg-purple-50 rounded-lg">
+                        <div className="text-2xl font-bold text-purple-600 mb-2">
+                          {enumeratorSubmissions.total || 0}
+                        </div>
+                        <div className="text-purple-800 font-medium">Total</div>
+                      </div>
+                    </div>
+                    {/* Bouton d'export Excel */}
+                    <button
+                      onClick={() => {
+                        const allSubmissions = [
+                          ...(enumeratorSubmissions.appSubmissions || []).map((s: any) => ({
+                            ...s,
+                            authorName: s.author?.name || 'N/A',
+                            source: 'application'
+                          })),
+                          ...(enumeratorSubmissions.publicSubmissions || []).map((s: any) => ({
+                            ...s,
+                            authorName: s.author?.name || s.submitterName || 'N/A',
+                            source: 'public_link'
+                          }))
+                        ];
+                        const fileName = `formulaires_${enumeratorSubmissions.enumeratorName || 'enqueteur'}_${new Date().toISOString().split('T')[0]}`;
+                        const success = exportEnquetesToExcel(allSubmissions, fileName);
+                        if (success) {
+                          setExportNotification({
+                            isVisible: true,
+                            isSuccess: true,
+                            message: 'Export Excel réussi !'
+                          });
+                        }
+                      }}
+                      className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors font-semibold"
+                    >
+                      <Download className="h-4 w-4" />
+                      Exporter en Excel
+                    </button>
+                  </div>
+                </div>
 
-                        {/* Corps de la carte */}
-                        <div className="space-y-2 text-sm">
-                          <div className="flex items-center text-gray-600">
-                            <svg className="w-4 h-4 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M12,12C14.21,12 16,10.21 16,8C16,5.79 14.21,4 12,4C9.79,4 8,5.79 8,8C8,10.21 9.79,12 12,12M12,14C9.33,14 4,15.34 4,18V20H20V18C20,15.34 14.67,14 12,14Z"/>
-                            </svg>
-                            <span className="font-medium text-gray-700 truncate">{record.authorName || 'N/A'}</span>
-                          </div>
-
-                          <div className="flex items-center text-gray-600">
-                            <svg className="w-4 h-4 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M12,2A3,3 0 0,1 15,5A3,3 0 0,1 12,8A3,3 0 0,1 9,5A3,3 0 0,1 12,2M12,9C14.67,9 20,10.33 20,13V14H4V13C4,10.33 9.33,9 12,9M6,13C6,11.67 9.33,11 12,11C14.67,11 18,11.67 18,13C18.31,13 15,13 12,13C9,13 5.69,13 6,13Z"/>
-                            </svg>
-                            <span className="text-xs">{record.formData?.['identification.age'] || record.formData?.household?.age || 'N/A'} ans</span>
-                            <span className="mx-1">•</span>
-                            <span className="text-xs">{record.formData?.['identification.sexe'] || record.formData?.household?.sexe || 'N/A'}</span>
-                          </div>
-
-                          <div className="flex items-center text-gray-600">
-                            <svg className="w-4 h-4 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M12,5.5A3.5,3.5 0 0,1 15.5,9A3.5,3.5 0 0,1 12,12.5A3.5,3.5 0 0,1 8.5,9A3.5,3.5 0 0,1 12,5.5M5,8C5.56,8 6.08,8.15 6.53,8.42C6.38,9.85 6.8,11.27 7.66,12.38C7.16,13.34 6.16,14 5,14A3,3 0 0,1 2,11A3,3 0 0,1 5,8M19,8A3,3 0 0,1 22,11A3,3 0 0,1 19,14C17.84,14 16.84,13.34 16.34,12.38C17.2,11.27 17.62,9.85 17.47,8.42C17.92,8.15 18.44,8 19,8M5.5,12.25C6.31,12.25 7,12.94 7,13.75C7,14.56 6.31,15.25 5.5,15.25C4.69,15.25 4,14.56 4,13.75C4,12.94 4.69,12.25 5.5,12.25M18.5,12.25C19.31,12.25 20,12.94 20,13.75C20,14.56 19.31,15.25 18.5,15.25C17.69,15.25 17,14.56 17,13.75C17,12.94 17.69,12.25 18.5,12.25M12,18C13.5,18 17.22,18.17 17.22,19.75C17.22,20.5 16.5,21 12,21C7.5,21 6.78,20.5 6.78,19.75C6.78,18.17 10.5,18 12,18Z"/>
-                            </svg>
-                            <span className="text-xs">{record.formData?.['identification.tailleMenage'] || record.formData?.household?.tailleMenage || 'N/A'} personnes</span>
-                          </div>
-
-                          <div className="flex items-center text-gray-600">
-                            <svg className="w-4 h-4 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M12,2C8.13,2 5,5.13 5,9c0 5.25 7,13 7,13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0,9.5c-1.38,0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5,1.12 2.5,2.5-1.12,2.5-2.5,2.5z"/>
-                            </svg>
-                            <span className="text-xs text-gray-500 truncate">{record.formData?.['household.geolocalisation'] || record.formData?.household?.geolocalisation || 'N/A'}</span>
-                          </div>
-
-                          <div className="flex items-center text-gray-600">
-                            <svg className="w-4 h-4 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M13,17H11V15H13M13,13H11V7H13V13Z"/>
-                            </svg>
-                            <span className="text-xs text-gray-500">
-                              {record.createdAt ? new Date(record.createdAt).toLocaleDateString('fr-FR') : 'N/A'}
+                {/* Liste des formulaires par application */}
+                {enumeratorSubmissions.appSubmissions && enumeratorSubmissions.appSubmissions.length > 0 && (
+                  <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 mb-4 sm:mb-6">
+                    <h3 className="text-lg font-semibold mb-4 text-blue-800">Formulaires soumis par application ({enumeratorSubmissions.appSubmissions.length})</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {enumeratorSubmissions.appSubmissions.map((submission: any) => (
+                        <div
+                          key={submission.id}
+                          className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
+                          onClick={() => {
+                            setSelectedRecord(submission);
+                            setShowDetailModal(true);
+                          }}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">Application</span>
+                            <span className={`text-xs px-2 py-1 rounded-full ${
+                              submission.analystValidationStatus === 'VALIDATED' ? 'bg-green-100 text-green-800' :
+                              submission.analystValidationStatus === 'NEEDS_REVIEW' ? 'bg-orange-100 text-orange-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {submission.analystValidationStatus === 'VALIDATED' ? 'Validé' :
+                               submission.analystValidationStatus === 'NEEDS_REVIEW' ? 'À revoir' :
+                               'En attente'}
                             </span>
                           </div>
+                          <p className="text-sm font-medium text-gray-900 mt-2">
+                            {submission.formData?.['identification.nomOuCode'] || submission.formData?.household?.nomOuCode || 'N/A'}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {new Date(submission.createdAt).toLocaleDateString('fr-FR')}
+                          </p>
                         </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-                        {/* Bouton d'action */}
-                        <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedRecord(record);
-                            setRecordActionLocked(false);
-                            setRecordActionMessage(null);
-                            setReviewComment('');
-                            setShowCommentField(false);
-                              setShowDetailModal(true);
-                            }}
-                            className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-semibold"
-                          >
-                            Voir détails
-                          </button>
+                {/* Liste des formulaires par lien public */}
+                {enumeratorSubmissions.publicSubmissions && enumeratorSubmissions.publicSubmissions.length > 0 && (
+                  <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6">
+                    <h3 className="text-lg font-semibold mb-4 text-green-800">Formulaires soumis par lien public ({enumeratorSubmissions.publicSubmissions.length})</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {enumeratorSubmissions.publicSubmissions.map((submission: any) => (
+                        <div
+                          key={submission.id}
+                          className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
+                          onClick={() => {
+                            setSelectedRecord(submission);
+                            setShowDetailModal(true);
+                          }}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Lien public</span>
+                            {submission.submitterName && (
+                              <span className="text-xs text-gray-600">{submission.submitterName}</span>
+                            )}
+                          </div>
+                          <p className="text-sm font-medium text-gray-900 mt-2">
+                            {submission.formData?.['identification.nomOuCode'] || submission.formData?.household?.nomOuCode || 'N/A'}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {new Date(submission.createdAt).toLocaleDateString('fr-FR')}
+                          </p>
                         </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {enumeratorSubmissionsLoading && (
+                  <div className="text-center py-8">
+                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <p className="mt-2 text-gray-600">Chargement des formulaires...</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Liste des enquêteurs avec leurs stats */
+              <div>
+                {/* Afficher la campagne actuelle */}
+                {selectedCampaignId && campaignData?.campaign && (
+                  <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg mb-4 sm:mb-6">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                      <div className="flex-1">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                          Campagne : {campaignData.campaign.title}
+                        </h3>
+                        <p className="text-sm text-gray-600">
+                          {campaignData.campaign.description}
+                        </p>
                       </div>
-                    ))}
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <button
+                          onClick={() => {
+                            if (selectedCampaignId) {
+                              fetchEnumeratorStats(selectedCampaignId);
+                            }
+                          }}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          Actualiser
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Bouton d'export global - visible même si la campagne n'est pas chargée */}
+                {selectedCampaignId && enumeratorStats.length > 0 && (
+                  <div className="mb-4 flex justify-end">
+                    <button
+                      onClick={() => {
+                        if (selectedCampaignId) {
+                          exportAllEnumeratorsSubmissions(selectedCampaignId);
+                        }
+                      }}
+                      className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 font-semibold shadow-lg hover:shadow-xl"
+                    >
+                      <Download className="h-5 w-5" />
+                      <span className="hidden sm:inline">Exporter tous les formulaires</span>
+                      <span className="sm:hidden">Exporter tout</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Chargement des stats */}
+                {enumeratorStatsLoading ? (
+                  <div className="text-center py-8">
+                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <p className="mt-2 text-gray-600">Chargement des enquêteurs...</p>
+                  </div>
+                ) : enumeratorStats.length > 0 ? (
+                  <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6">
+                    <h3 className="text-lg font-semibold mb-4">Enquêteurs ({enumeratorStats.length})</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {enumeratorStats.map((enumerator: any) => (
+                        <div
+                          key={enumerator.id}
+                          className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
+                          onClick={() => {
+                            if (selectedCampaignId) {
+                              handleEnumeratorClick(enumerator.id, selectedCampaignId);
+                            }
+                          }}
+                        >
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                <span className="text-blue-600 font-bold">
+                                  {enumerator.name.charAt(0).toUpperCase()}
+                                </span>
+                              </div>
+                              <div>
+                                <p className="font-semibold text-gray-900">{enumerator.name}</p>
+                                <p className="text-xs text-gray-500">{enumerator.email}</p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 mt-3">
+                            <div className="text-center p-2 bg-blue-50 rounded">
+                              <div className="text-lg font-bold text-blue-600">{enumerator.appSubmissionsCount || 0}</div>
+                              <div className="text-xs text-blue-800">Par app</div>
+                            </div>
+                            <div className="text-center p-2 bg-green-50 rounded">
+                              <div className="text-lg font-bold text-green-600">{enumerator.publicLinkSubmissionsCount || 0}</div>
+                              <div className="text-xs text-green-800">Par lien</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : selectedCampaignId ? (
+                  <div className="text-center py-8 text-gray-500">
+                    Aucun enquêteur trouvé pour cette campagne
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    Veuillez sélectionner une campagne pour voir les enquêteurs
                   </div>
                 )}
               </div>
@@ -1727,16 +1915,26 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
           <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
             <div className="mt-3">
               {/* En-tête du modal */}
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium text-gray-900">
-                  Détails de l'enquête - {selectedRecord.formData?.['identification.nomOuCode'] || selectedRecord.formData?.household?.nomOuCode || 'Ménage'}
-                </h3>
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex-1">
+                  <h3 className="text-lg font-medium text-gray-900 mb-1">
+                    Détails de l'enquête - {selectedRecord.formData?.['identification.nomOuCode'] || selectedRecord.formData?.household?.nomOuCode || 'Ménage'}
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Enquêteur : {selectedRecord.author?.name || selectedRecord.submitterName || 'N/A'} - Campagne : {selectedRecord.survey?.title || 'N/A'}
+                  </p>
+                  {selectedRecord.source === 'public_link' && selectedRecord.submitterName && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Soumis par : {selectedRecord.submitterName} {selectedRecord.submitterContact ? `(${selectedRecord.submitterContact})` : ''}
+                    </p>
+                  )}
+                </div>
                 <button
                   onClick={() => {
                     setShowDetailModal(false);
                     setSelectedRecord(null);
                   }}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-gray-400 hover:text-gray-600 ml-4"
                 >
                   <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1999,7 +2197,15 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="bg-gray-50 p-3 rounded-lg">
                       <span className="font-medium text-gray-700">Enquêteur :</span>
-                      <div className="mt-1 text-gray-900 font-semibold">{selectedRecord.authorName || selectedRecord.authorId || 'N/A'}</div>
+                      <div className="mt-1 text-gray-900 font-semibold">
+                        {selectedRecord.author?.name || selectedRecord.authorName || selectedRecord.submitterName || selectedRecord.authorId || 'N/A'}
+                      </div>
+                      {selectedRecord.author?.email && (
+                        <div className="mt-1 text-xs text-gray-600">{selectedRecord.author.email}</div>
+                      )}
+                      {selectedRecord.source === 'public_link' && selectedRecord.submitterContact && (
+                        <div className="mt-1 text-xs text-gray-600">Contact soumetteur : {selectedRecord.submitterContact}</div>
+                      )}
                     </div>
                     <div className="bg-gray-50 p-3 rounded-lg">
                       <span className="font-medium text-gray-700">Date et heure de soumission :</span>
@@ -2014,6 +2220,29 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
                         }) : 'N/A'}
                       </div>
                     </div>
+                    {selectedRecord.survey && (
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <span className="font-medium text-gray-700">Campagne :</span>
+                        <div className="mt-1 text-gray-900 font-semibold">{selectedRecord.survey.title}</div>
+                        {selectedRecord.survey.description && (
+                          <div className="mt-1 text-xs text-gray-600">{selectedRecord.survey.description}</div>
+                        )}
+                      </div>
+                    )}
+                    {selectedRecord.source && (
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <span className="font-medium text-gray-700">Source :</span>
+                        <div className="mt-1">
+                          <span className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold ${
+                            selectedRecord.source === 'public_link' 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-blue-100 text-blue-800'
+                          }`}>
+                            {selectedRecord.source === 'public_link' ? 'Lien public' : 'Application'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

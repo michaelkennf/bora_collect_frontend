@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-toastify';
+import { Loader2 } from 'lucide-react';
 import { environment } from '../config/environment';
 import { localStorageService } from '../services/localStorageService';
+import { reverseGeocodeProvince } from '../utils/geocoding';
 
 interface Campaign {
   id: string;
@@ -28,6 +30,8 @@ const initialGeolocationState = {
   timestamp: null as number | null,
   isCapturing: false,
   error: null as string | null,
+  province: null as string | null,
+  provinceStatus: 'idle' as 'idle' | 'loading' | 'success' | 'error',
 };
 
 const ControllerCampaignForms: React.FC = () => {
@@ -102,21 +106,34 @@ const ControllerCampaignForms: React.FC = () => {
   
   const captureGeolocation = () => {
     if (!navigator.geolocation) {
-      setGeolocation(prev => ({ ...prev, error: 'Géolocalisation non supportée par votre navigateur' }));
+      setGeolocation(prev => ({ ...prev, error: 'Géolocalisation non supportée par votre navigateur', provinceStatus: 'error' }));
       return;
     }
 
-    setGeolocation(prev => ({ ...prev, isCapturing: true, error: null }));
+    setGeolocation(prev => ({ ...prev, isCapturing: true, error: null, provinceStatus: 'loading' }));
     const options = { enableHighAccuracy: true, timeout: 30000, maximumAge: 300000 };
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      async (position) => {
         const { latitude, longitude, accuracy } = position.coords;
         const timestamp = Date.now();
-        setGeolocation({ latitude, longitude, accuracy, timestamp, isCapturing: false, error: null });
+        setGeolocation({ latitude, longitude, accuracy, timestamp, isCapturing: false, error: null, province: null, provinceStatus: 'loading' });
         setFormData(prev => ({
           ...prev,
           ['household.geolocalisation']: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
         }));
+        try {
+          const provinceName = await reverseGeocodeProvince(latitude, longitude);
+          setGeolocation(prev => ({ ...prev, province: provinceName, provinceStatus: provinceName ? 'success' : 'error' }));
+          if (provinceName) {
+            setFormData(prev => ({
+              ...prev,
+              ['household.provinceFromGPS']: provinceName,
+            }));
+          }
+        } catch (error) {
+          console.error('Erreur reverse geocoding:', error);
+          setGeolocation(prev => ({ ...prev, province: null, provinceStatus: 'error' }));
+        }
       },
       (error) => {
         let errorMessage = 'Erreur GPS inattendue.';
@@ -127,7 +144,7 @@ const ControllerCampaignForms: React.FC = () => {
             case 3: errorMessage = 'Délai de capture GPS dépassé.'; break;
           }
         }
-        setGeolocation({ latitude: null, longitude: null, accuracy: null, timestamp: null, isCapturing: false, error: errorMessage });
+        setGeolocation({ latitude: null, longitude: null, accuracy: null, timestamp: null, isCapturing: false, error: errorMessage, province: null, provinceStatus: 'error' });
       },
       options
     );
@@ -271,8 +288,11 @@ const ControllerCampaignForms: React.FC = () => {
       /geolocalisation/i.test(key) && formData[key] && formData[key].trim() !== ''
     );
 
-    if (!hasGPS && !gpsInFormData) {
-      toast.error('❌ Veuillez capturer votre position GPS avant de soumettre le formulaire.');
+    const provinceInFormData = formData['household.provinceFromGPS'] && formData['household.provinceFromGPS'].trim() !== '';
+    const hasProvince = geolocation.provinceStatus === 'success' || provinceInFormData;
+
+    if ((!hasGPS || !hasProvince) && !gpsInFormData) {
+      toast.error('❌ Veuillez capturer votre position GPS (province incluse) avant de soumettre le formulaire.');
       // Faire défiler vers le champ GPS si visible
       const gpsField = document.querySelector('[placeholder*="GPS"], [placeholder*="gps"], [placeholder*="Géolocalisation"]');
       if (gpsField) {
@@ -342,8 +362,11 @@ const ControllerCampaignForms: React.FC = () => {
       /geolocalisation/i.test(key) && submissionData.formData[key] && submissionData.formData[key].trim() !== ''
     );
 
-    if (!hasGPS && !gpsInFormData) {
-      toast.error('❌ Veuillez capturer votre position GPS avant de sauvegarder le formulaire.');
+    const provinceInPayload = submissionData.formData?.['household.provinceFromGPS'] && submissionData.formData['household.provinceFromGPS'].trim() !== '';
+    const hasProvince = geolocation.provinceStatus === 'success' || provinceInPayload;
+
+    if ((!hasGPS || !hasProvince) && !gpsInFormData) {
+      toast.error('❌ Veuillez capturer votre position GPS (province incluse) avant de sauvegarder le formulaire.');
       const gpsField = document.querySelector('[placeholder*="GPS"], [placeholder*="gps"], [placeholder*="Géolocalisation"]');
       if (gpsField) {
         gpsField.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -823,6 +846,24 @@ const ControllerCampaignForms: React.FC = () => {
                                 <span className="font-mono bg-green-100 px-2 py-1 rounded text-xs">
                                   {geolocation.latitude.toFixed(6)}, {geolocation.longitude.toFixed(6)}
                                 </span>
+                              </div>
+                            )}
+                            {geolocation.provinceStatus === 'loading' && (
+                              <div className="flex items-center gap-2 text-blue-600 text-xs sm:text-sm">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                <span>Détection de la province...</span>
+                              </div>
+                            )}
+                            {geolocation.province && geolocation.provinceStatus === 'success' && (
+                              <div className="flex items-center gap-2 text-green-700 text-xs sm:text-sm">
+                                <span>📍</span>
+                                <span>Province détectée : {geolocation.province}</span>
+                              </div>
+                            )}
+                            {geolocation.provinceStatus === 'error' && (
+                              <div className="flex items-center gap-2 text-red-600 text-xs sm:text-sm">
+                                <span>⚠️</span>
+                                <span>Province introuvable. Saisissez-la manuellement si nécessaire.</span>
                               </div>
                             )}
                             {geolocation.accuracy && (
