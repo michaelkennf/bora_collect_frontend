@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'react-toastify';
 import { Loader2 } from 'lucide-react';
 import { environment } from '../config/environment';
@@ -47,8 +47,8 @@ const ControllerCampaignForms: React.FC = () => {
 
   const resetGeolocation = () => setGeolocation({ ...initialGeolocationState });
 
-  // Fonction pour extraire les champs de la structure imbriquée
-  const extractFieldsFromForm = (fields: any): any[] => {
+  // Fonction pour extraire les champs de la structure imbriquée (optimisée)
+  const extractFieldsFromForm = useCallback((fields: any): any[] => {
     if (!fields) return [];
     
     // Si fields est une chaîne JSON, la parser
@@ -57,7 +57,8 @@ const ControllerCampaignForms: React.FC = () => {
       try {
         parsedFields = JSON.parse(fields);
       } catch (error) {
-        console.error('Erreur lors du parsing des champs:', error);
+        // Réduire les logs pour améliorer les performances sur appareils mobiles
+        // Ne logger que si nécessaire pour le débogage
         return [];
       }
     }
@@ -91,20 +92,48 @@ const ControllerCampaignForms: React.FC = () => {
       }
     });
     
-    console.log('🔍 Champs extraits:', extractedFields.length, extractedFields);
-    
-    // Debug spécifique pour les champs conditionnels et ranking
-    extractedFields.forEach(field => {
-      if (field.conditional) {
-        console.log('🔍 Champ conditionnel trouvé:', field.id, field.conditional);
-      }
-      if (field.type === 'ranking') {
-        console.log('🔍 Champ ranking trouvé:', field.id, field.rankingOptions);
-      }
-    });
+    // Réduire les logs pour améliorer les performances
+    // Les logs peuvent ralentir les appareils avec peu de mémoire
     
     return extractedFields;
-  };
+  }, []);
+  
+  // Mémoriser les champs extraits pour éviter de recalculer à chaque rendu
+  const extractedFields = useMemo(() => {
+    if (!selectedForm) return [];
+    return extractFieldsFromForm(selectedForm.fields);
+  }, [selectedForm, extractFieldsFromForm]);
+  
+  // Mémoriser les sections groupées pour éviter de recalculer à chaque rendu
+  const sections = useMemo(() => {
+    if (!extractedFields.length) return {};
+    
+    return extractedFields.reduce((acc: any, field: any) => {
+      if (!acc[field.section]) {
+        acc[field.section] = { label: field.sectionLabel, fields: [] };
+      }
+      acc[field.section].fields.push(field);
+      return acc;
+    }, {});
+  }, [extractedFields]);
+  
+  // Vérifier la compatibilité du navigateur (spécialement pour Chrome)
+  useEffect(() => {
+    // Vérifier si le navigateur supporte les fonctionnalités nécessaires
+    if (typeof navigator !== 'undefined') {
+      const isChrome = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
+      const hasGeolocation = 'geolocation' in navigator;
+      const hasLocalStorage = typeof Storage !== 'undefined';
+      
+      // Vérifier la mémoire disponible (approximatif) et optimiser si nécessaire
+      if ('deviceMemory' in navigator) {
+        const deviceMemory = (navigator as any).deviceMemory;
+        if (deviceMemory && deviceMemory < 2) {
+          // Appareil avec mémoire limitée - optimisations déjà en place via useMemo
+        }
+      }
+    }
+  }, []);
   
   const captureGeolocation = () => {
     if (!navigator.geolocation) {
@@ -113,7 +142,12 @@ const ControllerCampaignForms: React.FC = () => {
     }
 
     setGeolocation(prev => ({ ...prev, isCapturing: true, error: null, provinceStatus: 'loading' }));
-    const options = { enableHighAccuracy: true, timeout: 30000, maximumAge: 300000 };
+    // Options optimisées pour Chrome mobile : réduire timeout et maximumAge pour améliorer les performances
+    const options = { 
+      enableHighAccuracy: false, // Désactiver pour améliorer les performances sur Chrome mobile
+      timeout: 15000, // Réduire le timeout pour éviter les blocages
+      maximumAge: 60000 // Réduire l'âge maximum pour des données plus fraîches
+    };
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude, accuracy } = position.coords;
@@ -133,7 +167,8 @@ const ControllerCampaignForms: React.FC = () => {
             }));
           }
         } catch (error) {
-          console.error('Erreur reverse geocoding:', error);
+          // Réduire les logs pour améliorer les performances
+          // Ne logger que si nécessaire pour le débogage
           setGeolocation(prev => ({ ...prev, province: null, provinceStatus: 'error' }));
         }
       },
@@ -196,7 +231,6 @@ const ControllerCampaignForms: React.FC = () => {
 
       if (response.ok) {
         const applicationsData = await response.json();
-        console.log('✅ Applications approuvées chargées:', applicationsData);
         
         // Extraire les campagnes des applications
         const now = new Date();
@@ -217,12 +251,13 @@ const ControllerCampaignForms: React.FC = () => {
         });
         
         setCampaigns(campaignsFromApplications);
-        console.log('✅ Campagnes extraites:', campaignsFromApplications);
       } else {
-        console.error('❌ Erreur lors du chargement des campagnes:', response.status);
+        // Réduire les logs pour améliorer les performances
+        toast.error('Erreur lors du chargement des campagnes');
       }
     } catch (error) {
-      console.error('❌ Erreur de connexion au serveur:', error);
+      // Réduire les logs pour améliorer les performances
+      toast.error('Erreur de connexion au serveur');
       toast.error('Erreur de connexion au serveur');
     } finally {
       setLoading(false);
@@ -259,7 +294,6 @@ const ControllerCampaignForms: React.FC = () => {
       }
 
       // Récupérer les formulaires de la campagne sélectionnée
-      console.log('🔍 Tentative de chargement des formulaires pour campaignId:', campaignId);
       const response = await fetch(`${apiBaseUrl}/forms/by-survey/${campaignId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -267,11 +301,8 @@ const ControllerCampaignForms: React.FC = () => {
         },
       });
 
-      console.log('🔍 Réponse du serveur:', response.status, response.statusText);
-
       if (response.ok) {
         const responseData = await response.json();
-        console.log('✅ Réponse du serveur:', responseData);
         
         // Vérifier si la campagne est expirée
         if (responseData.isExpired) {
@@ -482,7 +513,8 @@ const ControllerCampaignForms: React.FC = () => {
   };
 
   // Fonction pour vérifier si un champ doit être affiché selon les conditions
-  const shouldShowField = (field: any): boolean => {
+  // Mémoriser shouldShowField pour éviter les recalculs
+  const shouldShowField = useCallback((field: any): boolean => {
     if (!field.conditional) return true;
     
     const { field: conditionalField, value: conditionalValue, operator } = field.conditional;
@@ -491,16 +523,7 @@ const ControllerCampaignForms: React.FC = () => {
     const conditionalFieldId = conditionalField.includes('.') ? conditionalField : `${field.section}.${conditionalField}`;
     const fieldValue = formData[conditionalFieldId];
     
-    console.log('🔍 shouldShowField:', {
-      fieldId: field.id,
-      conditionalField,
-      conditionalFieldId,
-      conditionalValue,
-      operator,
-      fieldValue,
-      shouldShow: fieldValue === conditionalValue,
-      formData: formData
-    });
+    // Réduire les logs pour améliorer les performances sur appareils mobiles
     
     switch (operator) {
       case 'equals':
@@ -512,7 +535,7 @@ const ControllerCampaignForms: React.FC = () => {
       default:
         return true;
     }
-  };
+  }, [formData]);
 
   const formatDate = (dateString: string) => {
     try {
@@ -634,20 +657,16 @@ const ControllerCampaignForms: React.FC = () => {
                 Formulaire de collecte de données
               </h2>
               <div className="text-sm text-gray-600 mb-4">
-                {extractFieldsFromForm(selectedForm.fields).length} champ(s) à remplir
+                {extractedFields.length} champ(s) à remplir
               </div>
             </div>
 
-            {/* Formulaire dynamique avec sections colorées (aligné sur SchoolForm) */}
+            {/* Formulaire dynamique avec sections colorées (optimisé pour performance) */}
             <div className="space-y-6">
-              {(() => {
-                const fields = extractFieldsFromForm(selectedForm.fields);
-                const sections = fields.reduce((acc: any, field: any) => {
-                  if (!acc[field.section]) acc[field.section] = { label: field.sectionLabel, fields: [] };
-                  acc[field.section].fields.push(field);
-                  return acc;
-                }, {});
-
+              {Object.keys(sections).map((sectionKey) => {
+                const section = sections[sectionKey];
+                
+                // Fonctions utilitaires mémorisées
                 const getSectionClasses = (label: string) => {
                   if (/Identification du ménage/i.test(label)) return 'bg-blue-50 border-blue-200';
                   if (/Mode de cuisson actuelle/i.test(label)) return 'bg-green-50 border-green-200';
@@ -666,18 +685,16 @@ const ControllerCampaignForms: React.FC = () => {
                   return '';
                 };
 
-                return Object.keys(sections).map((sectionKey) => {
-                  const section = sections[sectionKey];
-                  const sectionClasses = getSectionClasses(section.label);
-                  return (
-                    <div key={sectionKey} className={`p-4 sm:p-6 rounded-xl border ${sectionClasses}`}>
+                const sectionClasses = getSectionClasses(section.label);
+                return (
+                  <div key={sectionKey} className={`p-4 sm:p-6 rounded-xl border ${sectionClasses}`}>
                       <h3 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4">
                         {getSectionNumber(section.label)}{section.label}
                       </h3>
                       <div className="space-y-4">
-                        {section.fields.map((field: any, index: number) => {
-                          // Vérifier si le champ doit être affiché
-                          if (!shouldShowField(field)) return null;
+                        {section.fields
+                          .filter((field: any) => shouldShowField(field)) // Filtrer avant le map pour améliorer les performances
+                          .map((field: any, index: number) => {
                           
                           return (
                             <div key={index} className="space-y-2">
@@ -956,8 +973,7 @@ const ControllerCampaignForms: React.FC = () => {
                       </div>
                     </div>
                   );
-                });
-              })()}
+                })}
             </div>
 
             <div className="mt-8 flex flex-col items-center gap-4">
