@@ -270,24 +270,19 @@ const PublicFormPage = () => {
             handleInputChange(`${fieldId}_province`, provinceName);
             setGpsProvinceStatus('success');
           } else {
-            console.warn('⚠️ Impossible de déterminer la province pour les coordonnées:', latitude, longitude);
             setGpsProvince(null);
             setGpsProvinceStatus('error');
-            alert('⚠️ La position GPS a été capturée, mais la province n\'a pas pu être déterminée automatiquement. Veuillez la saisir manuellement si nécessaire.');
           }
         } catch (error) {
-          console.error('❌ Erreur lors de la détermination de la province:', error);
           setGpsProvince(null);
           setGpsProvinceStatus('error');
-          alert('⚠️ Erreur lors de la détermination de la province. La position GPS a été capturée, mais la province n\'a pas pu être déterminée.');
         }
       },
       (error) => {
-        // Logs réduits pour améliorer les performances
         alert('Impossible de capturer la position GPS. Veuillez autoriser l\'accès à la localisation.');
         setGpsProvinceStatus('error');
       },
-      { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 } // Optimisé pour Chrome mobile
+      { enableHighAccuracy: false, timeout: 2400000, maximumAge: 60000 } // 40 minutes
     );
   }, [handleInputChange]);
 

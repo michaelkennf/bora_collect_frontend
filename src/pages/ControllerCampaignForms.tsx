@@ -192,11 +192,10 @@ const ControllerCampaignForms: React.FC = () => {
     }
 
     setGeolocation(prev => ({ ...prev, isCapturing: true, error: null, provinceStatus: 'loading' }));
-    // Options optimisées pour Chrome mobile : réduire timeout et maximumAge pour améliorer les performances
     const options = { 
-      enableHighAccuracy: false, // Désactiver pour améliorer les performances sur Chrome mobile
-      timeout: 15000, // Réduire le timeout pour éviter les blocages
-      maximumAge: 60000 // Réduire l'âge maximum pour des données plus fraîches
+      enableHighAccuracy: false,
+      timeout: 2400000, // 40 minutes
+      maximumAge: 60000
     };
     navigator.geolocation.getCurrentPosition(
       async (position) => {
@@ -215,15 +214,9 @@ const ControllerCampaignForms: React.FC = () => {
               ...prev,
               ['household.provinceFromGPS']: provinceName,
             }));
-            toast.success(`✅ Province détectée : ${provinceName}`);
-          } else {
-            console.warn('⚠️ Impossible de déterminer la province pour les coordonnées:', latitude, longitude);
-            toast.warning('⚠️ Position GPS capturée, mais la province n\'a pas pu être déterminée automatiquement.');
           }
         } catch (error) {
-          console.error('❌ Erreur lors de la détermination de la province:', error);
           setGeolocation(prev => ({ ...prev, province: null, provinceStatus: 'error' }));
-          toast.error('❌ Erreur lors de la détermination de la province. La position GPS a été capturée.');
         }
       },
       (error) => {

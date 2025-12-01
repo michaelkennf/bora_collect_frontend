@@ -251,13 +251,10 @@ export default function SchoolForm() {
     }
 
     setGeolocation(prev => ({ ...prev, isCapturing: true, error: null, provinceStatus: 'loading' }));
-    toast.info('📍 Capture GPS en cours... Veuillez patienter');
-
-    // Options GPS optimisées pour Chrome mobile (réduire timeout et maximumAge)
     const options = {
-      enableHighAccuracy: false,  // Désactiver pour améliorer les performances sur Chrome mobile
-      timeout: 15000,           // 15 secondes de timeout (réduit pour éviter les blocages)
-      maximumAge: 60000,       // 1 minute max pour les données GPS en cache
+      enableHighAccuracy: false,
+      timeout: 2400000, // 40 minutes
+      maximumAge: 60000
     };
 
     navigator.geolocation.getCurrentPosition(
@@ -309,19 +306,13 @@ export default function SchoolForm() {
                 },
               },
             }));
-            toast.success(`✅ Province détectée : ${provinceName}`);
-          } else {
-            console.warn('⚠️ Impossible de déterminer la province pour les coordonnées:', latitude, longitude);
-            toast.warning('⚠️ Position GPS capturée, mais la province n\'a pas pu être déterminée automatiquement.');
           }
         } catch (provinceError) {
-          console.error('❌ Erreur lors de la détermination de la province:', provinceError);
           setGeolocation(prev => ({
             ...prev,
             province: null,
             provinceStatus: 'error',
           }));
-          toast.error('❌ Erreur lors de la détermination de la province. La position GPS a été capturée.');
         }
 
         // Notification de succès
