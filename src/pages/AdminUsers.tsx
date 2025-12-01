@@ -169,17 +169,26 @@ export default function AdminUsers() {
   // Réinitialiser le mot de passe
   const handleResetPwd = async () => {
     if (!showReset) return;
+    if (!resetPwd || resetPwd.length < 6) {
+      setResetError('Le mot de passe doit contenir au moins 6 caractères');
+      return;
+    }
     setResetSaving(true);
     setResetError('');
     try {
-              const res = await fetch(`${environment.apiBaseUrl}/users/${showReset}`, {
-        method: 'PATCH',
+      const res = await fetch(`${environment.apiBaseUrl}/users/${showReset}/reset-password`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify({ password: resetPwd }),
       });
-      if (!res.ok) throw new Error('Erreur lors de la réinitialisation');
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Erreur lors de la réinitialisation');
+      }
       setShowReset(null);
       setResetPwd('');
+      setResetError('');
+      alert('✅ Mot de passe réinitialisé avec succès');
       fetchUsers();
     } catch (err: any) {
       setResetError(err.message || 'Erreur inconnue');
