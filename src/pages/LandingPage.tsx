@@ -91,6 +91,13 @@ const profiles = [
     image:
       'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?auto=format&fit=crop&w=900&q=80',
   },
+  {
+    title: 'Analyste',
+    description:
+      'Validez, analysez et transformez les données collectées en insights actionnables pour des décisions éclairées.',
+    image:
+      'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=900&q=80',
+  },
 ];
 
 const LandingPage = () => {
@@ -305,11 +312,11 @@ const LandingPage = () => {
             </Reveal>
             <Reveal delay={100}>
               <h2 className="text-3xl font-semibold text-slate-900 sm:text-4xl">
-                Deux rôles complémentaires
+                Trois rôles complémentaires
               </h2>
             </Reveal>
           </div>
-          <div className="mx-auto grid w-full max-w-6xl gap-10 md:grid-cols-2">
+          <div className="mx-auto grid w-full max-w-6xl gap-10 md:grid-cols-3">
             {profiles.map((role, index) => (
               <Reveal key={role.title} delay={index * 180}>
                 <div className="overflow-hidden rounded-[36px] border border-slate-100 shadow-2xl shadow-blue-100/50">

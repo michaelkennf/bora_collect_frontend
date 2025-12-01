@@ -76,6 +76,8 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
     message: '',
     type: 'success'
   });
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   // Styles CSS pour les animations 3D
   const flipCardStyles = `
@@ -221,6 +223,73 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
         formData: response.formData || {}
       };
     });
+  };
+
+  // Fonction pour réinitialiser les données d'une campagne
+  const resetCampaignData = async () => {
+    if (!selectedCampaign) {
+      toast.error('Veuillez sélectionner une campagne');
+      return;
+    }
+
+    setResetting(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast.error('Vous devez être connecté');
+        return;
+      }
+
+      const response = await fetch(`${environment.apiBaseUrl}/records/campaign/${selectedCampaign}/reset`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSuccessNotification({
+          show: true,
+          message: `✅ ${data.message}. ${data.totalDeleted} formulaire(s) supprimé(s).`,
+          type: 'success'
+        });
+        
+        // Fermer le modal
+        setShowResetModal(false);
+        
+        // Recharger les données (qui seront maintenant vides)
+        fetchCampaignResponses(selectedCampaign);
+        fetchEnumeratorStats(selectedCampaign);
+        
+        // Réinitialiser les états
+        setResponses([]);
+        setEnumeratorStats([]);
+        setEnumeratorSubmissions(null);
+        setSelectedEnumeratorId(null);
+        
+        toast.success('Données de la campagne réinitialisées avec succès');
+      } else {
+        setSuccessNotification({
+          show: true,
+          message: `❌ Erreur: ${data.message || 'Impossible de réinitialiser les données'}`,
+          type: 'error'
+        });
+        toast.error(data.message || 'Erreur lors de la réinitialisation');
+      }
+    } catch (error: any) {
+      console.error('Erreur lors de la réinitialisation:', error);
+      setSuccessNotification({
+        show: true,
+        message: '❌ Erreur lors de la réinitialisation des données',
+        type: 'error'
+      });
+      toast.error('Erreur lors de la réinitialisation');
+    } finally {
+      setResetting(false);
+    }
   };
 
   const exportToCSV = async () => {
@@ -411,27 +480,39 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
               </select>
             </div>
             {selectedCampaign && (
-              <button
-                onClick={exportToCSV}
-                disabled={exporting || responses.length === 0}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 transition-colors duration-200 hover:scale-105 active:scale-95"
-              >
-                {exporting ? (
-                  <>
-                    <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    <span>Export en cours...</span>
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <span>Exporter en Excel</span>
-                  </>
-                )}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={exportToCSV}
+                  disabled={exporting || responses.length === 0}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 transition-colors duration-200 hover:scale-105 active:scale-95"
+                >
+                  {exporting ? (
+                    <>
+                      <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      <span>Export en cours...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <span>Exporter en Excel</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => setShowResetModal(true)}
+                  disabled={resetting}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 transition-colors duration-200 hover:scale-105 active:scale-95"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span>Réinitialiser</span>
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -988,6 +1069,72 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
           </div>
         )}
       </div>
+
+      {/* Modal de confirmation pour réinitialisation */}
+      {showResetModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="flex-shrink-0 w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                  <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-gray-900">Réinitialiser les données</h3>
+                  <p className="text-sm text-gray-600 mt-1">Cette action est irréversible</p>
+                </div>
+              </div>
+              
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                <p className="text-sm text-red-800 font-medium mb-2">
+                  ⚠️ Attention : Cette action va supprimer définitivement :
+                </p>
+                <ul className="text-sm text-red-700 list-disc list-inside space-y-1">
+                  <li>Tous les formulaires soumis par application</li>
+                  <li>Toutes les soumissions via les liens publics</li>
+                  <li>Toutes les statistiques de la campagne</li>
+                </ul>
+                <p className="text-sm text-red-800 font-semibold mt-3">
+                  Les données seront perdues et ne pourront pas être récupérées.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowResetModal(false)}
+                  disabled={resetting}
+                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors font-medium disabled:opacity-50"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={resetCampaignData}
+                  disabled={resetting}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {resetting ? (
+                    <>
+                      <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      <span>Réinitialisation...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      <span>Confirmer la réinitialisation</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Notification de succès */}
       <SuccessNotification

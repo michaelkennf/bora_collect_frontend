@@ -15,6 +15,13 @@ interface FormField {
   description?: string;
   section?: string; // Pour les champs dans des sections
   fieldKey?: string; // Clé originale du champ
+  conditional?: {
+    field: string;
+    value: any;
+    operator?: string;
+  };
+  helpText?: string; // Pour l'explication quand la réponse est "Non"
+  rankingOptions?: string[]; // Options de rang pour les champs ranking (ex: ["1er", "2e", "3e"])
 }
 
 interface FormTemplate {
@@ -78,6 +85,9 @@ const parseFormTemplate = (template: FormTemplate | null): FormTemplate | null =
             description: field.helpText,
             section: sectionKey, // Garder la section pour la transformation
             fieldKey: fieldKey, // Garder le fieldKey original
+            conditional: field.conditional, // Garder la logique conditionnelle
+            helpText: field.helpText, // Garder le texte d'aide
+            rankingOptions: field.rankingOptions, // Garder les options de rang
           });
         });
       }
@@ -133,6 +143,33 @@ const PublicFormPage = () => {
     }));
   };
 
+  // Fonction pour vérifier si un champ doit être affiché selon les conditions
+  const shouldShowField = (field: FormField): boolean => {
+    if (!field.conditional) return true;
+    
+    const { field: conditionalField, value: conditionalValue, operator = 'equals' } = field.conditional;
+    
+    // Construire l'ID complet du champ conditionnel
+    const conditionalFieldId = conditionalField.includes('.') 
+      ? conditionalField 
+      : field.section 
+        ? `${field.section}.${conditionalField}` 
+        : conditionalField;
+    
+    const fieldValue = formData[conditionalFieldId];
+    
+    switch (operator) {
+      case 'equals':
+        return fieldValue === conditionalValue;
+      case 'not_equals':
+        return fieldValue !== conditionalValue;
+      case 'contains':
+        return Array.isArray(fieldValue) ? fieldValue.includes(conditionalValue) : fieldValue?.includes(conditionalValue);
+      default:
+        return fieldValue === conditionalValue;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -150,39 +187,15 @@ const PublicFormPage = () => {
         }
       });
       
-      // Traiter les champs ranking pour les convertir en format objet
+      // Traiter les champs ranking - les données sont déjà dans le format { option: rank }
+      // Pas besoin de transformation car elles sont déjà stockées correctement
       if (formTemplate?.fields) {
         formTemplate.fields.forEach((field) => {
-          if (field.type === 'ranking' && field.options) {
-            const rankingData: Record<string, string> = {};
-            let hasRanking = false;
-            
-            field.options.forEach((option) => {
-              const rankKey = `${field.id}_${option}`;
-              if (formData[rankKey]) {
-                rankingData[option] = formData[rankKey];
-                hasRanking = true;
-              }
-            });
-            
-            if (hasRanking) {
-              // Convertir les rangs en format texte (1er, 2e, 3e, etc.)
-              const rankTexts: Record<string, string> = {};
-              Object.entries(rankingData).forEach(([option, rank]) => {
-                const rankNum = parseInt(rank);
-                if (rankNum === 1) rankTexts[option] = '1er';
-                else if (rankNum === 2) rankTexts[option] = '2e';
-                else if (rankNum === 3) rankTexts[option] = '3e';
-                else if (rankNum === 4) rankTexts[option] = '4e';
-                else if (rankNum === 5) rankTexts[option] = '5e';
-                else rankTexts[option] = `${rankNum}e`;
-              });
-              transformedFormData[field.id] = rankTexts;
-              
-              // Supprimer les clés temporaires
-              field.options.forEach((option) => {
-                delete transformedFormData[`${field.id}_${option}`];
-              });
+          if (field.type === 'ranking') {
+            // Les données de ranking sont déjà dans le format { "Bois": "1er", "Charbon de bois": "2e" }
+            // On s'assure juste que le champ existe dans transformedFormData
+            if (formData[field.id] && typeof formData[field.id] === 'object') {
+              transformedFormData[field.id] = formData[field.id];
             }
           }
           
@@ -323,23 +336,91 @@ const PublicFormPage = () => {
       
       case 'ranking':
         const rankOptions = field.options || [];
+        const rankingOptions = field.rankingOptions || ['1er', '2e', '3e', '4e', '5e'];
+        
         return (
-          <div className="space-y-2">
-            {rankOptions.map((option, idx) => (
-              <div key={option} className="flex items-center gap-2">
-                <select
-                  value={formData[`${field.id}_${option}`] || ''}
-                  onChange={(e) => handleInputChange(`${field.id}_${option}`, e.target.value)}
-                  className="px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                >
-                  <option value="">Rang</option>
-                  {rankOptions.map((_, i) => (
-                    <option key={i} value={i + 1}>{i + 1}</option>
-                  ))}
-                </select>
-                <span className="text-slate-700">{option}</span>
-              </div>
-            ))}
+          <div className="space-y-3">
+            <p className="text-sm text-slate-600 mb-3">
+              Sélectionnez les combustibles utilisés et classez-les par ordre d'importance (1er, 2e, 3e, etc.)
+            </p>
+            {rankOptions.map((option: string, optIndex: number) => {
+              // Obtenir les rangs déjà utilisés
+              const currentRankings = formData[field.id] || {};
+              const usedRanks = Object.values(currentRankings).filter((rank: any) => rank !== '');
+              const currentRank = currentRankings[option] || '';
+              
+              return (
+                <div key={optIndex} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={currentRank !== ''}
+                    onChange={(e) => {
+                      const currentRankings = formData[field.id] || {};
+                      let newRankings = { ...currentRankings };
+                      
+                      if (e.target.checked) {
+                        // Si on coche, assigner le premier rang disponible
+                        const availableRanks = rankingOptions.filter((rank: string) => !usedRanks.includes(rank));
+                        if (availableRanks.length > 0) {
+                          newRankings[option] = availableRanks[0];
+                        }
+                      } else {
+                        // Si on décoche, retirer le rang
+                        newRankings[option] = '';
+                      }
+                      
+                      handleInputChange(field.id, newRankings);
+                    }}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-slate-700 flex-1">{option}</span>
+                  <select
+                    value={currentRank}
+                    onChange={(e) => {
+                      const newRank = e.target.value;
+                      const currentRankings = formData[field.id] || {};
+                      
+                      // Si on sélectionne un rang déjà utilisé par un autre combustible, on le retire d'abord
+                      let newRankings = { ...currentRankings };
+                      if (newRank !== '') {
+                        // Retirer ce rang de tous les autres combustibles
+                        Object.keys(newRankings).forEach(key => {
+                          if (key !== option && newRankings[key] === newRank) {
+                            newRankings[key] = '';
+                          }
+                        });
+                      }
+                      
+                      // Assigner le nouveau rang au combustible actuel
+                      newRankings[option] = newRank;
+                      handleInputChange(field.id, newRankings);
+                    }}
+                    className="px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
+                    disabled={currentRank === ''}
+                  >
+                    <option value="">-- Non utilisé --</option>
+                    {rankingOptions.map((rank: string, rankIndex: number) => {
+                      const isUsed = usedRanks.includes(rank) && rank !== currentRank;
+                      return (
+                        <option 
+                          key={rankIndex} 
+                          value={rank}
+                          disabled={isUsed}
+                          style={{ color: isUsed ? '#999' : 'inherit' }}
+                        >
+                          {rank} {isUsed ? '(déjà utilisé)' : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              );
+            })}
+            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+              <p className="text-xs text-blue-700">
+                💡 Astuce : Cochez les combustibles que vous utilisez, puis classez-les par ordre d'importance en sélectionnant un rang pour chacun.
+              </p>
+            </div>
           </div>
         );
       case 'text':
@@ -585,24 +666,49 @@ const PublicFormPage = () => {
 
             {/* Form Fields */}
             <div className="space-y-6">
-              {(Array.isArray(formTemplate.fields) ? formTemplate.fields : []).map((field: FormField) => (
-                <div key={field.id}>
-                  {field.type === 'section' || field.type === 'info' ? (
-                    renderField(field)
-                  ) : (
-                    <>
-                      <label htmlFor={field.id} className="block text-sm font-medium text-slate-700 mb-2">
-                        {field.label}
-                        {field.required && <span className="text-red-500 ml-1">*</span>}
-                      </label>
-                      {field.description && (
-                        <p className="text-xs text-slate-500 mb-2">{field.description}</p>
-                      )}
-                      {renderField(field)}
-                    </>
-                  )}
-                </div>
-              ))}
+              {(Array.isArray(formTemplate.fields) ? formTemplate.fields : []).map((field: FormField) => {
+                // Vérifier si le champ doit être affiché selon les conditions
+                if (!shouldShowField(field)) {
+                  return null;
+                }
+
+                // Vérifier si on doit afficher l'explication pour "Non"
+                // L'explication s'affiche si :
+                // 1. Le champ a un helpText
+                // 2. Le champ est de type radio/select avec des options Oui/Non
+                // 3. La valeur sélectionnée est "Non"
+                const fieldValue = formData[field.id];
+                const showNonExplanation = field.helpText && 
+                  fieldValue === 'Non' && 
+                  (field.type === 'radio' || field.type === 'select') &&
+                  field.options?.includes('Non');
+
+                return (
+                  <div key={field.id}>
+                    {field.type === 'section' || field.type === 'info' ? (
+                      renderField(field)
+                    ) : (
+                      <>
+                        <label htmlFor={field.id} className="block text-sm font-medium text-slate-700 mb-2">
+                          {field.label}
+                          {field.required && <span className="text-red-500 ml-1">*</span>}
+                        </label>
+                        {field.description && (
+                          <p className="text-xs text-slate-500 mb-2">{field.description}</p>
+                        )}
+                        {renderField(field)}
+                        {/* Afficher l'explication si la réponse est "Non" */}
+                        {showNonExplanation && (
+                          <div className="mt-3 bg-blue-50 border border-blue-200 rounded-xl p-4 text-blue-700 text-sm">
+                            <p className="font-medium mb-1">Explication pour l'enquêteur :</p>
+                            <p>{field.helpText}</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {/* Error Message */}

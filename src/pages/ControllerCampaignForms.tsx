@@ -11,6 +11,8 @@ interface Campaign {
   description: string;
   status: string;
   publishedAt: string;
+  endDate?: string | null;
+  isExpired?: boolean;
 }
 
 interface FormTemplate {
@@ -197,16 +199,22 @@ const ControllerCampaignForms: React.FC = () => {
         console.log('✅ Applications approuvées chargées:', applicationsData);
         
         // Extraire les campagnes des applications
-        const campaignsFromApplications = applicationsData.map((app: any) => ({
-          id: app.survey.id,
-          title: app.survey.title,
-          description: app.survey.description,
-          startDate: app.survey.startDate,
-          endDate: app.survey.endDate,
-          status: app.survey.status,
-          publishedAt: app.survey.publishedAt,
-          publisher: app.survey.publisher
-        }));
+        const now = new Date();
+        const campaignsFromApplications = applicationsData.map((app: any) => {
+          const endDate = app.survey.endDate ? new Date(app.survey.endDate) : null;
+          const isExpired = endDate ? endDate < now : false;
+          return {
+            id: app.survey.id,
+            title: app.survey.title,
+            description: app.survey.description,
+            startDate: app.survey.startDate,
+            endDate: app.survey.endDate,
+            status: app.survey.status,
+            publishedAt: app.survey.publishedAt,
+            publisher: app.survey.publisher,
+            isExpired
+          };
+        });
         
         setCampaigns(campaignsFromApplications);
         console.log('✅ Campagnes extraites:', campaignsFromApplications);
@@ -223,15 +231,30 @@ const ControllerCampaignForms: React.FC = () => {
 
 
   const handleCampaignSelect = useCallback(async (campaignId: string) => {
-    if (!campaignId) return;
+    if (!campaignId) {
+      setSelectedCampaignId('');
+      setSelectedForm(null);
+      return;
+    }
     
+    // Réinitialiser le formulaire sélectionné avant de charger
+    setSelectedForm(null);
     setSelectedCampaignId(campaignId);
     setFormsLoading(true);
+    
+    // Vérifier d'abord côté frontend si la campagne est expirée
+    const selectedCampaign = campaigns.find(c => c.id === campaignId);
+    if (selectedCampaign?.isExpired) {
+      toast.warning('Cette campagne est terminée. Les formulaires ne sont plus accessibles.');
+      setFormsLoading(false);
+      return;
+    }
     
     try {
       const token = localStorage.getItem('token');
       if (!token) {
         toast.error('Vous devez être connecté pour accéder à cette page');
+        setFormsLoading(false);
         return;
       }
 
@@ -247,8 +270,19 @@ const ControllerCampaignForms: React.FC = () => {
       console.log('🔍 Réponse du serveur:', response.status, response.statusText);
 
       if (response.ok) {
-        const formsData = await response.json();
-        console.log('✅ Formulaires de la campagne chargés:', formsData);
+        const responseData = await response.json();
+        console.log('✅ Réponse du serveur:', responseData);
+        
+        // Vérifier si la campagne est expirée
+        if (responseData.isExpired) {
+          toast.warning(responseData.message || 'Cette campagne est terminée');
+          setSelectedForm(null);
+          setFormsLoading(false);
+          return;
+        }
+        
+        // Si c'est un tableau (ancien format) ou un objet avec forms
+        const formsData = Array.isArray(responseData) ? responseData : (responseData.forms || []);
         
         if (formsData.length > 0) {
           // Ouvrir directement le premier formulaire actif
@@ -257,22 +291,26 @@ const ControllerCampaignForms: React.FC = () => {
             setSelectedForm(activeForm);
           } else {
             toast.warning('Aucun formulaire actif trouvé pour cette campagne');
+            setSelectedForm(null);
           }
         } else {
           toast.warning('Aucun formulaire trouvé pour cette campagne');
+          setSelectedForm(null);
         }
       } else {
         const errorText = await response.text();
         console.error('❌ Erreur lors du chargement des formulaires:', response.status, errorText);
         toast.error(`Erreur lors du chargement des formulaires: ${response.status}`);
+        setSelectedForm(null);
       }
     } catch (error) {
       console.error('❌ Erreur de connexion au serveur:', error);
       toast.error('Erreur de connexion au serveur');
+      setSelectedForm(null);
     } finally {
       setFormsLoading(false);
     }
-  }, [apiBaseUrl]);
+  }, [apiBaseUrl, campaigns]);
 
   const handleFormSubmit = async () => {
     if (!selectedForm) return;
@@ -499,9 +537,44 @@ const ControllerCampaignForms: React.FC = () => {
     );
   }
 
-  // Si un formulaire est sélectionné, afficher le formulaire
+  // Si un formulaire est sélectionné, vérifier d'abord si la campagne n'est pas expirée
   if (selectedForm) {
     const selectedCampaign = campaigns.find(c => c.id === selectedCampaignId);
+    
+    // Si la campagne est expirée, ne pas afficher le formulaire
+    if (selectedCampaign?.isExpired) {
+      return (
+        <div className="min-h-screen bg-gray-50 p-6">
+          <div className="max-w-7xl mx-auto">
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-6">
+              <div className="flex items-start gap-3">
+                <svg className="w-6 h-6 text-orange-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-orange-800">Campagne terminée</h3>
+                  <p className="text-orange-700 mt-2">
+                    Cette campagne est terminée. Les formulaires ne sont plus accessibles.
+                    {selectedCampaign.endDate && (
+                      <span className="block mt-2">
+                        Date de fin : {formatDate(selectedCampaign.endDate)}
+                      </span>
+                    )}
+                  </p>
+                  <button
+                    onClick={handleBackToSelection}
+                    className="mt-4 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors"
+                  >
+                    Retour à la sélection
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
     return (
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-7xl mx-auto">
@@ -953,11 +1026,39 @@ const ControllerCampaignForms: React.FC = () => {
               <option value="">-- Sélectionnez une campagne --</option>
               {campaigns.map((campaign) => (
                 <option key={campaign.id} value={campaign.id}>
-                  {campaign.title}
+                  {campaign.title} {campaign.isExpired ? '(Terminée)' : ''}
                 </option>
               ))}
             </select>
           </div>
+
+          {/* Message si une campagne expirée est sélectionnée */}
+          {selectedCampaignId && (() => {
+            const selectedCampaign = campaigns.find(c => c.id === selectedCampaignId);
+            if (selectedCampaign?.isExpired) {
+              return (
+                <div className="mt-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                  <div className="flex items-start gap-3">
+                    <svg className="w-5 h-5 text-orange-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div>
+                      <h3 className="text-sm font-semibold text-orange-800">Campagne terminée</h3>
+                      <p className="text-sm text-orange-700 mt-1">
+                        Cette campagne est terminée. Les formulaires ne sont plus accessibles.
+                        {selectedCampaign.endDate && (
+                          <span className="block mt-1">
+                            Date de fin : {formatDate(selectedCampaign.endDate)}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          })()}
 
           {campaigns.length === 0 ? (
             <div className="text-center py-8">

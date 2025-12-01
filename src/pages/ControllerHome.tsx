@@ -168,7 +168,15 @@ export function DashboardController({ setView }: { setView: (view: string) => vo
     if (user) {
       fetchDashboardStats();
       fetchDailyObjectives();
+      
+      // Rafraîchir les statistiques toutes les 30 secondes pour mettre à jour les compteurs
+      const statsInterval = setInterval(() => {
+        fetchDashboardStats();
+      }, 30000); // 30 secondes
+      
+      return () => clearInterval(statsInterval);
     }
+    return undefined;
   }, [user]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
