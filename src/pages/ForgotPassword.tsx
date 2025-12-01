@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Mail, KeyRound, CheckCircle, Loader2, Eye, EyeOff } from 'lucide-react';
 import logo2 from '../assets/images/logo2.jpg';
@@ -19,8 +19,8 @@ const ForgotPassword: React.FC = () => {
   const [message, setMessage] = useState('');
   const navigate = useNavigate();
 
-  // Étape 1 : Envoyer le code de vérification
-  const handleSendCode = async (e: React.FormEvent) => {
+  // Étape 1 : Envoyer le code de vérification (optimisé avec useCallback)
+  const handleSendCode = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
@@ -45,10 +45,10 @@ const ForgotPassword: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [email]);
 
-  // Étape 2 : Vérifier le code
-  const handleVerifyCode = async (e: React.FormEvent) => {
+  // Étape 2 : Vérifier le code (optimisé avec useCallback)
+  const handleVerifyCode = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
@@ -72,10 +72,10 @@ const ForgotPassword: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [email, code]);
 
-  // Étape 3 : Réinitialiser le mot de passe
-  const handleResetPassword = async (e: React.FormEvent) => {
+  // Étape 3 : Réinitialiser le mot de passe (optimisé avec useCallback)
+  const handleResetPassword = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -110,10 +110,10 @@ const ForgotPassword: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [email, code, newPassword, confirmPassword]);
 
-  // Renvoyer le code
-  const handleResendCode = async () => {
+  // Renvoyer le code (optimisé avec useCallback)
+  const handleResendCode = useCallback(async () => {
     setError('');
     setLoading(true);
 
@@ -133,7 +133,7 @@ const ForgotPassword: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [email]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">

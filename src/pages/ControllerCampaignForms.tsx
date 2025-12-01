@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { toast } from 'react-toastify';
 import { Loader2 } from 'lucide-react';
 import { environment } from '../config/environment';
@@ -104,6 +104,28 @@ const ControllerCampaignForms: React.FC = () => {
     return extractFieldsFromForm(selectedForm.fields);
   }, [selectedForm, extractFieldsFromForm]);
   
+  // Fonction pour vérifier si un champ doit être affiché selon les conditions (déclarée avant utilisation)
+  const shouldShowField = useCallback((field: any): boolean => {
+    if (!field.conditional) return true;
+    
+    const { field: conditionalField, value: conditionalValue, operator } = field.conditional;
+    
+    // Construire l'ID complet du champ conditionnel
+    const conditionalFieldId = conditionalField.includes('.') ? conditionalField : `${field.section}.${conditionalField}`;
+    const fieldValue = formData[conditionalFieldId];
+    
+    switch (operator) {
+      case 'equals':
+        return fieldValue === conditionalValue;
+      case 'not_equals':
+        return fieldValue !== conditionalValue;
+      case 'contains':
+        return Array.isArray(fieldValue) ? fieldValue.includes(conditionalValue) : fieldValue?.includes(conditionalValue);
+      default:
+        return true;
+    }
+  }, [formData]);
+  
   // Mémoriser les sections groupées pour éviter de recalculer à chaque rendu
   const sections = useMemo(() => {
     if (!extractedFields.length) return {};
@@ -116,6 +138,34 @@ const ControllerCampaignForms: React.FC = () => {
       return acc;
     }, {});
   }, [extractedFields]);
+  
+  // Mémoriser les fonctions utilitaires pour éviter les recréations
+  const getSectionClasses = useCallback((label: string) => {
+    if (/Identification du ménage/i.test(label)) return 'bg-blue-50 border-blue-200';
+    if (/Mode de cuisson actuelle/i.test(label)) return 'bg-green-50 border-green-200';
+    if (/Connaissance des solutions de cuisson propres/i.test(label)) return 'bg-yellow-50 border-yellow-200';
+    if (/Perceptions et contraintes/i.test(label)) return 'bg-red-50 border-red-200';
+    if (/Intention d\'adoption/i.test(label)) return 'bg-purple-50 border-purple-200';
+    return 'bg-gray-50 border-gray-200';
+  }, []);
+  
+  const getSectionNumber = useCallback((label: string) => {
+    if (/Identification du ménage/i.test(label)) return '1. ';
+    if (/Mode de cuisson actuelle/i.test(label)) return '2. ';
+    if (/Connaissance des solutions de cuisson propres/i.test(label)) return '3. ';
+    if (/Perceptions et contraintes/i.test(label)) return '4. ';
+    if (/Intention d\'adoption/i.test(label)) return '5. ';
+    return '';
+  }, []);
+  
+  // Mémoriser les champs visibles par section pour éviter les recalculs
+  const visibleFieldsBySection = useMemo(() => {
+    const result: Record<string, any[]> = {};
+    Object.keys(sections).forEach(sectionKey => {
+      result[sectionKey] = sections[sectionKey].fields.filter((field: any) => shouldShowField(field));
+    });
+    return result;
+  }, [sections, shouldShowField]);
   
   // Vérifier la compatibilité du navigateur (spécialement pour Chrome)
   useEffect(() => {
@@ -165,11 +215,15 @@ const ControllerCampaignForms: React.FC = () => {
               ...prev,
               ['household.provinceFromGPS']: provinceName,
             }));
+            toast.success(`✅ Province détectée : ${provinceName}`);
+          } else {
+            console.warn('⚠️ Impossible de déterminer la province pour les coordonnées:', latitude, longitude);
+            toast.warning('⚠️ Position GPS capturée, mais la province n\'a pas pu être déterminée automatiquement.');
           }
         } catch (error) {
-          // Réduire les logs pour améliorer les performances
-          // Ne logger que si nécessaire pour le débogage
+          console.error('❌ Erreur lors de la détermination de la province:', error);
           setGeolocation(prev => ({ ...prev, province: null, provinceStatus: 'error' }));
+          toast.error('❌ Erreur lors de la détermination de la province. La position GPS a été capturée.');
         }
       },
       (error) => {
@@ -505,37 +559,14 @@ const ControllerCampaignForms: React.FC = () => {
     resetGeolocation();
   };
 
-  const handleFieldChange = (fieldId: string, value: any) => {
+  // Optimiser handleFieldChange avec useCallback pour éviter les re-renders
+  const handleFieldChange = useCallback((fieldId: string, value: any) => {
     setFormData(prev => ({
       ...prev,
       [fieldId]: value
     }));
-  };
+  }, []);
 
-  // Fonction pour vérifier si un champ doit être affiché selon les conditions
-  // Mémoriser shouldShowField pour éviter les recalculs
-  const shouldShowField = useCallback((field: any): boolean => {
-    if (!field.conditional) return true;
-    
-    const { field: conditionalField, value: conditionalValue, operator } = field.conditional;
-    
-    // Construire l'ID complet du champ conditionnel
-    const conditionalFieldId = conditionalField.includes('.') ? conditionalField : `${field.section}.${conditionalField}`;
-    const fieldValue = formData[conditionalFieldId];
-    
-    // Réduire les logs pour améliorer les performances sur appareils mobiles
-    
-    switch (operator) {
-      case 'equals':
-        return fieldValue === conditionalValue;
-      case 'not_equals':
-        return fieldValue !== conditionalValue;
-      case 'contains':
-        return Array.isArray(fieldValue) ? fieldValue.includes(conditionalValue) : fieldValue?.includes(conditionalValue);
-      default:
-        return true;
-    }
-  }, [formData]);
 
   const formatDate = (dateString: string) => {
     try {
@@ -661,40 +692,25 @@ const ControllerCampaignForms: React.FC = () => {
               </div>
             </div>
 
-            {/* Formulaire dynamique avec sections colorées (optimisé pour performance) */}
+            {/* Formulaire dynamique avec sections colorées (ultra-optimisé pour Chrome) */}
             <div className="space-y-6">
               {Object.keys(sections).map((sectionKey) => {
                 const section = sections[sectionKey];
+                const visibleFields = visibleFieldsBySection[sectionKey] || [];
                 
-                // Fonctions utilitaires mémorisées
-                const getSectionClasses = (label: string) => {
-                  if (/Identification du ménage/i.test(label)) return 'bg-blue-50 border-blue-200';
-                  if (/Mode de cuisson actuelle/i.test(label)) return 'bg-green-50 border-green-200';
-                  if (/Connaissance des solutions de cuisson propres/i.test(label)) return 'bg-yellow-50 border-yellow-200';
-                  if (/Perceptions et contraintes/i.test(label)) return 'bg-red-50 border-red-200';
-                  if (/Intention d\'adoption/i.test(label)) return 'bg-purple-50 border-purple-200';
-                  return 'bg-gray-50 border-gray-200';
-                };
-
-                const getSectionNumber = (label: string) => {
-                  if (/Identification du ménage/i.test(label)) return '1. ';
-                  if (/Mode de cuisson actuelle/i.test(label)) return '2. ';
-                  if (/Connaissance des solutions de cuisson propres/i.test(label)) return '3. ';
-                  if (/Perceptions et contraintes/i.test(label)) return '4. ';
-                  if (/Intention d\'adoption/i.test(label)) return '5. ';
-                  return '';
-                };
-
+                // Si aucune section visible, ne pas rendre
+                if (visibleFields.length === 0) return null;
+                
                 const sectionClasses = getSectionClasses(section.label);
+                const sectionNumber = getSectionNumber(section.label);
+                
                 return (
                   <div key={sectionKey} className={`p-4 sm:p-6 rounded-xl border ${sectionClasses}`}>
                       <h3 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4">
-                        {getSectionNumber(section.label)}{section.label}
+                        {sectionNumber}{section.label}
                       </h3>
                       <div className="space-y-4">
-                        {section.fields
-                          .filter((field: any) => shouldShowField(field)) // Filtrer avant le map pour améliorer les performances
-                          .map((field: any, index: number) => {
+                        {visibleFields.map((field: any, index: number) => {
                           
                           return (
                             <div key={index} className="space-y-2">
@@ -724,7 +740,7 @@ const ControllerCampaignForms: React.FC = () => {
                               </div>
                             ) : null}
 
-                            {field.type === 'text' && !(/geolocalisation/i.test(field.id)) && (
+                            {field.type === 'text' && !field.id.toLowerCase().includes('geolocalisation') && (
                               <input
                                 type="text"
                                 value={formData[field.id] || ''}

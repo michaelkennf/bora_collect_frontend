@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { Loader2 } from 'lucide-react';
@@ -238,8 +238,8 @@ export default function SchoolForm() {
     };
   }, []);
 
-  // Capturer la géolocalisation (fonction améliorée pour mode hors ligne)
-  const captureGeolocation = () => {
+  // Capturer la géolocalisation (optimisée avec useCallback pour Chrome mobile)
+  const captureGeolocation = useCallback(() => {
     if (!navigator.geolocation) {
       setGeolocation(prev => ({ 
         ...prev, 
@@ -253,11 +253,11 @@ export default function SchoolForm() {
     setGeolocation(prev => ({ ...prev, isCapturing: true, error: null, provinceStatus: 'loading' }));
     toast.info('📍 Capture GPS en cours... Veuillez patienter');
 
-    // Options GPS optimisées pour la précision
+    // Options GPS optimisées pour Chrome mobile (réduire timeout et maximumAge)
     const options = {
-      enableHighAccuracy: true,  // Précision maximale
-      timeout: 30000,           // 30 secondes de timeout (plus long pour mode hors ligne)
-      maximumAge: 300000,       // 5 minutes max pour les données GPS en cache
+      enableHighAccuracy: false,  // Désactiver pour améliorer les performances sur Chrome mobile
+      timeout: 15000,           // 15 secondes de timeout (réduit pour éviter les blocages)
+      maximumAge: 60000,       // 1 minute max pour les données GPS en cache
     };
 
     navigator.geolocation.getCurrentPosition(
@@ -265,12 +265,7 @@ export default function SchoolForm() {
         const { latitude, longitude, accuracy } = position.coords;
         const timestamp = Date.now();
         
-        console.log('✅ GPS capturé avec succès:', {
-          latitude,
-          longitude,
-          accuracy: `${accuracy}m`,
-          timestamp: new Date(timestamp).toLocaleString('fr-FR')
-        });
+        // Logs réduits pour améliorer les performances
 
         setGeolocation({
           latitude,
@@ -314,29 +309,29 @@ export default function SchoolForm() {
                 },
               },
             }));
+            toast.success(`✅ Province détectée : ${provinceName}`);
+          } else {
+            console.warn('⚠️ Impossible de déterminer la province pour les coordonnées:', latitude, longitude);
+            toast.warning('⚠️ Position GPS capturée, mais la province n\'a pas pu être déterminée automatiquement.');
           }
         } catch (provinceError) {
-          console.error('Erreur lors de la récupération de la province:', provinceError);
+          console.error('❌ Erreur lors de la détermination de la province:', provinceError);
           setGeolocation(prev => ({
             ...prev,
             province: null,
             provinceStatus: 'error',
           }));
+          toast.error('❌ Erreur lors de la détermination de la province. La position GPS a été capturée.');
         }
 
         // Notification de succès
         toast.success(`📍 Position GPS capturée avec précision de ${Math.round(accuracy)}m`);
         
-        // Afficher les informations GPS détaillées
-        console.log('📍 Informations GPS détaillées:', {
-          coordonnées: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
-          précision: `${Math.round(accuracy)} mètres`,
-          heure: new Date(timestamp).toLocaleTimeString('fr-FR'),
-          date: new Date(timestamp).toLocaleDateString('fr-FR')
-        });
+        // Logs réduits pour améliorer les performances
+        // Les informations GPS détaillées sont disponibles dans geolocation state
       },
       (error) => {
-        console.error('❌ Erreur GPS complète:', error);
+        // Logs réduits pour améliorer les performances
         
         let errorMessage = '';
         let toastMessage = '';
@@ -366,12 +361,7 @@ export default function SchoolForm() {
           toastMessage = '❌ Erreur GPS inattendue. Vérifiez votre appareil.';
         }
 
-        console.error('❌ Détails de l\'erreur GPS:', {
-          error: error,
-          code: error?.code,
-          message: error?.message,
-          errorMessage: errorMessage
-        });
+        // Logs réduits pour améliorer les performances
 
         setGeolocation({
           latitude: null,
@@ -388,7 +378,7 @@ export default function SchoolForm() {
       },
       options
     );
-  };
+  }, []);
 
   // Chargement automatique du formulaire à modifier si effectiveEditId est fourni
   useEffect(() => {
@@ -404,7 +394,7 @@ export default function SchoolForm() {
   };
 
   // Gestion du changement d'un champ du ménage
-  const handleHouseholdChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleHouseholdChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setForm(prev => ({
       ...prev,
@@ -416,10 +406,10 @@ export default function SchoolForm() {
         }
       }
     }));
-  };
+  }, []);
 
-  // Gestion du changement des combustibles avec classement
-  const handleCombustiblesChange = (combustible: string, checked: boolean) => {
+  // Gestion du changement des combustibles avec classement (optimisé avec useCallback)
+  const handleCombustiblesChange = useCallback((combustible: string, checked: boolean) => {
     setForm(prev => {
       const currentCombustibles = prev.formData.cooking.combustibles;
       const currentRanking = prev.formData.cooking.combustiblesRanking;
@@ -458,7 +448,7 @@ export default function SchoolForm() {
         }
       };
     });
-  };
+  }, []);
 
   // Gestion du changement de classement des combustibles
   const handleCombustibleRankingChange = (combustible: string, newRank: number) => {
@@ -503,8 +493,8 @@ export default function SchoolForm() {
     }));
   };
 
-  // Gestion du changement des équipements
-  const handleEquipementsChange = (equipement: string, checked: boolean) => {
+  // Gestion du changement des équipements (optimisé avec useCallback)
+  const handleEquipementsChange = useCallback((equipement: string, checked: boolean) => {
     setForm(prev => ({
       ...prev,
       formData: {
@@ -517,10 +507,10 @@ export default function SchoolForm() {
         }
       }
     }));
-  };
+  }, []);
 
-  // Gestion du changement des avantages
-  const handleAvantagesChange = (avantage: string, checked: boolean) => {
+  // Gestion du changement des avantages (optimisé avec useCallback)
+  const handleAvantagesChange = useCallback((avantage: string, checked: boolean) => {
     setForm(prev => ({
       ...prev,
       formData: {
@@ -533,10 +523,10 @@ export default function SchoolForm() {
         }
       }
     }));
-  };
+  }, []);
 
-  // Gestion du changement des obstacles
-  const handleObstaclesChange = (obstacle: string, checked: boolean) => {
+  // Gestion du changement des obstacles (optimisé avec useCallback)
+  const handleObstaclesChange = useCallback((obstacle: string, checked: boolean) => {
     setForm(prev => ({
       ...prev,
       formData: {
@@ -549,7 +539,7 @@ export default function SchoolForm() {
         }
       }
     }));
-  };
+  }, []);
 
   // Gestion du changement des autres champs
   const handleOtherChange = (section: string, field: string, value: string) => {
@@ -630,7 +620,7 @@ export default function SchoolForm() {
 
       // ÉTAPE 1: TOUJOURS sauvegarder en local d'abord (sécurité)
       const localId = await localStorageService.saveRecord(form);
-      console.log('✅ Enregistrement système sauvegardé en local avec ID:', localId);
+      // Logs réduits pour améliorer les performances
 
       // ÉTAPE 2: Vérifier la connectivité
       if (!isOnline) {
@@ -667,7 +657,7 @@ export default function SchoolForm() {
       }
 
       // ÉTAPE 4: Tentative d'envoi au serveur (endpoint système)
-      console.log('🌐 Tentative d\'envoi du formulaire système au serveur...');
+      // Logs réduits pour améliorer les performances
       const response = await fetch('https://api.collect.fikiri.co/records/system', {
         method: 'POST',
         headers: {
@@ -681,13 +671,13 @@ export default function SchoolForm() {
       if (response.ok) {
         // SUCCÈS: Le serveur a accepté le formulaire
         const result = await response.json();
-        console.log('✅ Formulaire envoyé avec succès au serveur:', result);
+        // Logs réduits pour améliorer les performances
         
         // Nettoyer le stockage local (optionnel, mais recommandé)
         try {
           await localStorageService.markAsSynced(localId, result.id);
           await localStorageService.removeSyncedRecord(localId);
-          console.log('✅ Stockage local nettoyé après synchronisation');
+          // Logs réduits pour améliorer les performances
         } catch (cleanupError) {
           console.warn('⚠️ Erreur lors du nettoyage local (non critique):', cleanupError);
         }

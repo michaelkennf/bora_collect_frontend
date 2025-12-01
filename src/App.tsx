@@ -1,55 +1,61 @@
 // Assurez-vous d'avoir installé react-router-dom : npm install react-router-dom
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import LandingPage from './pages/LandingPage';
-import Login from './pages/Login';
-import CreateAccount from './pages/CreateAccount';
-import ProjectManagerRegistration from './pages/ProjectManagerRegistration';
-import AccountCreatedSuccess from './pages/AccountCreatedSuccess';
-import AdminHome, { DashboardAdmin } from './pages/AdminHome';
-import ControllerHome, { DashboardController } from './pages/ControllerHome';
-import AnalystHome from './pages/AnalystHome';
-import ProjectManagerHome from './pages/ProjectManagerHome';
-import PMEnumeratorRequests from './pages/PMEnumeratorRequests';
-import RecordsList from './pages/RecordsList';
-import RecordsSyncedList from './pages/RecordsSyncedList';
-import SchoolForm from './pages/SchoolForm';
-import ExportsStats from './pages/ExportsStats';
-import AdminUsers from './pages/AdminUsers';
-import AdminParametres from './pages/AdminParametres';
-import AdminDeletedUsers from './pages/AdminDeletedUsers';
-import AdminPendingApprovals from './pages/AdminPendingApprovals';
-import AdminSurveyPublication from './pages/AdminSurveyPublication';
-import AdminCandidatures from './pages/AdminCandidatures';
-import ControllerAvailableSurveys from './pages/ControllerAvailableSurveys';
-import Settings from './pages/Settings';
-import PublicFormPage from './pages/PublicFormPage';
-import ForgotPassword from './pages/ForgotPassword';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-// Route protégée selon le rôle
+// Imports critiques (chargés immédiatement)
+import LandingPage from './pages/LandingPage';
+import Login from './pages/Login';
+import ForgotPassword from './pages/ForgotPassword';
+import PublicFormPage from './pages/PublicFormPage';
+
+// Lazy loading pour réduire le bundle initial
+const CreateAccount = lazy(() => import('./pages/CreateAccount'));
+const ProjectManagerRegistration = lazy(() => import('./pages/ProjectManagerRegistration'));
+const AccountCreatedSuccess = lazy(() => import('./pages/AccountCreatedSuccess'));
+const AdminHomeModule = lazy(() => import('./pages/AdminHome'));
+const ControllerHomeModule = lazy(() => import('./pages/ControllerHome'));
+const AnalystHome = lazy(() => import('./pages/AnalystHome'));
+const ProjectManagerHome = lazy(() => import('./pages/ProjectManagerHome'));
+const PMEnumeratorRequests = lazy(() => import('./pages/PMEnumeratorRequests'));
+const RecordsList = lazy(() => import('./pages/RecordsList'));
+const RecordsSyncedList = lazy(() => import('./pages/RecordsSyncedList'));
+const SchoolForm = lazy(() => import('./pages/SchoolForm'));
+const ExportsStats = lazy(() => import('./pages/ExportsStats'));
+const AdminUsers = lazy(() => import('./pages/AdminUsers'));
+const AdminParametres = lazy(() => import('./pages/AdminParametres'));
+const AdminDeletedUsers = lazy(() => import('./pages/AdminDeletedUsers'));
+const AdminPendingApprovals = lazy(() => import('./pages/AdminPendingApprovals'));
+const AdminSurveyPublication = lazy(() => import('./pages/AdminSurveyPublication'));
+const AdminCandidatures = lazy(() => import('./pages/AdminCandidatures'));
+const ControllerAvailableSurveys = lazy(() => import('./pages/ControllerAvailableSurveys'));
+const Settings = lazy(() => import('./pages/Settings'));
+
+// Composant de chargement
+const LoadingFallback = () => (
+  <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="text-center">
+      <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <p className="mt-4 text-gray-600">Chargement...</p>
+    </div>
+  </div>
+);
+
+// Route protégée selon le rôle (optimisée - logs réduits)
 function PrivateRoute({ children, roles }: { children: React.ReactNode; roles: string[] }) {
   const token = localStorage.getItem('token');
   const user = localStorage.getItem('user');
   
-  console.log('🔍 PrivateRoute - Token:', !!token, 'User:', !!user);
-  console.log('🔍 PrivateRoute - Roles attendus:', roles);
-  
   if (!token || !user) {
-    console.log('❌ PrivateRoute - Token ou user manquant, redirection vers login');
     return <Navigate to="/login" />;
   }
   
   try {
     const userData = JSON.parse(user);
-    console.log('🔍 PrivateRoute - User data:', userData);
-    console.log('🔍 PrivateRoute - User role:', userData.role);
-    console.log('🔍 PrivateRoute - User status:', userData.status);
     
     // Vérifier que les données utilisateur sont valides
     if (!userData || !userData.role || !userData.id) {
-      console.log('❌ PrivateRoute - Données utilisateur invalides');
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       return <Navigate to="/login" />;
@@ -57,24 +63,15 @@ function PrivateRoute({ children, roles }: { children: React.ReactNode; roles: s
     
     // Vérifier si l'utilisateur est actif (sauf pour les PM qui peuvent être PENDING_APPROVAL)
     if (userData.status && userData.status !== 'ACTIVE' && userData.status !== 'PENDING_APPROVAL') {
-      console.log('❌ PrivateRoute - Utilisateur non actif:', userData.status);
       return <Navigate to="/login" />;
-    }
-    
-    // Pour les PM en attente d'approbation, permettre l'accès mais avec un message
-    if (userData.status === 'PENDING_APPROVAL' && userData.role === 'PROJECT_MANAGER') {
-      console.log('⚠️ PrivateRoute - PM en attente d\'approbation, accès autorisé');
     }
     
     if (!roles.includes(userData.role)) {
-      console.log('❌ PrivateRoute - Rôle non autorisé:', userData.role, 'pour roles:', roles);
       return <Navigate to="/login" />;
     }
     
-    console.log('✅ PrivateRoute - Accès autorisé pour rôle:', userData.role);
     return <>{children}</>;
   } catch (error) {
-    console.error('❌ PrivateRoute - Erreur parsing user data:', error);
     // Nettoyer les données corrompues
     localStorage.removeItem('token');
     localStorage.removeItem('user');
@@ -87,63 +84,65 @@ export default function App() {
     <>
       <ToastContainer position="top-right" autoClose={3000} hideProgressBar newestOnTop closeOnClick pauseOnFocusLoss draggable pauseOnHover />
       <Router>
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/create-account" element={<CreateAccount />} />
-          <Route path="/project-manager-registration" element={<ProjectManagerRegistration />} />
-          <Route path="/account-created" element={<AccountCreatedSuccess />} />
-          <Route path="/admin" element={<PrivateRoute roles={["ADMIN"]}><AdminHome /></PrivateRoute>}>
-            <Route index element={<DashboardAdmin />} />
-            <Route path="users" element={<AdminUsers />} />
-            <Route path="pending-approvals" element={<AdminPendingApprovals />} />
-            <Route path="survey-publication" element={<AdminSurveyPublication />} />
-            <Route path="candidatures" element={<AdminCandidatures />} />
-            <Route path="parametres" element={<AdminParametres />} />
-            <Route path="deleted-users" element={<AdminDeletedUsers />} />
-            <Route path="exports" element={<ExportsStats />} />
-          </Route>
-          <Route path="/controleur" element={<PrivateRoute roles={["CONTROLLER"]}><ControllerHome /></PrivateRoute>}>
-            <Route index element={<DashboardController setView={() => {}} />} />
-            <Route path="formulaire" element={<SchoolForm />} />
-            <Route path="enquetes-disponibles" element={<ControllerAvailableSurveys />} />
-            <Route path="parametres" element={<Settings />} />
-          </Route>
-          <Route path="/admin/utilisateurs" element={
-            <PrivateRoute roles={["ADMIN"]}>
-              <AdminUsers />
-            </PrivateRoute>
-          } />
-          <Route path="/admin/parametres" element={
-            <PrivateRoute roles={["ADMIN"]}>
-              <AdminParametres />
-            </PrivateRoute>
-          } />
-          <Route path="/analyst-home" element={
-            <PrivateRoute roles={["ANALYST"]}>
-              <AnalystHome />
-            </PrivateRoute>
-          } />
-          <Route path="/project-manager" element={
-            <PrivateRoute roles={["PROJECT_MANAGER"]}>
-              <ProjectManagerHome />
-            </PrivateRoute>
-          } />
-          <Route path="/analyst/enumerator-requests" element={
-            <PrivateRoute roles={["PROJECT_MANAGER"]}>
-              <PMEnumeratorRequests />
-            </PrivateRoute>
-          } />
-          <Route path="/analyst/parametres" element={
-            <PrivateRoute roles={["ANALYST"]}>
-              <Settings />
-            </PrivateRoute>
-          } />
-          {/* Route publique pour formulaires via lien partagé */}
-          <Route path="/form/:token" element={<PublicFormPage />} />
-          <Route path="*" element={<Navigate to="/login" />} />
-        </Routes>
+        <Suspense fallback={<LoadingFallback />}>
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/create-account" element={<Suspense fallback={<LoadingFallback />}><CreateAccount /></Suspense>} />
+            <Route path="/project-manager-registration" element={<Suspense fallback={<LoadingFallback />}><ProjectManagerRegistration /></Suspense>} />
+            <Route path="/account-created" element={<Suspense fallback={<LoadingFallback />}><AccountCreatedSuccess /></Suspense>} />
+            <Route path="/admin" element={<PrivateRoute roles={["ADMIN"]}><Suspense fallback={<LoadingFallback />}><AdminHomeModule /></Suspense></PrivateRoute>}>
+              <Route index element={<Suspense fallback={<LoadingFallback />}><AdminHomeModule /></Suspense>} />
+              <Route path="users" element={<Suspense fallback={<LoadingFallback />}><AdminUsers /></Suspense>} />
+              <Route path="pending-approvals" element={<Suspense fallback={<LoadingFallback />}><AdminPendingApprovals /></Suspense>} />
+              <Route path="survey-publication" element={<Suspense fallback={<LoadingFallback />}><AdminSurveyPublication /></Suspense>} />
+              <Route path="candidatures" element={<Suspense fallback={<LoadingFallback />}><AdminCandidatures /></Suspense>} />
+              <Route path="parametres" element={<Suspense fallback={<LoadingFallback />}><AdminParametres /></Suspense>} />
+              <Route path="deleted-users" element={<Suspense fallback={<LoadingFallback />}><AdminDeletedUsers /></Suspense>} />
+              <Route path="exports" element={<Suspense fallback={<LoadingFallback />}><ExportsStats /></Suspense>} />
+            </Route>
+            <Route path="/controleur" element={<PrivateRoute roles={["CONTROLLER"]}><Suspense fallback={<LoadingFallback />}><ControllerHomeModule /></Suspense></PrivateRoute>}>
+              <Route index element={<Suspense fallback={<LoadingFallback />}><ControllerHomeModule /></Suspense>} />
+              <Route path="formulaire" element={<Suspense fallback={<LoadingFallback />}><SchoolForm /></Suspense>} />
+              <Route path="enquetes-disponibles" element={<Suspense fallback={<LoadingFallback />}><ControllerAvailableSurveys /></Suspense>} />
+              <Route path="parametres" element={<Suspense fallback={<LoadingFallback />}><Settings /></Suspense>} />
+            </Route>
+            <Route path="/admin/utilisateurs" element={
+              <PrivateRoute roles={["ADMIN"]}>
+                <Suspense fallback={<LoadingFallback />}><AdminUsers /></Suspense>
+              </PrivateRoute>
+            } />
+            <Route path="/admin/parametres" element={
+              <PrivateRoute roles={["ADMIN"]}>
+                <Suspense fallback={<LoadingFallback />}><AdminParametres /></Suspense>
+              </PrivateRoute>
+            } />
+            <Route path="/analyst-home" element={
+              <PrivateRoute roles={["ANALYST"]}>
+                <Suspense fallback={<LoadingFallback />}><AnalystHome /></Suspense>
+              </PrivateRoute>
+            } />
+            <Route path="/project-manager" element={
+              <PrivateRoute roles={["PROJECT_MANAGER"]}>
+                <Suspense fallback={<LoadingFallback />}><ProjectManagerHome /></Suspense>
+              </PrivateRoute>
+            } />
+            <Route path="/analyst/enumerator-requests" element={
+              <PrivateRoute roles={["PROJECT_MANAGER"]}>
+                <Suspense fallback={<LoadingFallback />}><PMEnumeratorRequests /></Suspense>
+              </PrivateRoute>
+            } />
+            <Route path="/analyst/parametres" element={
+              <PrivateRoute roles={["ANALYST"]}>
+                <Suspense fallback={<LoadingFallback />}><Settings /></Suspense>
+              </PrivateRoute>
+            } />
+            {/* Route publique pour formulaires via lien partagé */}
+            <Route path="/form/:token" element={<PublicFormPage />} />
+            <Route path="*" element={<Navigate to="/login" />} />
+          </Routes>
+        </Suspense>
       </Router>
     </>
   );

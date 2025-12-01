@@ -44,7 +44,7 @@ const communesKinshasa = [
 ];
 
 export default function AnalystHome() {
-  console.log('🔍 AnalystHome: Composant monté');
+  // Logs réduits pour améliorer les performances
   
   const [user, setUser] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -160,7 +160,7 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
 
         if (response.ok) {
           const userData = await response.json();
-          console.log('🔍 AnalystHome - Données utilisateur reçues:', userData);
+          // Logs réduits pour améliorer les performances
           setUser(userData.user);
           localStorage.setItem('user', JSON.stringify(userData.user));
         } else {
@@ -210,9 +210,8 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
   //   .finally(() => setDashboardLoading(false));
   // }, []); // Chargement automatique au montage du composant
 
-  // Fonction pour récupérer les données de campagne de l'analyste
-  const fetchAnalystCampaignData = async () => {
-    console.log('🔍 fetchAnalystCampaignData: Début');
+  // Fonction pour récupérer les données de campagne de l'analyste (optimisée - logs réduits)
+  const fetchAnalystCampaignData = useCallback(async () => {
     setCampaignLoading(true);
     try {
       const token = localStorage.getItem('token');
@@ -220,7 +219,6 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
         throw new Error('Token non trouvé');
       }
 
-      console.log('🔍 fetchAnalystCampaignData: Appel API /users/analyst-campaign-data');
       const res = await fetch(`${environment.apiBaseUrl}/users/analyst-campaign-data`, {
         headers: { 
           Authorization: `Bearer ${token}`
@@ -228,36 +226,26 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
         cache: 'no-store'
       });
       
-      console.log('🔍 fetchAnalystCampaignData: Réponse reçue:', res.status);
-      
       if (!res.ok) {
         throw new Error(`Erreur HTTP: ${res.status}`);
       }
       
       const data = await res.json();
-      console.log('🔍 fetchAnalystCampaignData: Données reçues:', data);
       setCampaignData(data);
     } catch (err: any) {
-      console.error('❌ fetchAnalystCampaignData: Erreur:', err.message);
       setCampaignData(null);
     } finally {
       setCampaignLoading(false);
-      console.log('🔍 fetchAnalystCampaignData: Terminé');
     }
-  };
+  }, []);
 
   const fetchAnalystStats = async () => {
-    console.log('🔍 fetchAnalystStats: Début');
     setStatsLoading(true);
     try {
       const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('Token non trouvé');
       }
-
-      console.log('🔍 Tentative de récupération des statistiques analyste...');
-      console.log('🔍 Token:', !!token);
-      console.log('🔍 URL:', `${environment.apiBaseUrl}/records/analyst-stats`);
 
       const res = await fetch(`${environment.apiBaseUrl}/records/analyst-stats`, {
         headers: { 
@@ -266,21 +254,12 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
         cache: 'no-store'
       });
       
-      console.log('🔍 Réponse HTTP:', res.status, res.statusText);
-      
       if (!res.ok) {
         const errorText = await res.text();
-        console.error('❌ Erreur HTTP:', res.status, errorText);
         throw new Error(`Erreur HTTP: ${res.status} - ${errorText}`);
       }
       
       const data = await res.json();
-      console.log('📊 Statistiques analyste reçues:', data);
-      console.log('📊 Total records:', data.totalRecords);
-      console.log('📊 Total enumerators:', data.totalEnumerators);
-      console.log('📊 Communes:', data.communes);
-      console.log('📊 FormFields:', data.formFields);
-      console.log('📊 Campaign:', data.campaign);
       setAnalystStats(data);
     } catch (err: any) {
       console.error('❌ Erreur lors de la récupération des statistiques:', err.message);

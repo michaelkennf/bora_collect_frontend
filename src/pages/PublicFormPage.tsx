@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { CheckCircle, AlertCircle, Loader2, Send, ArrowLeft } from 'lucide-react';
 import { environment } from '../config/environment';
@@ -120,11 +120,10 @@ const PublicFormPage = () => {
           throw new Error(errorData.message || 'Lien invalide ou expiré');
         }
         const data = await response.json();
-        console.log('🔍 PublicFormPage - Received data:', data);
-        console.log('🔍 PublicFormPage - formTemplates:', data?.survey?.formTemplates);
+        // Logs réduits pour améliorer les performances
         setLinkData(data);
       } catch (err: any) {
-        console.error('🔍 PublicFormPage - Error:', err);
+        // Logs réduits pour améliorer les performances
         setError(err.message || 'Une erreur est survenue');
       } finally {
         setLoading(false);
@@ -136,15 +135,16 @@ const PublicFormPage = () => {
     }
   }, [token]);
 
-  const handleInputChange = (fieldId: string, value: any) => {
+  // Optimiser handleInputChange avec useCallback
+  const handleInputChange = useCallback((fieldId: string, value: any) => {
     setFormData((prev) => ({
       ...prev,
       [fieldId]: value,
     }));
-  };
+  }, []);
 
-  // Fonction pour vérifier si un champ doit être affiché selon les conditions
-  const shouldShowField = (field: FormField): boolean => {
+  // Fonction pour vérifier si un champ doit être affiché selon les conditions (mémorisée)
+  const shouldShowField = useCallback((field: FormField): boolean => {
     if (!field.conditional) return true;
     
     const { field: conditionalField, value: conditionalValue, operator = 'equals' } = field.conditional;
@@ -168,7 +168,7 @@ const PublicFormPage = () => {
       default:
         return fieldValue === conditionalValue;
     }
-  };
+  }, [formData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -210,14 +210,7 @@ const PublicFormPage = () => {
         });
       }
 
-      // Log pour debug
-      console.log('📤 Données à envoyer:', {
-        formDataKeys: Object.keys(transformedFormData),
-        formDataCount: Object.keys(transformedFormData).length,
-        formData: transformedFormData,
-        submitterName,
-        submitterContact
-      });
+      // Logs réduits pour améliorer les performances
 
       const response = await fetch(`${environment.apiBaseUrl}/public-links/form/${token}/submit`, {
         method: 'POST',
@@ -244,7 +237,61 @@ const PublicFormPage = () => {
     }
   };
 
-  const renderField = (field: FormField) => {
+  // Mémoriser le formTemplate pour éviter les recalculs
+  const formTemplate = useMemo(() => {
+    const formTemplates = linkData?.survey?.formTemplates;
+    const rawFormTemplate =
+      Array.isArray(formTemplates) && formTemplates.length > 0 ? formTemplates[0] : null;
+    return parseFormTemplate(rawFormTemplate);
+  }, [linkData]);
+
+  // Mémoriser les champs visibles pour éviter les recalculs
+  const visibleFields = useMemo(() => {
+    if (!formTemplate || !Array.isArray(formTemplate.fields)) return [];
+    return formTemplate.fields.filter((field: FormField) => shouldShowField(field));
+  }, [formTemplate, shouldShowField]);
+
+  // Optimiser captureGPS avec useCallback
+  const captureGPS = useCallback((fieldId: string) => {
+    if (!navigator.geolocation) {
+      alert('La géolocalisation n\'est pas supportée par votre navigateur.');
+      return;
+    }
+    setGpsProvinceStatus('loading');
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        const coordsValue = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+        handleInputChange(fieldId, coordsValue);
+        try {
+          const provinceName = await reverseGeocodeProvince(latitude, longitude);
+          if (provinceName) {
+            setGpsProvince(provinceName);
+            handleInputChange(`${fieldId}_province`, provinceName);
+            setGpsProvinceStatus('success');
+          } else {
+            console.warn('⚠️ Impossible de déterminer la province pour les coordonnées:', latitude, longitude);
+            setGpsProvince(null);
+            setGpsProvinceStatus('error');
+            alert('⚠️ La position GPS a été capturée, mais la province n\'a pas pu être déterminée automatiquement. Veuillez la saisir manuellement si nécessaire.');
+          }
+        } catch (error) {
+          console.error('❌ Erreur lors de la détermination de la province:', error);
+          setGpsProvince(null);
+          setGpsProvinceStatus('error');
+          alert('⚠️ Erreur lors de la détermination de la province. La position GPS a été capturée, mais la province n\'a pas pu être déterminée.');
+        }
+      },
+      (error) => {
+        // Logs réduits pour améliorer les performances
+        alert('Impossible de capturer la position GPS. Veuillez autoriser l\'accès à la localisation.');
+        setGpsProvinceStatus('error');
+      },
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 } // Optimisé pour Chrome mobile
+    );
+  }, [handleInputChange]);
+
+  const renderField = useCallback((field: FormField) => {
     const commonClasses =
       'w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all';
 
@@ -264,41 +311,6 @@ const PublicFormPage = () => {
         );
       
       case 'gps':
-        const captureGPS = () => {
-          if (!navigator.geolocation) {
-            alert('La géolocalisation n\'est pas supportée par votre navigateur.');
-            return;
-          }
-          setGpsProvinceStatus('loading');
-          navigator.geolocation.getCurrentPosition(
-            async (pos) => {
-              const { latitude, longitude } = pos.coords;
-              const coordsValue = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
-              handleInputChange(field.id, coordsValue);
-              try {
-                const provinceName = await reverseGeocodeProvince(latitude, longitude);
-                if (provinceName) {
-                  setGpsProvince(provinceName);
-                  handleInputChange(`${field.id}_province`, provinceName);
-                  setGpsProvinceStatus('success');
-                } else {
-                  setGpsProvince(null);
-                  setGpsProvinceStatus('error');
-                }
-              } catch (error) {
-                console.error('Erreur lors de la récupération de la province:', error);
-                setGpsProvince(null);
-                setGpsProvinceStatus('error');
-              }
-            },
-            (error) => {
-              console.error('GPS error:', error);
-              alert('Impossible de capturer la position GPS. Veuillez autoriser l\'accès à la localisation.');
-              setGpsProvinceStatus('error');
-            },
-            { enableHighAccuracy: true, timeout: 30000, maximumAge: 300000 }
-          );
-        };
         return (
           <div className="space-y-3">
             <input
@@ -312,7 +324,7 @@ const PublicFormPage = () => {
             />
             <button
               type="button"
-              onClick={captureGPS}
+              onClick={() => captureGPS(field.id)}
               className="w-full flex items-center justify-center gap-2 bg-green-600 text-white py-3 px-4 rounded-xl font-medium hover:bg-green-700 transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -543,7 +555,7 @@ const PublicFormPage = () => {
           />
         );
     }
-  };
+  }, [formData, handleInputChange, gpsProvince, gpsProvinceStatus, captureGPS]);
 
   if (loading) {
     return (
@@ -600,10 +612,7 @@ const PublicFormPage = () => {
     );
   }
 
-  const formTemplates = linkData?.survey?.formTemplates;
-  const rawFormTemplate =
-    Array.isArray(formTemplates) && formTemplates.length > 0 ? formTemplates[0] : null;
-  const formTemplate = parseFormTemplate(rawFormTemplate);
+  // formTemplate et visibleFields sont maintenant mémorisés avec useMemo plus haut
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-blue-50">
@@ -666,11 +675,7 @@ const PublicFormPage = () => {
 
             {/* Form Fields */}
             <div className="space-y-6">
-              {(Array.isArray(formTemplate.fields) ? formTemplate.fields : []).map((field: FormField) => {
-                // Vérifier si le champ doit être affiché selon les conditions
-                if (!shouldShowField(field)) {
-                  return null;
-                }
+              {visibleFields.map((field: FormField) => {
 
                 // Vérifier si on doit afficher l'explication pour "Non"
                 // L'explication s'affiche si :

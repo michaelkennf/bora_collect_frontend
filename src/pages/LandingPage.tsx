@@ -46,8 +46,9 @@ const Reveal = ({ children, delay = 0 }: RevealProps) => {
   );
 };
 
+// Image hero optimisée (chargement lazy)
 const heroImage =
-  'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1600&q=80';
+  'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1200&q=75';
 
 const keyPoints = [
   'Organisation des campagnes humanitaires et statistiques en un seul espace.',
@@ -82,21 +83,21 @@ const profiles = [
     description:
       'Accédez aux campagnes, remplissez des formulaires intuitifs et partagez des données authentiques du terrain.',
     image:
-      'https://images.unsplash.com/photo-1509099836639-18ba1795216d?auto=format&fit=crop&w=900&q=80',
+      'https://images.unsplash.com/photo-1509099836639-18ba1795216d?auto=format&fit=crop&w=600&q=75',
   },
   {
     title: 'Project Manager',
     description:
       'Planifiez, publiez et pilotez vos campagnes en gardant le contrôle sur chaque indicateur clé.',
     image:
-      'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?auto=format&fit=crop&w=900&q=80',
+      'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?auto=format&fit=crop&w=600&q=75',
   },
   {
     title: 'Analyste',
     description:
       'Validez, analysez et transformez les données collectées en insights actionnables pour des décisions éclairées.',
     image:
-      'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=900&q=80',
+      'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=600&q=75',
   },
 ];
 
