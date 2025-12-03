@@ -578,85 +578,64 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
   };
 
   // Fonction pour récupérer les statistiques des enquêteurs par campagne
-  // Fonction pour exporter tous les formulaires de tous les enquêteurs
+  // Fonction pour exporter tous les formulaires (optimisée - génération côté serveur)
   const exportAllEnumeratorsSubmissions = async (campaignId: string) => {
     try {
       setExportNotification({
         isVisible: true,
         isSuccess: false,
-        message: 'Récupération des formulaires en cours...'
+        message: 'Génération du fichier Excel en cours... Cela peut prendre quelques instants pour 22 000+ formulaires.'
       });
 
-      // Récupérer tous les enquêteurs de la campagne
-      const statsResponse = await fetch(
-        `${environment.apiBaseUrl}/records/campaign/${campaignId}/enumerators/stats`,
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Token d\'authentification manquant');
+      }
+
+      // Utiliser le nouvel endpoint optimisé côté serveur
+      const response = await fetch(
+        `${environment.apiBaseUrl}/records/analyst/export`,
         {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Authorization': `Bearer ${token}`,
           },
         }
       );
 
-      if (!statsResponse.ok) {
-        throw new Error('Erreur lors de la récupération des enquêteurs');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erreur lors de l\'export' }));
+        throw new Error(errorData.error || `Erreur ${response.status}: ${response.statusText}`);
       }
 
-      const enumerators = await statsResponse.json();
-
-      // Récupérer les soumissions de chaque enquêteur
-      const allSubmissions: any[] = [];
+      // Récupérer le fichier Excel
+      const blob = await response.blob();
       
-      for (const enumerator of enumerators) {
-        try {
-          const submissionsResponse = await fetch(
-            `${environment.apiBaseUrl}/records/campaign/${campaignId}/enumerator/${enumerator.id}/submissions`,
-            {
-              headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`,
-              },
-            }
-          );
-
-          if (submissionsResponse.ok) {
-            const submissions = await submissionsResponse.json();
-            
-            // Ajouter les soumissions par application
-            if (submissions.appSubmissions && submissions.appSubmissions.length > 0) {
-              allSubmissions.push(...submissions.appSubmissions.map((s: any) => ({
-                ...s,
-                authorName: s.author?.name || 'N/A',
-                source: 'application'
-              })));
-            }
-            
-            // Ajouter les soumissions par lien public
-            if (submissions.publicSubmissions && submissions.publicSubmissions.length > 0) {
-              allSubmissions.push(...submissions.publicSubmissions.map((s: any) => ({
-                ...s,
-                authorName: s.author?.name || s.submitterName || 'N/A',
-                source: 'public_link'
-              })));
-            }
-          }
-        } catch (error) {
-          console.error(`Erreur lors de la récupération des soumissions pour ${enumerator.name}:`, error);
+      // Créer un lien de téléchargement
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Extraire le nom du fichier depuis les headers ou utiliser un nom par défaut
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let fileName = `enquetes_${new Date().toISOString().split('T')[0]}.xlsx`;
+      if (contentDisposition) {
+        const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (fileNameMatch) {
+          fileName = fileNameMatch[1];
         }
       }
+      
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
 
-      // Exporter en Excel
-      const campaignTitle = campaignData?.campaign?.title || 'campagne';
-      const fileName = `tous_formulaires_${campaignTitle.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}`;
-      const success = exportEnquetesToExcel(allSubmissions, fileName);
-
-      if (success) {
-        setExportNotification({
-          isVisible: true,
-          isSuccess: true,
-          message: `✅ Export réussi ! ${allSubmissions.length} formulaire(s) exporté(s)`
-        });
-      } else {
-        throw new Error('Erreur lors de l\'export Excel');
-      }
+      setExportNotification({
+        isVisible: true,
+        isSuccess: true,
+        message: '✅ Export Excel réussi ! Le fichier est en cours de téléchargement.'
+      });
     } catch (error: any) {
       console.error('Erreur lors de l\'export de tous les formulaires:', error);
       setExportNotification({
@@ -719,18 +698,70 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
   };
 
   // Fonction d'export des enquêtes avec gestion d'erreur
-  const handleExportEnquetes = () => {
+  // Fonction d'export optimisée - utilise l'endpoint serveur pour les grandes quantités
+  const handleExportEnquetes = async () => {
     try {
-      if (records.length > 0) {
-        const success = exportEnquetesToExcel(records, 'enquetes_analyste');
-        if (success) {
-          showExportNotification(true, 'Export des enquêtes réussi !');
+      // Si on a beaucoup d'enregistrements, utiliser l'export côté serveur
+      if (totalRecords > 1000) {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          showExportNotification(false, 'Token d\'authentification manquant');
+          return;
+        }
+
+        showExportNotification(false, 'Génération du fichier Excel en cours...');
+
+        const response = await fetch(
+          `${environment.apiBaseUrl}/records/analyst/export`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Erreur lors de l\'export' }));
+          throw new Error(errorData.error || `Erreur ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let fileName = `enquetes_${new Date().toISOString().split('T')[0]}.xlsx`;
+        if (contentDisposition) {
+          const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
+          if (fileNameMatch) {
+            fileName = fileNameMatch[1];
+          }
+        }
+        
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+        showExportNotification(true, '✅ Export Excel réussi !');
+      } else {
+        // Pour les petites quantités, utiliser l'export côté client
+        if (records.length > 0) {
+          const success = exportEnquetesToExcel(records, 'enquetes_analyste');
+          if (success) {
+            showExportNotification(true, 'Export des enquêtes réussi !');
+          } else {
+            showExportNotification(false, 'Erreur lors de l\'export des enquêtes');
+          }
         } else {
-          showExportNotification(false, 'Erreur lors de l\'export des enquêtes');
+          showExportNotification(false, 'Aucune enquête à exporter');
         }
       }
-    } catch (error) {
-      showExportNotification(false, 'Erreur lors de l\'export des enquêtes');
+    } catch (error: any) {
+      console.error('Erreur lors de l\'export:', error);
+      showExportNotification(false, `Erreur: ${error.message || 'Erreur inconnue'}`);
     }
   };
 

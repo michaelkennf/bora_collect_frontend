@@ -196,7 +196,7 @@ const ControllerCampaignForms: React.FC = () => {
     // Options GPS optimisées pour une capture simple et fiable
     const options = { 
       enableHighAccuracy: true,  // Activer la haute précision GPS
-      timeout: 60000,            // 60 secondes (timeout plus long pour éviter les erreurs)
+      timeout: 1500000,          // 25 minutes pour laisser suffisamment de temps à la capture
       maximumAge: 0              // Forcer une nouvelle capture (pas de cache)
     };
     
@@ -738,7 +738,7 @@ const ControllerCampaignForms: React.FC = () => {
                                   // Options GPS optimisées pour une capture simple et fiable
                                   const gpsOptions = {
                                     enableHighAccuracy: true,  // Activer la haute précision GPS
-                                    timeout: 60000,           // 60 secondes (timeout plus long pour éviter les erreurs)
+                                    timeout: 1500000,          // 25 minutes pour laisser suffisamment de temps à la capture
                                     maximumAge: 0             // Forcer une nouvelle capture (pas de cache)
                                   };
                                   
