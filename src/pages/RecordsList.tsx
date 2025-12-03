@@ -451,7 +451,12 @@ export default function RecordsList() {
         throw new Error('Erreur lors du chargement des enregistrements');
       }
       
-      const serverRecords = await res.json();
+      const responseData = await res.json();
+      
+      // L'API peut retourner un objet avec { data: [...], pagination: {...} } ou directement un tableau
+      // Extraire le tableau de records
+      const serverRecords = Array.isArray(responseData) ? responseData : (responseData?.data || []);
+      
       console.log('✅ Enregistrements serveur chargés:', serverRecords.length, serverRecords);
       
       // Charger les enregistrements locaux
@@ -465,7 +470,10 @@ export default function RecordsList() {
         if (userData.role === 'CONTROLLER') {
           
           // Pour les enquêteurs : enregistrements serveur + enregistrements locaux
-          const userServerRecords = serverRecords.filter((record: any) => record.authorId === currentUserId);
+          // S'assurer que serverRecords est un tableau avant d'utiliser filter
+          const userServerRecords = Array.isArray(serverRecords) 
+            ? serverRecords.filter((record: any) => record.authorId === currentUserId)
+            : [];
           console.log('🔍 Enregistrements serveur filtrés par utilisateur:', userServerRecords.length, userServerRecords);
           
           // Les enregistrements locaux sont toujours visibles pour l'enquêteur qui les a créés
@@ -507,11 +515,16 @@ export default function RecordsList() {
           setRecords(validRecords);
         } else {
           // Les analystes et admins voient tous les enregistrements
-          const allRecords = [...serverRecords, ...localRecords.filter(lr => !lr.synced)];
+          const allRecords = Array.isArray(serverRecords) 
+            ? [...serverRecords, ...localRecords.filter(lr => !lr.synced)]
+            : [...localRecords.filter(lr => !lr.synced)];
           setRecords(allRecords);
         }
       } else {
-        setRecords([...serverRecords, ...localRecords.filter(lr => !lr.synced)]);
+        const recordsToSet = Array.isArray(serverRecords)
+          ? [...serverRecords, ...localRecords.filter(lr => !lr.synced)]
+          : [...localRecords.filter(lr => !lr.synced)];
+        setRecords(recordsToSet);
       }
       
       // Mettre à jour le statut de synchronisation

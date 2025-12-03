@@ -73,12 +73,16 @@ export default function ControllerDashboardCharts({ personalStats }: ControllerD
         });
 
         if (recordsResponse.ok) {
-          const records = await recordsResponse.json();
+          const responseData = await recordsResponse.json();
           
-          console.log('📊 ControllerDashboardCharts - Données reçues:', records);
+          console.log('📊 ControllerDashboardCharts - Données reçues:', responseData);
+          
+          // L'API retourne un objet avec { data: [...], pagination: {...} }
+          // Extraire le tableau de records
+          const records = Array.isArray(responseData) ? responseData : (responseData?.data || []);
           
           // Si pas d'enregistrements, afficher un état vide
-          if (!records || records.length === 0) {
+          if (!records || !Array.isArray(records) || records.length === 0) {
             console.log('📊 ControllerDashboardCharts - Aucun enregistrement trouvé');
             setChartData({
               recordsByMonth: []

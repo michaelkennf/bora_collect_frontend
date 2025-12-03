@@ -544,39 +544,124 @@ export default function SchoolForm() {
     });
   };
 
-  // Validation simple
-  const validate = (): boolean => {
-    if (!form.formData.household.nomOuCode || !form.formData.household.age || !form.formData.household.tailleMenage) {
-      toast.error('Veuillez remplir tous les champs d\'identification du ménage.');
-      return false;
-    }
-    
-    // VALIDATION GPS OBLIGATOIRE
+  // Fonction pour vérifier si la localisation est valide (GPS ou adresse)
+  const isLocationValid = useMemo(() => {
+    // Vérifier si GPS est présent dans l'état
     const hasGPS = geolocation.latitude !== null && 
                    geolocation.longitude !== null && 
                    !isNaN(geolocation.latitude) && 
                    !isNaN(geolocation.longitude);
     
+    if (hasGPS) return true;
+    
+    // Vérifier aussi dans formData
     const gpsInFormData = form.formData.household.geolocalisation && 
                           form.formData.household.geolocalisation.trim() !== '';
     
-    if (!hasGPS && !gpsInFormData) {
-      toast.error('❌ Veuillez capturer votre position GPS avant de soumettre le formulaire.');
-      // Faire défiler vers le champ GPS si visible
-      const gpsField = document.querySelector('[placeholder*="GPS"], [placeholder*="gps"], [placeholder*="Géolocalisation"]');
-      if (gpsField) {
-        gpsField.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        (gpsField as HTMLElement).focus();
+    if (gpsInFormData) return true;
+
+    // Vérifier si une adresse complète est fournie
+    const hasCommuneQuartier = form.formData.household.communeQuartier && 
+                               form.formData.household.communeQuartier.trim() !== '';
+    
+    // Pour SchoolForm, on accepte soit GPS soit communeQuartier
+    return hasCommuneQuartier;
+  }, [geolocation, form.formData.household]);
+
+  // Fonction pour valider soit GPS soit adresse manuelle
+  const validateLocation = (gpsState: GeolocationState, householdData: HouseholdData): { isValid: boolean; message?: string } => {
+    // Vérifier si GPS est présent dans l'état
+    const hasGPS = gpsState.latitude !== null && 
+                   gpsState.longitude !== null && 
+                   !isNaN(gpsState.latitude) && 
+                   !isNaN(gpsState.longitude);
+    
+    // Vérifier aussi dans formData
+    const gpsInFormData = householdData.geolocalisation && 
+                          householdData.geolocalisation.trim() !== '';
+    
+    if (hasGPS || gpsInFormData) {
+      return { isValid: true };
+    }
+
+    // Vérifier si une adresse complète est fournie
+    const hasCommuneQuartier = householdData.communeQuartier && 
+                               householdData.communeQuartier.trim() !== '';
+    
+    // Pour SchoolForm, on accepte soit GPS soit communeQuartier
+    if (hasCommuneQuartier) {
+      return { isValid: true };
+    }
+
+    return {
+      isValid: false,
+      message: '❌ Veuillez soit capturer votre position GPS, soit compléter le champ commune/quartier avant de soumettre le formulaire.'
+    };
+  };
+
+  // Validation complète de tous les champs obligatoires
+  const validate = (): boolean => {
+    // Validation des champs d'identification du ménage (obligatoires)
+    if (!form.formData.household.nomOuCode || form.formData.household.nomOuCode.trim() === '') {
+      toast.error('❌ Le champ "Nom ou Code" est obligatoire. Veuillez le remplir.');
+      const field = document.querySelector('[name="nomOuCode"], [id*="nomOuCode"]');
+      if (field) {
+        (field as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+        (field as HTMLElement).focus();
       }
       return false;
     }
     
-    if (form.formData.cooking.combustibles.length === 0) {
-      toast.error('Veuillez sélectionner au moins un type de combustible.');
+    if (!form.formData.household.age || form.formData.household.age.trim() === '') {
+      toast.error('❌ Le champ "Âge" est obligatoire. Veuillez le remplir.');
+      const field = document.querySelector('[name="age"], [id*="age"]');
+      if (field) {
+        (field as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+        (field as HTMLElement).focus();
+      }
       return false;
     }
-    if (form.formData.cooking.equipements.length === 0) {
-      toast.error('Veuillez sélectionner au moins un équipement de cuisson.');
+    
+    if (!form.formData.household.tailleMenage || form.formData.household.tailleMenage.trim() === '') {
+      toast.error('❌ Le champ "Taille du ménage" est obligatoire. Veuillez le remplir.');
+      const field = document.querySelector('[name="tailleMenage"], [id*="tailleMenage"]');
+      if (field) {
+        (field as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+        (field as HTMLElement).focus();
+      }
+      return false;
+    }
+    
+    // Valider la localisation (GPS ou adresse manuelle)
+    const locationValidation = validateLocation(geolocation, form.formData.household);
+    if (!locationValidation.isValid) {
+      toast.error(locationValidation.message || 'Localisation requise');
+      // Faire défiler vers le champ GPS ou communeQuartier si visible
+      const locationField = document.querySelector('[placeholder*="GPS"], [placeholder*="gps"], [placeholder*="Géolocalisation"], [placeholder*="commune"], [name*="communeQuartier"]');
+      if (locationField) {
+        locationField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        (locationField as HTMLElement).focus();
+      }
+      return false;
+    }
+    
+    // Validation des combustibles (obligatoire - au moins un)
+    if (!form.formData.cooking.combustibles || form.formData.cooking.combustibles.length === 0) {
+      toast.error('❌ Veuillez sélectionner au moins un type de combustible.');
+      const field = document.querySelector('[name*="combustibles"], [id*="combustibles"]');
+      if (field) {
+        (field as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      return false;
+    }
+    
+    // Validation des équipements (obligatoire - au moins un)
+    if (!form.formData.cooking.equipements || form.formData.cooking.equipements.length === 0) {
+      toast.error('❌ Veuillez sélectionner au moins un équipement de cuisson.');
+      const field = document.querySelector('[name*="equipements"], [id*="equipements"]');
+      if (field) {
+        (field as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
       return false;
     }
     
@@ -1206,31 +1291,31 @@ export default function SchoolForm() {
           </div>
         </div>
 
-        {/* Indicateur GPS */}
-        {!(geolocation.latitude && geolocation.longitude) && (
+        {/* Indicateur localisation */}
+        {!isLocationValid && (
           <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
             <div className="flex items-center gap-2">
               <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
-              <span className="font-medium">⚠️ La capture GPS est obligatoire avant la soumission</span>
+              <span className="font-medium">⚠️ Veuillez soit capturer votre position GPS, soit compléter le champ commune/quartier</span>
             </div>
           </div>
         )}
         <button 
           type="submit" 
           className={`w-full py-3 rounded-xl text-base sm:text-lg font-bold shadow-lg transition-colors ${
-            geolocation.latitude && geolocation.longitude
+            isLocationValid
               ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
               : 'bg-gray-400 text-gray-200 cursor-not-allowed'
           }`}
-          disabled={isSubmitting || !(geolocation.latitude && geolocation.longitude)}
+          disabled={isSubmitting || !isLocationValid}
         >
           {isSubmitting 
             ? 'Enregistrement...' 
-            : geolocation.latitude && geolocation.longitude 
+            : isLocationValid 
               ? 'Soumettre' 
-              : 'GPS requis pour soumettre'
+              : 'Localisation requise'
           }
         </button>
       </form>
