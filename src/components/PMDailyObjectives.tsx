@@ -9,6 +9,7 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
+import { getChartColor, CompatibleColors } from '../utils/colors';
 
 ChartJS.register(
   CategoryScale,
@@ -79,15 +80,15 @@ export default function PMDailyObjectives({ objectives, loading }: PMDailyObject
             {
               label: 'Soumis (total équipe)',
               data: submittedData,
-              backgroundColor: 'rgba(34, 197, 94, 0.6)',
-              borderColor: 'rgba(34, 197, 94, 1)',
+              backgroundColor: getChartColor(CompatibleColors.chart.green, 0.6),
+              borderColor: getChartColor(CompatibleColors.chart.green, 1),
               borderWidth: 2
             },
             {
               label: 'Objectif quotidien',
               data: targetData,
-              backgroundColor: 'rgba(59, 130, 246, 0.6)',
-              borderColor: 'rgba(59, 130, 246, 1)',
+              backgroundColor: getChartColor(CompatibleColors.chart.blue, 0.6),
+              borderColor: getChartColor(CompatibleColors.chart.blue, 1),
               borderWidth: 2,
               borderDash: [5, 5]
             }
@@ -148,47 +149,77 @@ export default function PMDailyObjectives({ objectives, loading }: PMDailyObject
               <h4 className="text-lg font-semibold text-gray-700 mb-4">
                 Évolution Quotidienne des Soumissions
               </h4>
-              <div style={{ height: '350px' }}>
-                <Bar
-                  data={chartData}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: {
-                        display: true,
-                        position: 'top' as const
+              {objective.history && objective.history.length > 0 ? (
+                <div style={{ height: '350px', position: 'relative' }}>
+                  <Bar
+                    data={chartData}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: {
+                          display: true,
+                          position: 'top' as const,
+                          labels: {
+                            usePointStyle: true,
+                            padding: 15,
+                            font: {
+                              size: 12
+                            }
+                          }
+                        },
+                        tooltip: {
+                          enabled: true,
+                          callbacks: {
+                            afterLabel: (context) => {
+                              const index = context.dataIndex;
+                              const submitted = objective.history[index]?.submitted || 0;
+                              const target = objective.history[index]?.target || 0;
+                              const percentage = target > 0 ? ((submitted / target) * 100).toFixed(0) : 0;
+                              return `${percentage}% de l'objectif`;
+                            }
+                          }
+                        }
                       },
-                      tooltip: {
-                        callbacks: {
-                          afterLabel: (context) => {
-                            const index = context.dataIndex;
-                            const submitted = objective.history[index]?.submitted || 0;
-                            const target = objective.history[index]?.target || 0;
-                            const percentage = target > 0 ? ((submitted / target) * 100).toFixed(0) : 0;
-                            return `${percentage}% de l'objectif`;
+                      scales: {
+                        y: {
+                          beginAtZero: true,
+                          title: {
+                            display: true,
+                            text: 'Nombre de formulaires soumis',
+                            font: {
+                              size: 12,
+                              weight: 'bold'
+                            }
+                          },
+                          ticks: {
+                            stepSize: 1
+                          }
+                        },
+                        x: {
+                          title: {
+                            display: true,
+                            text: 'Date',
+                            font: {
+                              size: 12,
+                              weight: 'bold'
+                            }
+                          },
+                          ticks: {
+                            maxRotation: 45,
+                            minRotation: 45
                           }
                         }
                       }
-                    },
-                    scales: {
-                      y: {
-                        beginAtZero: true,
-                        title: {
-                          display: true,
-                          text: 'Nombre de formulaires soumis'
-                        }
-                      },
-                      x: {
-                        title: {
-                          display: true,
-                          text: 'Date'
-                        }
-                      }
-                    }
-                  }}
-                />
-              </div>
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="bg-gray-50 rounded-lg p-8 text-center">
+                  <p className="text-gray-500">Aucune donnée d'historique disponible pour le moment</p>
+                  <p className="text-sm text-gray-400 mt-2">Le graphique s'affichera une fois que des soumissions auront été enregistrées</p>
+                </div>
+              )}
             </div>
 
             {/* Statistiques et Recommandations */}

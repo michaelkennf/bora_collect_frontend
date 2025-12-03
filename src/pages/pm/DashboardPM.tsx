@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { environment } from '../../config/environment';
+import { devLogger, errorLogger } from '../../utils/logger';
 import PMDashboardCharts from '../../components/PMDashboardCharts';
 import PMDailyObjectives from '../../components/PMDailyObjectives';
 import ObjectiveAlerts from '../../components/ObjectiveAlerts';
@@ -35,6 +36,9 @@ interface PMStats {
   approvedCandidatures: number;
   rejectedCandidatures: number;
   pendingCandidatures: number;
+  totalFormsSubmitted: number;
+  totalFormsByApplication: number;
+  totalFormsByPublicLink: number;
 }
 
 interface Campaign {
@@ -60,7 +64,10 @@ const DashboardPM: React.FC = () => {
     totalCandidatures: 0,
     approvedCandidatures: 0,
     rejectedCandidatures: 0,
-    pendingCandidatures: 0
+    pendingCandidatures: 0,
+    totalFormsSubmitted: 0,
+    totalFormsByApplication: 0,
+    totalFormsByPublicLink: 0
   });
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
@@ -185,6 +192,8 @@ const DashboardPM: React.FC = () => {
       if (statsResponse.ok) {
         const statsData = await statsResponse.json();
         
+        console.log('📊 PM Stats brutes reçues du backend:', statsData);
+        
         // Convertir explicitement en nombres pour éviter les problèmes de type
         const newStats = {
           totalCampaigns: Number(statsData.totalCampaigns ?? 0) || 0,
@@ -197,14 +206,28 @@ const DashboardPM: React.FC = () => {
           totalCandidatures: Number(statsData.totalCandidatures ?? 0) || 0,
           approvedCandidatures: Number(statsData.approvedCandidatures ?? 0) || 0,
           rejectedCandidatures: Number(statsData.rejectedCandidatures ?? 0) || 0,
-          pendingCandidatures: Number(statsData.pendingCandidatures ?? 0) || 0
+          pendingCandidatures: Number(statsData.pendingCandidatures ?? 0) || 0,
+          totalFormsSubmitted: Number(statsData.totalFormsSubmitted ?? 0) || 0,
+          totalFormsByApplication: Number(statsData.totalFormsByApplication ?? 0) || 0,
+          totalFormsByPublicLink: Number(statsData.totalFormsByPublicLink ?? 0) || 0
         };
         
+        console.log('📊 PM Stats converties:', {
+          totalCampaigns: newStats.totalCampaigns,
+          activeCampaigns: newStats.activeCampaigns,
+          totalInscriptions: newStats.totalInscriptions,
+          totalCandidatures: newStats.totalCandidatures,
+          totalFormsSubmitted: newStats.totalFormsSubmitted,
+          totalFormsByApplication: newStats.totalFormsByApplication,
+          totalFormsByPublicLink: newStats.totalFormsByPublicLink
+        });
         setStats(newStats);
       } else {
         const errorText = await statsResponse.text();
         console.error('❌ Erreur lors de la récupération des statistiques:', 
                      statsResponse.status, statsResponse.statusText, errorText);
+        // Afficher un message d'erreur à l'utilisateur
+        errorLogger.error('Impossible de charger les statistiques. Vérifiez que vous avez des campagnes publiées');
       }
 
       // Récupérer les campagnes du Projet Manager
@@ -244,10 +267,17 @@ const DashboardPM: React.FC = () => {
       
       if (response.ok) {
         const data = await response.json();
+        console.log('📊 Objectifs quotidiens reçus:', data);
         setDailyObjectives(Array.isArray(data) ? data : []);
+      } else {
+        const errorText = await response.text();
+        errorLogger.error('Erreur lors de la récupération des objectifs quotidiens', 
+                     new Error(`Status: ${response.status} ${response.statusText}`), 
+                     { errorText });
+        setDailyObjectives([]);
       }
     } catch (error) {
-      console.error('❌ Erreur lors de la récupération des objectifs:', error);
+      errorLogger.error('Erreur lors de la récupération des objectifs', error);
       setDailyObjectives([]);
     } finally {
       setObjectivesLoading(false);
@@ -517,7 +547,7 @@ const DashboardPM: React.FC = () => {
         </div>
 
         {/* Statistiques principales avec cartes animées */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           {/* Carte Total Campagnes */}
           <div 
             className="relative w-full h-24 cursor-pointer perspective-1000 hover:scale-105 transition-transform duration-300"
@@ -671,6 +701,57 @@ const DashboardPM: React.FC = () => {
                       <span className="animate-pulse bg-white/20 rounded w-8 h-4 inline-block"></span>
                     ) : (
                       <span className="animate-bounce">{Number(stats.pendingCandidatures) || 0}</span>
+                    )}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Carte Total Formulaires Soumis */}
+          <div 
+            className="relative w-full h-24 cursor-pointer perspective-1000 hover:scale-105 transition-transform duration-300"
+            onClick={() => toggleCardFlip('totalForms')}
+          >
+            <div className={`relative w-full h-full transition-transform duration-700 transform-style-preserve-3d ${
+              flippedCards.totalForms ? 'rotate-y-180' : ''
+            }`}>
+              {/* Recto */}
+              <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl shadow-lg hover:shadow-xl flex items-center justify-center transition-shadow duration-300">
+                <div className="text-center text-white">
+                  <div className="mb-2 hover:scale-110 transition-transform duration-200 relative">
+                    <div className="absolute inset-0 bg-white opacity-20 rounded-full blur-sm"></div>
+                    <svg className="w-6 h-6 mx-auto relative z-10 drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                    </svg>
+                  </div>
+                  <div className="text-xs font-semibold">Total Formulaires</div>
+                  <div className="text-xs opacity-80 mt-1 animate-pulse">Cliquez pour voir</div>
+                </div>
+              </div>
+              {/* Verso */}
+              <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl shadow-lg flex items-center justify-center rotate-y-180">
+                <div className="text-center text-white px-2">
+                  <div className="text-2xl font-bold mb-1">
+                    {loading ? (
+                      <div className="animate-pulse bg-white/20 rounded w-12 h-8 mx-auto"></div>
+                    ) : (
+                      <span className="animate-bounce hover:animate-pulse transition-all duration-300 hover:scale-110 hover:text-yellow-200">
+                        {Number(stats.totalFormsSubmitted) || 0}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs font-semibold mb-2">Formulaires soumis</div>
+                  <div className="text-xs opacity-90 space-y-1">
+                    <div>📱 Application: {loading ? (
+                      <span className="animate-pulse bg-white/20 rounded w-8 h-4 inline-block"></span>
+                    ) : (
+                      <span className="animate-bounce">{Number(stats.totalFormsByApplication) || 0}</span>
+                    )}</div>
+                    <div>🔗 Lien public: {loading ? (
+                      <span className="animate-pulse bg-white/20 rounded w-8 h-4 inline-block"></span>
+                    ) : (
+                      <span className="animate-bounce">{Number(stats.totalFormsByPublicLink) || 0}</span>
                     )}</div>
                   </div>
                 </div>

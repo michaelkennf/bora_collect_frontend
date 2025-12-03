@@ -12,6 +12,7 @@ import {
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
 import { environment } from '../config/environment';
+import { getChartColor, CompatibleColors } from '../utils/colors';
 
 ChartJS.register(
   CategoryScale,
@@ -146,8 +147,8 @@ export default function ControllerDashboardCharts({ personalStats }: ControllerD
       {
         label: 'Sondages par mois',
         data: chartData.recordsByMonth.map((item: any) => item.count),
-        backgroundColor: 'rgba(59, 130, 246, 0.8)',
-        borderColor: 'rgba(59, 130, 246, 1)',
+        backgroundColor: getChartColor(CompatibleColors.chart.blue, 0.8),
+        borderColor: getChartColor(CompatibleColors.chart.blue, 1),
         borderWidth: 1,
       },
     ],

@@ -482,7 +482,7 @@ const CreateAccount = () => {
           {formData.province && (
             <div>
               <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-1">
-                Ville *
+                Ville ou Territoire *
               </label>
               <select
                 id="city"
@@ -492,7 +492,7 @@ const CreateAccount = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 required
               >
-                <option value="">Sélectionnez votre ville</option>
+                <option value="">Sélectionnez votre ville ou territoire</option>
                 {getCitiesByProvince(formData.province).map((city, index) => (
                   <option key={index} value={city.name}>
                     {city.name}
@@ -506,7 +506,7 @@ const CreateAccount = () => {
           {showCustomCity && (
             <div>
               <label htmlFor="customCity" className="block text-sm font-medium text-gray-700 mb-1">
-                Nom de votre ville *
+                Nom de votre ville ou territoire *
               </label>
               <input
                 id="customCity"
@@ -515,7 +515,7 @@ const CreateAccount = () => {
                 value={customCity}
                 onChange={(e) => setCustomCity(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Entrez le nom de votre ville"
+                placeholder="Entrez le nom de votre ville ou territoire"
                 required
               />
             </div>

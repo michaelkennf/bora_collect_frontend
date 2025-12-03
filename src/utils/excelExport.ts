@@ -50,11 +50,20 @@ export const exportEnquetesToExcel = (enquetes: any[], filename: string = 'enque
       const getValue = (newKey: string, oldKey?: string, oldSubKey?: string) => {
         // Vérifier d'abord le nouveau format
         if (enquete.formData?.[newKey] !== undefined && enquete.formData?.[newKey] !== null) {
-          return enquete.formData[newKey];
+          const value = enquete.formData[newKey];
+          // Si c'est une chaîne vide, retourner 'N/A'
+          if (typeof value === 'string' && value.trim() === '') {
+            return 'N/A';
+          }
+          return value;
         }
         // Fallback vers l'ancien format
         if (oldKey && oldSubKey && enquete.formData?.[oldKey]) {
-          return enquete.formData[oldKey]?.[oldSubKey];
+          const value = enquete.formData[oldKey]?.[oldSubKey];
+          if (typeof value === 'string' && value.trim() === '') {
+            return 'N/A';
+          }
+          return value;
         }
         return 'N/A';
       };
@@ -99,7 +108,58 @@ export const exportEnquetesToExcel = (enquetes: any[], filename: string = 'enque
       'Sexe': getValue('identification.sexe', 'household', 'sexe'),
       'Taille du Ménage': getValue('identification.tailleMenage', 'household', 'tailleMenage'),
       'Commune/Quartier': getValue('identification.communeQuartier', 'household', 'communeQuartier'),
-      'Géolocalisation': getValue('household.geolocalisation', 'household', 'geolocalisation'),
+      'Géolocalisation': (() => {
+        // Essayer plusieurs formats possibles pour la géolocalisation
+        const formData = enquete.formData || {};
+        
+        // Format 1: identification.geolocalisation (nouveau format pour soumissions publiques)
+        const gps1 = formData['identification.geolocalisation'];
+        if (gps1 && typeof gps1 === 'string' && gps1.trim() !== '' && gps1 !== 'N/A') {
+          return gps1;
+        }
+        
+        // Format 2: household.geolocalisation (ancien format pour soumissions via application)
+        const gps2 = formData['household.geolocalisation'];
+        if (gps2 && typeof gps2 === 'string' && gps2.trim() !== '' && gps2 !== 'N/A') {
+          return gps2;
+        }
+        
+        // Format 3: identification.geolocalisation (format imbriqué)
+        const gps3 = formData?.identification?.geolocalisation;
+        if (gps3 && typeof gps3 === 'string' && gps3.trim() !== '' && gps3 !== 'N/A') {
+          return gps3;
+        }
+        
+        // Format 4: household.geolocalisation (format imbriqué)
+        const gps4 = formData?.household?.geolocalisation;
+        if (gps4 && typeof gps4 === 'string' && gps4.trim() !== '' && gps4 !== 'N/A') {
+          return gps4;
+        }
+        
+        // Format 5: Utiliser getValue avec fallback
+        const gps5 = getValue('identification.geolocalisation', 'identification', 'geolocalisation');
+        if (gps5 !== 'N/A' && gps5 && typeof gps5 === 'string' && gps5.trim() !== '') {
+          return gps5;
+        }
+        
+        const gps6 = getValue('household.geolocalisation', 'household', 'geolocalisation');
+        if (gps6 !== 'N/A' && gps6 && typeof gps6 === 'string' && gps6.trim() !== '') {
+          return gps6;
+        }
+        
+        // Log pour déboguer si aucune valeur GPS n'est trouvée
+        if (index === 0) {
+          console.log('🔍 Debug GPS - Clés disponibles dans formData:', Object.keys(formData));
+          console.log('🔍 Debug GPS - Exemples de valeurs:', {
+            'identification.geolocalisation': formData['identification.geolocalisation'],
+            'household.geolocalisation': formData['household.geolocalisation'],
+            'identification': formData?.identification,
+            'household': formData?.household
+          });
+        }
+        
+        return 'N/A';
+      })(),
       'Date de Création': enquete.createdAt ? new Date(enquete.createdAt).toLocaleString('fr-FR', {
         year: 'numeric',
         month: '2-digit',

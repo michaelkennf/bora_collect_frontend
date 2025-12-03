@@ -371,7 +371,7 @@ const UserCreationForm: React.FC<UserCreationFormProps> = ({
             {formData.province && (
               <div>
                 <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-1">
-                  Ville *
+                  Ville ou Territoire *
                 </label>
                 <select
                   id="city"
@@ -381,7 +381,7 @@ const UserCreationForm: React.FC<UserCreationFormProps> = ({
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   required
                 >
-                  <option value="">Sélectionnez la ville</option>
+                  <option value="">Sélectionnez la ville ou territoire</option>
                   {getCitiesByProvince(formData.province).map((city, index) => (
                     <option key={index} value={city.name}>
                       {city.name}

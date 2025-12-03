@@ -12,6 +12,7 @@ import {
   PointElement,
   LineElement,
 } from 'chart.js';
+import { getChartColor, getChartColors, CompatibleColors } from '../utils/colors';
 
 ChartJS.register(
   CategoryScale,
@@ -44,8 +45,8 @@ export default function DashboardCharts({ stats }: DashboardChartsProps) {
       {
         label: 'Nombre d\'enquêtes',
         data: stats.byCommune?.map((c: any) => c.count) || [],
-        backgroundColor: 'rgba(59, 130, 246, 0.8)',
-        borderColor: 'rgba(59, 130, 246, 1)',
+        backgroundColor: getChartColor(CompatibleColors.chart.blue, 0.8),
+        borderColor: getChartColor(CompatibleColors.chart.blue, 1),
         borderWidth: 1,
       },
     ],
@@ -58,8 +59,8 @@ export default function DashboardCharts({ stats }: DashboardChartsProps) {
       {
         label: 'Nombre d\'utilisations',
         data: stats.byCombustible?.map((c: any) => c.count) || [],
-        backgroundColor: 'rgba(16, 185, 129, 0.8)',
-        borderColor: 'rgba(16, 185, 129, 1)',
+        backgroundColor: getChartColor(CompatibleColors.chart.green, 0.8),
+        borderColor: getChartColor(CompatibleColors.chart.green, 1),
         borderWidth: 1,
       },
     ],
@@ -72,8 +73,8 @@ export default function DashboardCharts({ stats }: DashboardChartsProps) {
       {
         label: 'Nombre d\'utilisations',
         data: stats.byEquipement?.map((e: any) => e.count) || [],
-        backgroundColor: 'rgba(245, 158, 11, 0.8)',
-        borderColor: 'rgba(245, 158, 11, 1)',
+        backgroundColor: getChartColor(CompatibleColors.chart.yellow, 0.8),
+        borderColor: getChartColor(CompatibleColors.chart.yellow, 1),
         borderWidth: 1,
       },
     ],
@@ -85,18 +86,8 @@ export default function DashboardCharts({ stats }: DashboardChartsProps) {
     datasets: [
       {
         data: stats.byStatus?.map((s: any) => s.count) || [],
-        backgroundColor: [
-          'rgba(59, 130, 246, 0.8)',
-          'rgba(16, 185, 129, 0.8)',
-          'rgba(245, 158, 11, 0.8)',
-          'rgba(239, 68, 68, 0.8)',
-        ],
-        borderColor: [
-          'rgba(59, 130, 246, 1)',
-          'rgba(16, 185, 129, 1)',
-          'rgba(245, 158, 11, 1)',
-          'rgba(239, 68, 68, 1)',
-        ],
+        backgroundColor: getChartColors(4, 0.8),
+        borderColor: getChartColors(4, 1),
         borderWidth: 2,
       },
     ],
@@ -109,8 +100,8 @@ export default function DashboardCharts({ stats }: DashboardChartsProps) {
       {
         label: 'Enquêtes par jour',
         data: stats.timeSeries?.map((t: any) => t.count) || [],
-        borderColor: 'rgba(147, 51, 234, 1)',
-        backgroundColor: 'rgba(147, 51, 234, 0.1)',
+        borderColor: getChartColor(CompatibleColors.chart.purple, 1),
+        backgroundColor: getChartColor(CompatibleColors.chart.purple, 0.1),
         tension: 0.4,
         fill: true,
       },

@@ -16,6 +16,8 @@ export default defineConfig({
   build: {
     // Assurer que les assets sont servis avec les bons types MIME
     assetsDir: 'assets',
+    // Générer un manifest pour le cache
+    manifest: true,
     rollupOptions: {
       output: {
         // Nommer les fichiers de manière prévisible
@@ -23,8 +25,14 @@ export default defineConfig({
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]'
       }
-    }
+    },
+    // Augmenter la taille limite pour éviter les warnings
+    chunkSizeWarningLimit: 1000
   },
   // Configuration pour la production
   base: '/',
+  // Désactiver les Service Workers si présents
+  define: {
+    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development')
+  }
 })

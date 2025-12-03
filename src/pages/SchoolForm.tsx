@@ -4,7 +4,6 @@ import { toast } from 'react-toastify';
 import { Loader2 } from 'lucide-react';
 import { localStorageService } from '../services/localStorageService';
 import { syncService } from '../services/syncService';
-import { reverseGeocodeProvince } from '../utils/geocoding';
 
 // Types pour les solutions de cuisson propre
 interface HouseholdData {
@@ -244,17 +243,19 @@ export default function SchoolForm() {
       setGeolocation(prev => ({ 
         ...prev, 
         error: 'Géolocalisation non supportée par votre navigateur',
-        provinceStatus: 'error',
+        provinceStatus: 'idle',
       }));
       toast.error('❌ Votre navigateur ne supporte pas la géolocalisation');
       return;
     }
 
-    setGeolocation(prev => ({ ...prev, isCapturing: true, error: null, provinceStatus: 'loading' }));
+    setGeolocation(prev => ({ ...prev, isCapturing: true, error: null, provinceStatus: 'idle' }));
+    
+    // Options GPS optimisées pour une capture simple et fiable
     const options = {
-      enableHighAccuracy: false,
-      timeout: 2400000, // 40 minutes
-      maximumAge: 60000
+      enableHighAccuracy: true,  // Activer la haute précision GPS
+      timeout: 60000,            // 60 secondes (timeout plus long pour éviter les erreurs)
+      maximumAge: 0              // Forcer une nouvelle capture (pas de cache)
     };
 
     navigator.geolocation.getCurrentPosition(
@@ -262,7 +263,24 @@ export default function SchoolForm() {
         const { latitude, longitude, accuracy } = position.coords;
         const timestamp = Date.now();
         
-        // Logs réduits pour améliorer les performances
+        // Vérifier que les coordonnées sont valides
+        if (isNaN(latitude) || isNaN(longitude) || latitude === 0 || longitude === 0) {
+          setGeolocation({
+            latitude: null,
+            longitude: null,
+            accuracy: null,
+            timestamp: null,
+            isCapturing: false,
+            error: 'Coordonnées GPS invalides',
+            province: null,
+            provinceStatus: 'idle',
+          });
+          toast.error('❌ Coordonnées GPS invalides. Veuillez réessayer.');
+          return;
+        }
+        
+        // Log pour débogage
+        console.log(`📍 GPS capturé: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}, Précision: ${Math.round(accuracy)}m`);
 
         setGeolocation({
           latitude,
@@ -272,7 +290,7 @@ export default function SchoolForm() {
           isCapturing: false,
           error: null,
           province: null,
-          provinceStatus: 'loading',
+          provinceStatus: 'idle',
         });
         
         // Mettre à jour le formulaire avec les coordonnées GPS
@@ -283,42 +301,12 @@ export default function SchoolForm() {
             household: {
               ...prev.formData.household,
               geolocalisation: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
-              provinceFromGPS: prev.formData.household.provinceFromGPS || '',
             },
           },
         }));
 
-        try {
-          const provinceName = await reverseGeocodeProvince(latitude, longitude);
-          setGeolocation(prev => ({
-            ...prev,
-            province: provinceName,
-            provinceStatus: provinceName ? 'success' : 'error',
-          }));
-          if (provinceName) {
-            setForm(prev => ({
-              ...prev,
-              formData: {
-                ...prev.formData,
-                household: {
-                  ...prev.formData.household,
-                  provinceFromGPS: provinceName,
-                },
-              },
-            }));
-          }
-        } catch (provinceError) {
-          setGeolocation(prev => ({
-            ...prev,
-            province: null,
-            provinceStatus: 'error',
-          }));
-        }
-
         // Notification de succès
-        toast.success(`📍 Position GPS capturée avec précision de ${Math.round(accuracy)}m`);
-        
-        // Logs réduits pour améliorer les performances
+        toast.success(`📍 Position GPS capturée : ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
         // Les informations GPS détaillées sont disponibles dans geolocation state
       },
       (error) => {
@@ -572,11 +560,8 @@ export default function SchoolForm() {
     const gpsInFormData = form.formData.household.geolocalisation && 
                           form.formData.household.geolocalisation.trim() !== '';
     
-    const hasProvince = geolocation.provinceStatus === 'success' ||
-      !!(form.formData.household.provinceFromGPS && form.formData.household.provinceFromGPS.trim() !== '');
-    
-    if ((!hasGPS || !hasProvince) && !gpsInFormData) {
-      toast.error('❌ Veuillez capturer votre position GPS (avec province) avant de soumettre le formulaire.');
+    if (!hasGPS && !gpsInFormData) {
+      toast.error('❌ Veuillez capturer votre position GPS avant de soumettre le formulaire.');
       // Faire défiler vers le champ GPS si visible
       const gpsField = document.querySelector('[placeholder*="GPS"], [placeholder*="gps"], [placeholder*="Géolocalisation"]');
       if (gpsField) {
@@ -930,26 +915,6 @@ export default function SchoolForm() {
                   </div>
                 )}
                 
-                {geolocation.provinceStatus === 'loading' && (
-                  <div className="flex items-center gap-2 text-blue-600 text-xs sm:text-sm">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    <span>Détection de la province...</span>
-                  </div>
-                )}
-                
-                {geolocation.province && geolocation.provinceStatus === 'success' && (
-                  <div className="flex items-center gap-2 text-green-700 text-xs sm:text-sm">
-                    <span>📍</span>
-                    <span>Province détectée : {geolocation.province}</span>
-                  </div>
-                )}
-                
-                {geolocation.provinceStatus === 'error' && (
-                  <div className="flex items-center gap-2 text-red-600 text-xs sm:text-sm">
-                    <span>⚠️</span>
-                    <span>Province introuvable. Saisissez-la manuellement si nécessaire.</span>
-                  </div>
-                )}
                 
                 {/* Précision GPS */}
                 {geolocation.accuracy && (

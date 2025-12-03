@@ -3,7 +3,6 @@ import { useParams, Link } from 'react-router-dom';
 import { CheckCircle, AlertCircle, Loader2, Send, ArrowLeft } from 'lucide-react';
 import { environment } from '../config/environment';
 import logo2 from '../assets/images/logo2.jpg';
-import { reverseGeocodeProvince } from '../utils/geocoding';
 
 interface FormField {
   id: string;
@@ -108,8 +107,6 @@ const PublicFormPage = () => {
   const [submitterContact, setSubmitterContact] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [gpsProvince, setGpsProvince] = useState<string | null>(null);
-  const [gpsProvinceStatus, setGpsProvinceStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
   useEffect(() => {
     const validateLink = async () => {
@@ -210,7 +207,15 @@ const PublicFormPage = () => {
         });
       }
 
-      // Logs réduits pour améliorer les performances
+      // Vérifier que les données GPS sont présentes
+      const gpsKeys = Object.keys(transformedFormData).filter(key => 
+        key.includes('geolocalisation') || key.includes('GPS')
+      );
+      if (gpsKeys.length > 0) {
+        console.log('📊 GPS trouvé dans formData:', gpsKeys.map(key => ({ key, value: transformedFormData[key] })));
+      } else {
+        console.warn('⚠️ Aucune clé GPS trouvée dans formData. Clés disponibles:', Object.keys(transformedFormData));
+      }
 
       const response = await fetch(`${environment.apiBaseUrl}/public-links/form/${token}/submit`, {
         method: 'POST',
@@ -251,38 +256,58 @@ const PublicFormPage = () => {
     return formTemplate.fields.filter((field: FormField) => shouldShowField(field));
   }, [formTemplate, shouldShowField]);
 
-  // Optimiser captureGPS avec useCallback
+  // Capture GPS simplifiée - sans détermination automatique de la province
   const captureGPS = useCallback((fieldId: string) => {
     if (!navigator.geolocation) {
       alert('La géolocalisation n\'est pas supportée par votre navigateur.');
       return;
     }
-    setGpsProvinceStatus('loading');
+    
+    // Options GPS optimisées pour une capture simple et fiable
+    const gpsOptions = {
+      enableHighAccuracy: true,  // Activer la haute précision GPS
+      timeout: 60000,            // 60 secondes (timeout plus long pour éviter les erreurs)
+      maximumAge: 0              // Forcer une nouvelle capture (pas de cache)
+    };
+    
     navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude, longitude } = pos.coords;
-        const coordsValue = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
-        handleInputChange(fieldId, coordsValue);
-        try {
-          const provinceName = await reverseGeocodeProvince(latitude, longitude);
-          if (provinceName) {
-            setGpsProvince(provinceName);
-            handleInputChange(`${fieldId}_province`, provinceName);
-            setGpsProvinceStatus('success');
-          } else {
-            setGpsProvince(null);
-            setGpsProvinceStatus('error');
-          }
-        } catch (error) {
-          setGpsProvince(null);
-          setGpsProvinceStatus('error');
+      (pos) => {
+        const { latitude, longitude, accuracy } = pos.coords;
+        
+        // Vérifier que les coordonnées sont valides
+        if (isNaN(latitude) || isNaN(longitude) || latitude === 0 || longitude === 0) {
+          alert('❌ Coordonnées GPS invalides. Veuillez réessayer.');
+          return;
         }
+        
+        const accuracyMeters = Math.round(accuracy);
+        const coordsValue = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+        
+        // Log pour débogage
+        console.log(`📍 GPS capturé: ${coordsValue}, Précision: ${accuracyMeters}m`);
+        
+        // Enregistrer simplement les coordonnées GPS
+        handleInputChange(fieldId, coordsValue);
+        console.log('✅ Coordonnées GPS enregistrées avec succès');
       },
       (error) => {
-        alert('Impossible de capturer la position GPS. Veuillez autoriser l\'accès à la localisation.');
-        setGpsProvinceStatus('error');
+        let errorMessage = 'Impossible de capturer la position GPS.';
+        if (error && typeof error === 'object') {
+          switch ((error as any).code) {
+            case 1: 
+              errorMessage = 'Permission GPS refusée. Veuillez autoriser l\'accès à la localisation dans les paramètres de votre navigateur.';
+              break;
+            case 2: 
+              errorMessage = 'Position GPS indisponible. Vérifiez votre connexion internet et que le GPS est activé sur votre appareil.';
+              break;
+            case 3: 
+              errorMessage = 'Délai de capture GPS dépassé. Veuillez réessayer.';
+              break;
+          }
+        }
+        alert(`❌ ${errorMessage}`);
       },
-      { enableHighAccuracy: false, timeout: 2400000, maximumAge: 60000 } // 40 minutes
+      gpsOptions
     );
   }, [handleInputChange]);
 
@@ -330,13 +355,18 @@ const PublicFormPage = () => {
                 <line x1="2" y1="12" x2="4" y2="12"/>
                 <line x1="20" y1="12" x2="22" y2="12"/>
               </svg>
-              {gpsProvinceStatus === 'loading' ? 'Capture en cours...' : 'Capturer ma position GPS'}
+              Capturer ma position GPS
             </button>
-            {gpsProvinceStatus === 'success' && gpsProvince && (
-              <p className="text-sm text-green-600">Province détectée : {gpsProvince}</p>
-            )}
-            {gpsProvinceStatus === 'error' && (
-              <p className="text-sm text-red-600">Impossible de déterminer la province. Veuillez réessayer.</p>
+            {/* Afficher des conseils pour améliorer la précision GPS */}
+            {!formData[field.id] && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
+                <p className="font-medium mb-1">💡 Pour une meilleure précision GPS :</p>
+                <ul className="list-disc list-inside space-y-1 text-xs">
+                  <li>Activez le GPS de votre appareil</li>
+                  <li>Sortez à l'extérieur si possible</li>
+                  <li>Attendez quelques secondes après avoir cliqué sur "Capturer"</li>
+                </ul>
+              </div>
             )}
           </div>
         );
@@ -550,7 +580,7 @@ const PublicFormPage = () => {
           />
         );
     }
-  }, [formData, handleInputChange, gpsProvince, gpsProvinceStatus, captureGPS]);
+  }, [formData, handleInputChange, captureGPS]);
 
   if (loading) {
     return (

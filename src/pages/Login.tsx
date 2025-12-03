@@ -36,13 +36,70 @@ const Login = () => {
 
       if (response.ok || response.status === 201) {
         const data = await response.json();
+        
+        // Vérifier si un autre compte est déjà connecté sur ce navigateur
+        const existingUser = localStorage.getItem('user');
+        const existingToken = localStorage.getItem('token');
+        const existingUserId = existingUser ? JSON.parse(existingUser)?.id : null;
+        const newUserId = data.user?.id;
+        
+        // Si un autre compte est connecté, le déconnecter AVANT de stocker les nouvelles données
+        if (existingUserId && existingUserId !== newUserId && existingToken) {
+          console.log('⚠️ Détection d\'un autre compte connecté. Déconnexion de l\'ancien compte...');
+          console.log('   Ancien compte:', existingUserId);
+          console.log('   Nouveau compte:', newUserId);
+          
+          // IMPORTANT: Déclencher forceLogout AVANT de changer les données
+          // Cela permet de déconnecter l'ancien compte dans les autres onglets
+          const forceLogoutData = {
+            userId: existingUserId,
+            timestamp: Date.now(),
+            newUserId: newUserId // Inclure le nouvel ID pour référence
+          };
+          
+          // Stocker forceLogout pour notifier les autres onglets
+          window.localStorage.setItem('forceLogout', JSON.stringify(forceLogoutData));
+          
+          // Déclencher l'événement de déconnexion pour les autres onglets
+          // Note: L'événement storage n'est pas déclenché dans l'onglet courant
+          // On doit donc utiliser un délai pour permettre la propagation
+          setTimeout(() => {
+            window.dispatchEvent(new StorageEvent('storage', {
+              key: 'forceLogout',
+              newValue: JSON.stringify(forceLogoutData),
+              oldValue: null
+            }));
+          }, 50);
+          
+          // Attendre un peu pour que les autres onglets reçoivent l'événement
+          // avant de changer les données dans cet onglet
+          await new Promise(resolve => setTimeout(resolve, 150));
+        }
+        
+        // Stocker le nouvel identifiant de session
+        const sessionId = `session_${newUserId}_${Date.now()}`;
+        
+        // IMPORTANT: Stocker les nouvelles données APRÈS avoir déclenché forceLogout
+        // Cela évite que le nouvel onglet se déconnecte lui-même
+        // Stocker dans l'ordre : currentUserId d'abord, puis token, puis user
+        localStorage.setItem('currentUserId', newUserId);
         localStorage.setItem('token', data.access_token);
         localStorage.setItem('user', JSON.stringify(data.user));
+        localStorage.setItem('sessionId', sessionId);
+        
+        // Nettoyer forceLogout après un délai pour éviter les conflits
+        // Mais seulement si on a déclenché un forceLogout
+        if (existingUserId && existingUserId !== newUserId) {
+          setTimeout(() => {
+            localStorage.removeItem('forceLogout');
+          }, 2000); // 2 secondes pour laisser le temps aux autres onglets de traiter
+        }
         
         console.log('✅ Connexion réussie, données stockées:');
         console.log('🔍 Token:', !!data.access_token);
         console.log('🔍 User data:', data.user);
         console.log('🔍 User role:', data.user.role);
+        console.log('🔍 Session ID:', sessionId);
         
         // Rediriger selon le rôle
         switch (data.user.role) {

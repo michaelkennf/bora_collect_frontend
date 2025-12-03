@@ -1,7 +1,7 @@
 // Assurez-vous d'avoir installé react-router-dom : npm install react-router-dom
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { ToastContainer } from 'react-toastify';
+import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 // Imports critiques (chargés immédiatement)
@@ -46,6 +46,7 @@ const LoadingFallback = () => (
 function PrivateRoute({ children, roles }: { children: React.ReactNode; roles: string[] }) {
   const token = localStorage.getItem('token');
   const user = localStorage.getItem('user');
+  const currentUserId = localStorage.getItem('currentUserId');
   
   if (!token || !user) {
     return <Navigate to="/login" />;
@@ -58,7 +59,35 @@ function PrivateRoute({ children, roles }: { children: React.ReactNode; roles: s
     if (!userData || !userData.role || !userData.id) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      localStorage.removeItem('currentUserId');
+      localStorage.removeItem('sessionId');
       return <Navigate to="/login" />;
+    }
+    
+    // Vérifier si l'utilisateur actuel correspond à l'ID stocké
+    // Si un autre compte s'est connecté, déconnecter celui-ci
+    // IMPORTANT: Ne vérifier que si currentUserId existe ET est différent
+    // Si currentUserId n'existe pas, l'initialiser au lieu de déconnecter
+    if (currentUserId) {
+      if (currentUserId !== userData.id) {
+        console.log('⚠️ Détection d\'un changement de compte. Déconnexion...');
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        localStorage.removeItem('currentUserId');
+        localStorage.removeItem('sessionId');
+        toast.warning('Un autre compte s\'est connecté sur ce navigateur. Vous avez été déconnecté.', {
+          autoClose: 5000,
+          position: 'top-center'
+        });
+        return <Navigate to="/login" />;
+      }
+    } else {
+      // Si currentUserId n'existe pas, l'initialiser avec l'ID de l'utilisateur actuel
+      // Cela peut arriver lors d'une première connexion ou après un rafraîchissement
+      if (userData.id) {
+        localStorage.setItem('currentUserId', userData.id);
+        console.log('✅ currentUserId initialisé dans PrivateRoute:', userData.id);
+      }
     }
     
     // Vérifier si l'utilisateur est actif (sauf pour les PM qui peuvent être PENDING_APPROVAL)
@@ -75,11 +104,128 @@ function PrivateRoute({ children, roles }: { children: React.ReactNode; roles: s
     // Nettoyer les données corrompues
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('currentUserId');
+    localStorage.removeItem('sessionId');
     return <Navigate to="/login" />;
   }
 }
 
 export default function App() {
+  // Écouter les changements de session pour détecter les connexions multiples
+  React.useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      // Détecter si un autre compte s'est connecté via forceLogout
+      // C'est le seul mécanisme fiable pour déconnecter l'ancien compte
+      if (e.key === 'forceLogout') {
+        try {
+          const forceLogoutData = e.newValue ? JSON.parse(e.newValue) : null;
+          if (forceLogoutData) {
+            const currentUser = localStorage.getItem('user');
+            const currentUserId = localStorage.getItem('currentUserId');
+            
+            // Vérifier si c'est notre compte qui doit être déconnecté
+            // On vérifie à la fois user.id et currentUserId pour être sûr
+            if (currentUser) {
+              const userData = JSON.parse(currentUser);
+              // Si c'est notre compte (ancien) qui doit être déconnecté
+              if (userData.id === forceLogoutData.userId || currentUserId === forceLogoutData.userId) {
+                console.log('⚠️ Déconnexion forcée détectée pour l\'ancien compte:', forceLogoutData.userId);
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                localStorage.removeItem('currentUserId');
+                localStorage.removeItem('sessionId');
+                toast.warning('Un autre compte s\'est connecté sur ce navigateur. Vous avez été déconnecté.', {
+                  autoClose: 5000,
+                  position: 'top-center'
+                });
+                window.location.href = '/login';
+                return; // Arrêter ici pour éviter de continuer
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Erreur lors du traitement de la déconnexion forcée:', error);
+        }
+      }
+      
+      // NE PAS écouter les changements de currentUserId directement
+      // Car cela déconnecte même le nouvel onglet qui vient de se connecter
+      // La déconnexion doit se faire uniquement via forceLogout
+    };
+
+    // Écouter les événements de stockage (pour les autres onglets)
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Vérifier périodiquement si le compte actuel est toujours valide
+    // IMPORTANT: Ne vérifier que si currentUserId existe, sinon on peut créer des faux positifs
+    const checkSession = setInterval(() => {
+      const currentUser = localStorage.getItem('user');
+      const currentUserId = localStorage.getItem('currentUserId');
+      const token = localStorage.getItem('token');
+      
+      // Si pas de token, pas besoin de vérifier
+      if (!token) {
+        return;
+      }
+      
+      // Si currentUserId n'existe pas encore, l'initialiser depuis user
+      if (currentUser && !currentUserId) {
+        try {
+          const userData = JSON.parse(currentUser);
+          if (userData.id) {
+            localStorage.setItem('currentUserId', userData.id);
+            console.log('✅ currentUserId initialisé depuis user:', userData.id);
+          }
+        } catch (error) {
+          console.error('Erreur lors de l\'initialisation de currentUserId:', error);
+        }
+        return;
+      }
+      
+      // Vérifier la cohérence seulement si les deux existent
+      // IMPORTANT: Ne pas déconnecter trop rapidement - laisser le temps à la connexion de se stabiliser
+      if (currentUser && currentUserId && token) {
+        try {
+          const userData = JSON.parse(currentUser);
+          // Si l'ID utilisateur ne correspond pas ET que currentUserId a été défini (pas juste initialisé)
+          // Vérifier aussi qu'il n'y a pas de forceLogout en cours (pour éviter les faux positifs)
+          const forceLogout = localStorage.getItem('forceLogout');
+          const isForceLogoutInProgress = forceLogout ? (() => {
+            try {
+              const data = JSON.parse(forceLogout);
+              return data.userId === userData.id;
+            } catch {
+              return false;
+            }
+          })() : false;
+          
+          // Ne déconnecter que si :
+          // 1. Les IDs ne correspondent pas
+          // 2. Ce n'est PAS un forceLogout en cours (car forceLogout gère déjà la déconnexion)
+          // 3. Le token existe (pour éviter les déconnexions sur des sessions expirées)
+          if (userData.id && userData.id !== currentUserId && !isForceLogoutInProgress) {
+            console.log('⚠️ Incohérence détectée entre user et currentUserId. Déconnexion...');
+            console.log('   user.id:', userData.id);
+            console.log('   currentUserId:', currentUserId);
+            console.log('   forceLogout en cours:', isForceLogoutInProgress);
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            localStorage.removeItem('currentUserId');
+            localStorage.removeItem('sessionId');
+            window.location.href = '/login';
+          }
+        } catch (error) {
+          console.error('Erreur lors de la vérification de session:', error);
+        }
+      }
+    }, 10000); // Vérifier toutes les 10 secondes (moins agressif)
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(checkSession);
+    };
+  }, []);
+
   return (
     <>
       <ToastContainer position="top-right" autoClose={3000} hideProgressBar newestOnTop closeOnClick pauseOnFocusLoss draggable pauseOnHover />

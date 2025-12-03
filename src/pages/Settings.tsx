@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link2, Copy, Check, Trash2, RefreshCw, ExternalLink } from 'lucide-react';
+import { toast } from 'react-toastify';
 import { environment } from '../config/environment';
 import { getCitiesByProvince, getCommunesByCity } from '../data/citiesData';
 import { getQuartiersByCommune } from '../data/quartiersData';
+import ConfirmationModal from '../components/ConfirmationModal';
 
 interface PublicLink {
   id: string;
@@ -68,6 +70,7 @@ const Settings: React.FC = () => {
   const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
   const [submissionStats, setSubmissionStats] = useState<{ appSubmissions: number; publicSubmissions: number; total: number } | null>(null);
   const [loadingStats, setLoadingStats] = useState(false);
+  const [showDeletePhotoModal, setShowDeletePhotoModal] = useState(false);
 
   // Charger les données utilisateur au montage du composant
   useEffect(() => {
@@ -450,10 +453,6 @@ const Settings: React.FC = () => {
   };
 
   const handleDeletePhoto = async () => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer votre photo de profil ?')) {
-      return;
-    }
-
     setUploadingPhoto(true);
     setMessage('');
 
@@ -681,7 +680,7 @@ const Settings: React.FC = () => {
               {/* Bouton supprimer */}
               {profilePhoto && (
                 <button
-                  onClick={handleDeletePhoto}
+                  onClick={() => setShowDeletePhotoModal(true)}
                   disabled={uploadingPhoto}
                   className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >

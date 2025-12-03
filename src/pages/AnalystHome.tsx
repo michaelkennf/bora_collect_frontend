@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { useDebounce } from '../utils/debounce';
 import { useNavigate } from 'react-router-dom';
 import logo2 from '../assets/images/logo2.jpg';
 import { Bar, Doughnut } from 'react-chartjs-2';
@@ -9,7 +10,10 @@ import EnumeratorListWithDailyStats from '../components/EnumeratorListWithDailyS
 import ExportNotification from '../components/ExportNotification';
 import SuccessNotification from '../components/SuccessNotification';
 import PNUDFooter from '../components/PNUDFooter';
+import ConfirmationModal from '../components/ConfirmationModal';
+import { toast } from 'react-toastify';
 import { environment } from '../config/environment';
+import { getChartColor, getChartColors, CompatibleColors } from '../utils/colors';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -60,6 +64,8 @@ export default function AnalystHome() {
   const [selectedRecord, setSelectedRecord] = useState<any>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [search, setSearch] = useState('');
+  // Debounce pour optimiser les recherches (300ms de délai)
+  const debouncedSearch = useDebounce(search, 300);
   const [reviewComment, setReviewComment] = useState('');
   const [showCommentField, setShowCommentField] = useState(false);
 const [recordActionLocked, setRecordActionLocked] = useState(false);
@@ -73,6 +79,8 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
   const [enumeratorSubmissions, setEnumeratorSubmissions] = useState<any>(null);
   const [enumeratorSubmissionsLoading, setEnumeratorSubmissionsLoading] = useState(false);
   const [analystStats, setAnalystStats] = useState<any>(null);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [isDeletingDuplicates, setIsDeletingDuplicates] = useState(false);
   const [statsLoading, setStatsLoading] = useState(false);
   const [exportNotification, setExportNotification] = useState<{
     isVisible: boolean;
@@ -260,6 +268,12 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
       }
       
       const data = await res.json();
+      console.log('📊 AnalystStats reçues:', {
+        totalRecords: data.totalRecords,
+        totalByApplication: data.totalByApplication,
+        totalByPublicLink: data.totalByPublicLink,
+        totalEnumerators: data.totalEnumerators
+      });
       setAnalystStats(data);
     } catch (err: any) {
       console.error('❌ Erreur lors de la récupération des statistiques:', err.message);
@@ -276,7 +290,7 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
     console.log('🔍 AnalystHome: Début du chargement des données');
     try {
       await Promise.all([
-        fetchRecords(),
+        fetchRecords(1),
         fetchAnalystCampaignData(),
         fetchAnalystStats(),
         fetchValidationStats()
@@ -414,13 +428,13 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        alert('Token d\'authentification manquant');
+        toast.error('Token d\'authentification manquant');
         return;
       }
 
       // Pour "À revoir", vérifier qu'un commentaire est fourni
       if (status === 'NEEDS_REVIEW' && !reviewComment.trim()) {
-        alert('Veuillez fournir un commentaire pour marquer ce formulaire comme "À revoir"');
+        toast.warning('Veuillez fournir un commentaire pour marquer ce formulaire comme "À revoir"');
         return;
       }
 
@@ -464,59 +478,60 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
               }
             : prev
         );
-        fetchRecords();
+        fetchRecords(currentPage);
         fetchValidationStats();
         setReviewComment('');
         setShowCommentField(false);
       } else {
         const errorData = await response.json();
-        alert(errorData.message || 'Erreur lors de la validation');
+        toast.error(errorData.message || 'Erreur lors de la validation');
       }
     } catch (error) {
       console.error('Erreur lors de la validation:', error);
-      alert('Erreur de connexion au serveur');
+      toast.error('Erreur de connexion au serveur');
     }
   };
 
-  // Récupérer les enquêtes
-  const fetchRecords = async () => {
-    console.log('🔍 fetchRecords: Début');
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(50);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+
+  // Récupérer les enquêtes - AVEC PAGINATION (optimisé pour 15 000+ enregistrements)
+  const fetchRecords = async (page: number = 1) => {
+    console.log('🔍 fetchRecords: Début', { page, pageSize });
     setRecordsLoading(true);
     setRecordsError('');
     try {
-      const res = await fetch(`${environment.apiBaseUrl}/records/analyst`, {
+      const res = await fetch(`${environment.apiBaseUrl}/records/analyst?page=${page}&limit=${pageSize}`, {
         headers: { 
           Authorization: `Bearer ${localStorage.getItem('token')}`
         },
         cache: 'no-store'
       });
       if (!res.ok) throw new Error('Erreur lors du chargement');
-      const data = await res.json();
+      const response = await res.json();
       
-      console.log('📊 Récupération des enquêtes:', data.length, 'enregistrements trouvés');
+      // Gérer la réponse paginée ou l'ancien format (rétrocompatibilité)
+      const data = response.data || response;
+      const pagination = response.pagination;
       
-             // Enrichir les records avec les informations des utilisateurs
-       const enrichedRecords = await Promise.all(
-         data.map(async (record: any) => {
-           let authorName = 'N/A';
-           
-           if (record.authorId) {
-             console.log(`🔍 Récupération des informations pour l'utilisateur: ${record.authorId}`);
-             authorName = await fetchUserInfo(record.authorId);
-             console.log(`✅ Nom de l'enquêteur récupéré: ${authorName}`);
-           } else {
-             console.warn('⚠️ Pas d\'authorId pour l\'enregistrement:', record.id);
-             authorName = 'Auteur non spécifié';
-           }
-           
-           return {
-             ...record,
-             authorName: authorName
-           };
-         })
-       );
+      if (pagination) {
+        setTotalRecords(pagination.total);
+        setTotalPages(pagination.totalPages);
+        setCurrentPage(pagination.page);
+      }
       
-      console.log('✅ Enrichissement des enregistrements terminé');
+      console.log('📊 Récupération des enquêtes:', data.length, 'enregistrements trouvés', pagination ? `(page ${pagination.page}/${pagination.totalPages})` : '');
+      
+      // Les données incluent déjà l'author depuis le backend - Plus besoin de requêtes N+1
+      const enrichedRecords = data.map((record: any) => ({
+        ...record,
+        authorName: record.author?.name || 'N/A'
+      }));
+      
+      console.log('✅ Enregistrements chargés (optimisé - pas de requêtes N+1)');
       setRecords(enrichedRecords);
     } catch (err: any) {
       console.error('❌ Erreur lors de la récupération des enquêtes:', err);
@@ -527,11 +542,11 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
     }
   };
 
-  // Appliquer les filtres aux records
+  // Appliquer les filtres aux records (utilise debouncedSearch pour éviter trop de re-renders)
   const filteredRecords = records.filter(record => {
-    // Filtre par nom du ménage
+    // Filtre par nom du ménage (utilise la valeur debounced)
     const nomOuCode = record.formData?.['identification.nomOuCode'] || record.formData?.household?.nomOuCode || '';
-    const matchesSearch = !search || nomOuCode.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = !debouncedSearch || nomOuCode.toLowerCase().includes(debouncedSearch.toLowerCase());
     
     // Filtre par commune
     const communeQuartier = record.formData?.['identification.communeQuartier'] || record.formData?.household?.communeQuartier || '';
@@ -690,7 +705,7 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
       if (!res.ok) throw new Error('Erreur lors du chargement');
       const data = await res.json();
       setEnumeratorSubmissions(data);
-      setSelectedEnumeratorId(enumeratorId);
+    setSelectedEnumeratorId(enumeratorId);
     } catch (err: any) {
       console.error('Erreur lors de la récupération des soumissions:', err);
     } finally {
@@ -897,7 +912,7 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
         datasets: [{
           label: 'Nombre d\'enquêtes',
           data: Object.values(analystStats.communes || {}),
-          backgroundColor: 'rgba(54, 162, 235, 0.8)',
+          backgroundColor: getChartColor(CompatibleColors.chart.blue, 0.8),
         }]
       }
     };
@@ -950,11 +965,11 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
           label: type,
           data: communesKinshasa.map(commune => combustiblesParCommune[commune]?.[type] || 0),
           backgroundColor: [
-            'rgba(255, 159, 64, 0.8)',   // Orange pour Électricité
-            'rgba(128, 128, 128, 0.8)',  // Gris pour Charbon de bois (Makala)
-            'rgba(54, 162, 235, 0.8)',   // Bleu pour Bois
-            'rgba(75, 192, 192, 0.8)',   // Vert pour Gaz
-            'rgba(153, 102, 255, 0.8)',  // Violet pour Charbon de bois
+            getChartColor('#f97316', 0.8),   // Orange pour Électricité
+            getChartColor('#6b7280', 0.8),   // Gris pour Charbon de bois (Makala)
+            getChartColor(CompatibleColors.chart.blue, 0.8),   // Bleu pour Bois
+            getChartColor('#14b8a6', 0.8),   // Vert pour Gaz
+            getChartColor(CompatibleColors.chart.purple, 0.8),  // Violet pour Charbon de bois
           ][index]
         }))
       };
@@ -965,13 +980,13 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
           label: type,
           data: communesKinshasa.map(commune => equipementsParCommune[commune]?.[type] || 0),
           backgroundColor: [
-            'rgba(255, 99, 132, 0.8)',   // Rouge pour Cuisinière électrique
-            'rgba(54, 162, 235, 0.8)',    // Bleu pour Réchaud à gaz
-            'rgba(255, 206, 86, 0.8)',    // Jaune pour Foyer trois pierres
-            'rgba(75, 192, 192, 0.8)',    // Cyan pour Foyer classique
-            'rgba(153, 102, 255, 0.8)',   // Violet pour Foyer amélioré
-            'rgba(34, 197, 94, 0.8)',     // Vert pour Foyer traditionnel
-            'rgba(255, 159, 64, 0.8)',    // Orange pour Marmite en fonte
+            getChartColor(CompatibleColors.chart.red, 0.8),   // Rouge pour Cuisinière électrique
+            getChartColor(CompatibleColors.chart.blue, 0.8),    // Bleu pour Réchaud à gaz
+            getChartColor(CompatibleColors.chart.yellow, 0.8),    // Jaune pour Foyer trois pierres
+            getChartColor('#14b8a6', 0.8),    // Cyan pour Foyer classique
+            getChartColor(CompatibleColors.chart.purple, 0.8),   // Violet pour Foyer amélioré
+            getChartColor(CompatibleColors.chart.green, 0.8),     // Vert pour Foyer traditionnel
+            getChartColor('#f97316', 0.8),    // Orange pour Marmite en fonte
           ][index]
         }))
       };
@@ -981,21 +996,13 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
     if (analystStats.formFields) {
       Object.entries(analystStats.formFields || {}).forEach(([fieldName, fieldData]: [string, any]) => {
         if (['select', 'radio', 'checkbox', 'ranking'].includes(fieldData.type) && Object.keys(fieldData.values || {}).length > 0) {
+          const valueCount = Object.keys(fieldData.values).length;
           chartData[fieldName] = {
             labels: Object.keys(fieldData.values),
             datasets: [{
               label: fieldData.label || fieldName,
               data: Object.values(fieldData.values),
-          backgroundColor: [
-            'rgba(255, 99, 132, 0.8)',
-            'rgba(54, 162, 235, 0.8)',
-            'rgba(255, 206, 86, 0.8)',
-            'rgba(75, 192, 192, 0.8)',
-            'rgba(153, 102, 255, 0.8)',
-            'rgba(255, 159, 64, 0.8)',
-            'rgba(199, 199, 199, 0.8)',
-            'rgba(83, 102, 255, 0.8)',
-              ],
+              backgroundColor: getChartColors(valueCount, 0.8),
             }]
           };
         }
@@ -1455,12 +1462,15 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
                       </div>
                       {/* Verso */}
                       <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg flex items-center justify-center rotate-y-180">
-                        <div className="text-center text-white">
+                        <div className="text-center text-white px-2">
                           <div className="text-2xl font-bold mb-1 animate-bounce">
-                            {validationStats?.totalRecords || 0}
+                            {analystStats?.totalRecords || 0}
                           </div>
-                          <div className="text-xs font-semibold">Formulaires totaux</div>
-                          <div className="text-xs opacity-80 mt-1">Formulaire{(validationStats?.totalRecords || 0) !== 1 ? 's' : ''}</div>
+                          <div className="text-xs font-semibold mb-2">Formulaires totaux</div>
+                          <div className="text-xs opacity-90 space-y-1">
+                            <div>📱 Application: {analystStats?.totalByApplication || 0}</div>
+                            <div>🔗 Lien public: {analystStats?.totalByPublicLink || 0}</div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1482,14 +1492,14 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
                               validationStats?.totalNeedsReview || 0
                             ],
                             backgroundColor: [
-                              'rgba(34, 197, 94, 0.8)',
-                              'rgba(59, 130, 246, 0.8)',
-                              'rgba(251, 146, 60, 0.8)',
+                              getChartColor(CompatibleColors.chart.green, 0.8),
+                              getChartColor(CompatibleColors.chart.blue, 0.8),
+                              getChartColor('#f97316', 0.8),
                             ],
                             borderColor: [
-                              'rgba(34, 197, 94, 1)',
-                              'rgba(59, 130, 246, 1)',
-                              'rgba(251, 146, 60, 1)',
+                              getChartColor(CompatibleColors.chart.green, 1),
+                              getChartColor(CompatibleColors.chart.blue, 1),
+                              getChartColor('#f97316', 1),
                             ],
                             borderWidth: 2,
                           }]
@@ -1535,7 +1545,7 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
                           datasets: [{
                             label: 'Nombre de formulaires en attente',
                             data: validationStats.pendingByEnumerator.map((e: any) => e.count),
-                            backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                            backgroundColor: getChartColor(CompatibleColors.chart.blue, 0.8),
                           }]
                         }}
                         options={{
@@ -1585,6 +1595,45 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
             <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6 text-center">
               {selectedEnumeratorId ? 'Formulaires de l\'enquêteur' : 'Liste des Enquêteurs'}
             </h1>
+
+            {/* Compteurs globaux - affichés seulement si aucun enquêteur n'est sélectionné */}
+            {!selectedEnumeratorId && analystStats && (
+              <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 mb-4 sm:mb-6">
+                <h2 className="text-lg font-semibold mb-4 text-center">Statistiques globales</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="text-center p-4 bg-blue-50 rounded-lg">
+                    <div className="text-3xl font-bold text-blue-600 mb-2">
+                      {analystStats.totalByApplication || 0}
+                    </div>
+                    <div className="text-blue-800 font-medium">Formulaires par enquêteur (Application)</div>
+                  </div>
+                  <div className="text-center p-4 bg-green-50 rounded-lg">
+                    <div className="text-3xl font-bold text-green-600 mb-2">
+                      {analystStats.totalByPublicLink || 0}
+                    </div>
+                    <div className="text-green-800 font-medium">Formulaires par lien public</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Bouton pour supprimer les doublons */}
+            {!selectedEnumeratorId && selectedCampaignId && (
+              <div className="mb-4 flex justify-end">
+                <button
+                  onClick={() => {
+                    if (!selectedCampaignId) return;
+                    setShowDeleteConfirmModal(true);
+                  }}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  Supprimer les doublons
+                </button>
+              </div>
+            )}
             
             {/* Bouton de retour si un enquêteur est sélectionné */}
             {selectedEnumeratorId && enumeratorSubmissions && (
@@ -1609,10 +1658,10 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
                 </button>
               </div>
             )}
-
+            
             {/* Si un enquêteur est sélectionné, afficher ses formulaires */}
             {selectedEnumeratorId && enumeratorSubmissions ? (
-              <div>
+                <div>
                 {/* Statistiques de l'enquêteur */}
                 <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg mb-4 sm:mb-6">
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
@@ -1620,13 +1669,13 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
                       <div className="text-center p-4 bg-blue-50 rounded-lg">
                         <div className="text-2xl font-bold text-blue-600 mb-2">
                           {enumeratorSubmissions.appSubmissions?.length || 0}
-                        </div>
+                </div>
                         <div className="text-blue-800 font-medium">Par application</div>
-                      </div>
+                </div>
                       <div className="text-center p-4 bg-green-50 rounded-lg">
                         <div className="text-2xl font-bold text-green-600 mb-2">
                           {enumeratorSubmissions.publicSubmissions?.length || 0}
-                        </div>
+              </div>
                         <div className="text-green-800 font-medium">Par lien public</div>
                       </div>
                       <div className="text-center p-4 bg-purple-50 rounded-lg">
@@ -1637,8 +1686,8 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
                       </div>
                     </div>
                     {/* Bouton d'export Excel */}
-                    <button
-                      onClick={() => {
+                 <button
+                   onClick={() => {
                         const allSubmissions = [
                           ...(enumeratorSubmissions.appSubmissions || []).map((s: any) => ({
                             ...s,
@@ -1662,19 +1711,31 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
                         }
                       }}
                       className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors font-semibold"
-                    >
-                      <Download className="h-4 w-4" />
-                      Exporter en Excel
-                    </button>
-                  </div>
-                </div>
+                 >
+                   <Download className="h-4 w-4" />
+                   Exporter en Excel
+                 </button>
+               </div>
+            </div>
 
                 {/* Liste des formulaires par application */}
                 {enumeratorSubmissions.appSubmissions && enumeratorSubmissions.appSubmissions.length > 0 && (
                   <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 mb-4 sm:mb-6">
-                    <h3 className="text-lg font-semibold mb-4 text-blue-800">Formulaires soumis par application ({enumeratorSubmissions.appSubmissions.length})</h3>
+                    <h3 className="text-lg font-semibold mb-4 text-blue-800">
+                      Formulaires soumis par application ({
+                        enumeratorSubmissions.appSubmissions.filter((s: any) => {
+                          if (!search) return true;
+                          const nomOuCode = s.formData?.['identification.nomOuCode'] || s.formData?.household?.nomOuCode || '';
+                          return nomOuCode.toLowerCase().includes(search.toLowerCase());
+                        }).length
+                      })
+                    </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {enumeratorSubmissions.appSubmissions.map((submission: any) => (
+                      {enumeratorSubmissions.appSubmissions.filter((s: any) => {
+                        if (!search) return true;
+                        const nomOuCode = s.formData?.['identification.nomOuCode'] || s.formData?.household?.nomOuCode || '';
+                        return nomOuCode.toLowerCase().includes(search.toLowerCase());
+                      }).map((submission: any) => (
                         <div
                           key={submission.id}
                           className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
@@ -1694,25 +1755,37 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
                                submission.analystValidationStatus === 'NEEDS_REVIEW' ? 'À revoir' :
                                'En attente'}
                             </span>
-                          </div>
+                      </div>
                           <p className="text-sm font-medium text-gray-900 mt-2">
                             {submission.formData?.['identification.nomOuCode'] || submission.formData?.household?.nomOuCode || 'N/A'}
                           </p>
                           <p className="text-xs text-gray-500 mt-1">
                             {new Date(submission.createdAt).toLocaleDateString('fr-FR')}
                           </p>
-                        </div>
+                      </div>
                       ))}
                     </div>
-                  </div>
+                      </div>
                 )}
 
                 {/* Liste des formulaires par lien public */}
                 {enumeratorSubmissions.publicSubmissions && enumeratorSubmissions.publicSubmissions.length > 0 && (
                   <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6">
-                    <h3 className="text-lg font-semibold mb-4 text-green-800">Formulaires soumis par lien public ({enumeratorSubmissions.publicSubmissions.length})</h3>
+                    <h3 className="text-lg font-semibold mb-4 text-green-800">
+                      Formulaires soumis par lien public ({
+                        enumeratorSubmissions.publicSubmissions.filter((s: any) => {
+                          if (!search) return true;
+                          const nomOuCode = s.formData?.['identification.nomOuCode'] || s.formData?.household?.nomOuCode || '';
+                          return nomOuCode.toLowerCase().includes(search.toLowerCase());
+                        }).length
+                      })
+                    </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {enumeratorSubmissions.publicSubmissions.map((submission: any) => (
+                      {enumeratorSubmissions.publicSubmissions.filter((s: any) => {
+                        if (!search) return true;
+                        const nomOuCode = s.formData?.['identification.nomOuCode'] || s.formData?.household?.nomOuCode || '';
+                        return nomOuCode.toLowerCase().includes(search.toLowerCase());
+                      }).map((submission: any) => (
                         <div
                           key={submission.id}
                           className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
@@ -1726,22 +1799,22 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
                             {submission.submitterName && (
                               <span className="text-xs text-gray-600">{submission.submitterName}</span>
                             )}
-                          </div>
+                      </div>
                           <p className="text-sm font-medium text-gray-900 mt-2">
                             {submission.formData?.['identification.nomOuCode'] || submission.formData?.household?.nomOuCode || 'N/A'}
                           </p>
                           <p className="text-xs text-gray-500 mt-1">
                             {new Date(submission.createdAt).toLocaleDateString('fr-FR')}
                           </p>
-                        </div>
+                      </div>
                       ))}
                     </div>
-                  </div>
-                )}
+              </div>
+            )}
 
                 {enumeratorSubmissionsLoading && (
-                  <div className="text-center py-8">
-                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <div className="text-center py-8">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                     <p className="mt-2 text-gray-600">Chargement des formulaires...</p>
                   </div>
                 )}
@@ -1756,14 +1829,14 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
                       <div className="flex-1">
                         <h3 className="text-lg font-semibold text-gray-900 mb-1">
                           Campagne : {campaignData.campaign.title}
-                        </h3>
+                  </h3>
                         <p className="text-sm text-gray-600">
                           {campaignData.campaign.description}
                         </p>
-                      </div>
+                </div>
                       <div className="flex flex-col sm:flex-row gap-2">
                         <button
-                          onClick={() => {
+                        onClick={() => {
                             if (selectedCampaignId) {
                               fetchEnumeratorStats(selectedCampaignId);
                             }
@@ -1773,9 +1846,9 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
                           <RefreshCw className="h-4 w-4" />
                           Actualiser
                         </button>
-                      </div>
-                    </div>
-                  </div>
+                          </div>
+                        </div>
+                          </div>
                 )}
 
                 {/* Bouton d'export global - visible même si la campagne n'est pas chargée */}
@@ -1793,8 +1866,59 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
                       <span className="hidden sm:inline">Exporter tous les formulaires</span>
                       <span className="sm:hidden">Exporter tout</span>
                     </button>
-                  </div>
+                          </div>
                 )}
+
+                {/* Filtres de recherche */}
+                <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 mb-4">
+                  <h3 className="text-lg font-semibold mb-4">Filtres de recherche</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Recherche par nom d'enquêteur */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Rechercher par nom d'enquêteur
+                      </label>
+                      <input
+                        type="text"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Nom de l'enquêteur..."
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    {/* Recherche par nom de personne (pour les formulaires) */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Rechercher par nom de personne (formulaires)
+                      </label>
+                      <input
+                        type="text"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Nom de la personne concernée..."
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    {/* Filtre par commune */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Filtrer par commune
+                      </label>
+                      <select
+                        value={communeFilter}
+                        onChange={(e) => setCommuneFilter(e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="">Toutes les communes</option>
+                        {communesKinshasa.map((commune) => (
+                          <option key={commune} value={commune}>
+                            {commune}
+                          </option>
+                        ))}
+                      </select>
+                          </div>
+                          </div>
+                        </div>
 
                 {/* Chargement des stats */}
                 {enumeratorStatsLoading ? (
@@ -1804,9 +1928,15 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
                   </div>
                 ) : enumeratorStats.length > 0 ? (
                   <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6">
-                    <h3 className="text-lg font-semibold mb-4">Enquêteurs ({enumeratorStats.length})</h3>
+                    <h3 className="text-lg font-semibold mb-4">Enquêteurs ({enumeratorStats.filter((e: any) => {
+                      const matchesSearch = !search || e.name.toLowerCase().includes(search.toLowerCase()) || e.email.toLowerCase().includes(search.toLowerCase());
+                      return matchesSearch;
+                    }).length})</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {enumeratorStats.map((enumerator: any) => (
+                      {enumeratorStats.filter((enumerator: any) => {
+                        const matchesSearch = !search || enumerator.name.toLowerCase().includes(search.toLowerCase()) || enumerator.email.toLowerCase().includes(search.toLowerCase());
+                        return matchesSearch;
+                      }).map((enumerator: any) => (
                         <div
                           key={enumerator.id}
                           className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
@@ -1838,9 +1968,9 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
                               <div className="text-lg font-bold text-green-600">{enumerator.publicLinkSubmissionsCount || 0}</div>
                               <div className="text-xs text-green-800">Par lien</div>
                             </div>
-                          </div>
                         </div>
-                      ))}
+                      </div>
+                    ))}
                     </div>
                   </div>
                 ) : selectedCampaignId ? (
@@ -1897,8 +2027,8 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
               <div className="flex justify-between items-start mb-4">
                 <div className="flex-1">
                   <h3 className="text-lg font-medium text-gray-900 mb-1">
-                    Détails de l'enquête - {selectedRecord.formData?.['identification.nomOuCode'] || selectedRecord.formData?.household?.nomOuCode || 'Ménage'}
-                  </h3>
+                  Détails de l'enquête - {selectedRecord.formData?.['identification.nomOuCode'] || selectedRecord.formData?.household?.nomOuCode || 'Ménage'}
+                </h3>
                   <p className="text-sm text-gray-600">
                     Enquêteur : {selectedRecord.author?.name || selectedRecord.submitterName || 'N/A'} - Campagne : {selectedRecord.survey?.title || 'N/A'}
                   </p>
@@ -2314,6 +2444,56 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
           </div>
         </div>
       )}
+
+      {/* Modal de confirmation pour la suppression des doublons */}
+      <ConfirmationModal
+        isOpen={showDeleteConfirmModal}
+        onClose={() => setShowDeleteConfirmModal(false)}
+        onConfirm={async () => {
+          if (!selectedCampaignId) return;
+          setIsDeletingDuplicates(true);
+          try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(
+              `${environment.apiBaseUrl}/records/detect-and-remove-duplicates?campaignId=${selectedCampaignId}`,
+              {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                }
+              }
+            );
+            if (response.ok) {
+              const result = await response.json();
+              toast.success(
+                `${result.duplicatesRemoved} doublon${result.duplicatesRemoved > 1 ? 's' : ''} supprimé${result.duplicatesRemoved > 1 ? 's' : ''} sur ${result.duplicatesFound} détecté${result.duplicatesFound > 1 ? 's' : ''}`,
+                { autoClose: 5000 }
+              );
+              setShowDeleteConfirmModal(false);
+              // Recharger les données
+              if (selectedCampaignId) {
+                fetchEnumeratorStats(selectedCampaignId);
+              }
+              fetchAnalystStats();
+            } else {
+              const error = await response.json();
+              toast.error(error.message || 'Erreur lors de la suppression des doublons');
+            }
+          } catch (error: any) {
+            console.error('Erreur:', error);
+            toast.error('Erreur lors de la suppression des doublons');
+          } finally {
+            setIsDeletingDuplicates(false);
+          }
+        }}
+        title="Supprimer les doublons"
+        message="Êtes-vous sûr de vouloir détecter et supprimer les doublons ? Cette action est irréversible et supprimera définitivement les formulaires en double."
+        confirmText="Supprimer les doublons"
+        cancelText="Annuler"
+        type="danger"
+        isLoading={isDeletingDuplicates}
+      />
       
       <PNUDFooter />
     </div>

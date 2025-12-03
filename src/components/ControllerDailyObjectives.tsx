@@ -1,5 +1,6 @@
 import React from 'react';
 import { Bar, Line } from 'react-chartjs-2';
+import { getChartColor, CompatibleColors } from '../utils/colors';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -91,16 +92,16 @@ export default function ControllerDailyObjectives({ objectives, loading }: Contr
             {
               label: 'Soumis',
               data: submittedData,
-              backgroundColor: 'rgba(34, 197, 94, 0.5)',
-              borderColor: 'rgba(34, 197, 94, 1)',
+              backgroundColor: getChartColor(CompatibleColors.chart.green, 0.5),
+              borderColor: getChartColor(CompatibleColors.chart.green, 1),
               borderWidth: 2,
               type: 'bar' as const
             },
             {
               label: 'Objectif',
               data: targetData,
-              backgroundColor: 'rgba(59, 130, 246, 0.2)',
-              borderColor: 'rgba(59, 130, 246, 1)',
+              backgroundColor: getChartColor(CompatibleColors.chart.blue, 0.2),
+              borderColor: getChartColor(CompatibleColors.chart.blue, 1),
               borderWidth: 2,
               borderDash: [5, 5],
               type: 'line' as const,

@@ -14,6 +14,7 @@ import {
 } from 'chart.js';
 import { Bar, Doughnut, Line } from 'react-chartjs-2';
 import { environment } from '../config/environment';
+import { getChartColor, CompatibleColors } from '../utils/colors';
 
 ChartJS.register(
   CategoryScale,
@@ -86,14 +87,14 @@ export default function AdminDashboardCharts({ users }: AdminDashboardChartsProp
           users.filter((u: any) => u.gender === 'OTHER' && u.status === 'ACTIVE').length,
         ],
         backgroundColor: [
-          'rgba(59, 130, 246, 0.8)',   // Bleu pour masculin
-          'rgba(236, 72, 153, 0.8)',   // Rose pour féminin
-          'rgba(16, 185, 129, 0.8)',   // Vert pour autre
+          getChartColor(CompatibleColors.chart.blue, 0.8),   // Bleu pour masculin
+          getChartColor(CompatibleColors.chart.pink, 0.8),   // Rose pour féminin
+          getChartColor(CompatibleColors.chart.green, 0.8),   // Vert pour autre
         ],
         borderColor: [
-          'rgba(59, 130, 246, 1)',
-          'rgba(236, 72, 153, 1)',
-          'rgba(16, 185, 129, 1)',
+          getChartColor(CompatibleColors.chart.blue, 1),
+          getChartColor(CompatibleColors.chart.pink, 1),
+          getChartColor(CompatibleColors.chart.green, 1),
         ],
         borderWidth: 2,
       },
@@ -107,16 +108,16 @@ export default function AdminDashboardCharts({ users }: AdminDashboardChartsProp
       {
         data: [usersByRole.admin, usersByRole.controller, usersByRole.analyst, usersByRole.projectManager],
         backgroundColor: [
-          'rgba(239, 68, 68, 0.8)',   // Rouge pour admin
-          'rgba(59, 130, 246, 0.8)',   // Bleu pour enquêteurs
-          'rgba(245, 158, 11, 0.8)',   // Orange pour analystes
-          'rgba(16, 185, 129, 0.8)',   // Vert pour project managers
+          getChartColor(CompatibleColors.chart.red, 0.8),   // Rouge pour admin
+          getChartColor(CompatibleColors.chart.blue, 0.8),   // Bleu pour enquêteurs
+          getChartColor(CompatibleColors.chart.yellow, 0.8),   // Orange pour analystes
+          getChartColor(CompatibleColors.chart.green, 0.8),   // Vert pour project managers
         ],
         borderColor: [
-          'rgba(239, 68, 68, 1)',
-          'rgba(59, 130, 246, 1)',
-          'rgba(245, 158, 11, 1)',
-          'rgba(16, 185, 129, 1)',
+          getChartColor(CompatibleColors.chart.red, 1),
+          getChartColor(CompatibleColors.chart.blue, 1),
+          getChartColor(CompatibleColors.chart.yellow, 1),
+          getChartColor(CompatibleColors.chart.green, 1),
         ],
         borderWidth: 2,
       },
@@ -152,8 +153,8 @@ export default function AdminDashboardCharts({ users }: AdminDashboardChartsProp
       {
         label: 'Nouveaux utilisateurs',
         data: newUsersCount,
-        borderColor: 'rgba(59, 130, 246, 1)',
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        borderColor: getChartColor(CompatibleColors.chart.blue, 1),
+        backgroundColor: getChartColor(CompatibleColors.chart.blue, 0.1),
         tension: 0.4,
         fill: true,
       },

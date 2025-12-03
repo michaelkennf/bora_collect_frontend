@@ -3,7 +3,7 @@ import { toast } from 'react-toastify';
 import { Loader2 } from 'lucide-react';
 import { environment } from '../config/environment';
 import { localStorageService } from '../services/localStorageService';
-import { reverseGeocodeProvince } from '../utils/geocoding';
+import LocationInput from '../components/LocationInput';
 
 interface Campaign {
   id: string;
@@ -187,37 +187,40 @@ const ControllerCampaignForms: React.FC = () => {
   
   const captureGeolocation = () => {
     if (!navigator.geolocation) {
-      setGeolocation(prev => ({ ...prev, error: 'Géolocalisation non supportée par votre navigateur', provinceStatus: 'error' }));
+      setGeolocation(prev => ({ ...prev, error: 'Géolocalisation non supportée par votre navigateur', provinceStatus: 'idle' }));
       return;
     }
 
-    setGeolocation(prev => ({ ...prev, isCapturing: true, error: null, provinceStatus: 'loading' }));
+                                  setGeolocation(prev => ({ ...prev, isCapturing: true, error: null, provinceStatus: 'idle' }));
+    
+    // Options GPS optimisées pour une capture simple et fiable
     const options = { 
-      enableHighAccuracy: false,
-      timeout: 2400000, // 40 minutes
-      maximumAge: 60000
+      enableHighAccuracy: true,  // Activer la haute précision GPS
+      timeout: 60000,            // 60 secondes (timeout plus long pour éviter les erreurs)
+      maximumAge: 0              // Forcer une nouvelle capture (pas de cache)
     };
+    
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude, accuracy } = position.coords;
         const timestamp = Date.now();
-        setGeolocation({ latitude, longitude, accuracy, timestamp, isCapturing: false, error: null, province: null, provinceStatus: 'loading' });
+        
+        // Vérifier que les coordonnées sont valides
+        if (isNaN(latitude) || isNaN(longitude) || latitude === 0 || longitude === 0) {
+          setGeolocation({ latitude: null, longitude: null, accuracy: null, timestamp: null, isCapturing: false, error: 'Coordonnées GPS invalides', province: null, provinceStatus: 'idle' });
+          toast.error('❌ Coordonnées GPS invalides. Veuillez réessayer.');
+          return;
+        }
+        
+        // Log pour débogage
+        console.log(`📍 GPS capturé: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}, Précision: ${Math.round(accuracy)}m`);
+        
+        setGeolocation({ latitude, longitude, accuracy, timestamp, isCapturing: false, error: null, province: null, provinceStatus: 'idle' });
         setFormData(prev => ({
           ...prev,
           ['household.geolocalisation']: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
         }));
-        try {
-          const provinceName = await reverseGeocodeProvince(latitude, longitude);
-          setGeolocation(prev => ({ ...prev, province: provinceName, provinceStatus: provinceName ? 'success' : 'error' }));
-          if (provinceName) {
-            setFormData(prev => ({
-              ...prev,
-              ['household.provinceFromGPS']: provinceName,
-            }));
-          }
-        } catch (error) {
-          setGeolocation(prev => ({ ...prev, province: null, provinceStatus: 'error' }));
-        }
+        toast.success(`📍 Position GPS capturée : ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
       },
       (error) => {
         let errorMessage = 'Erreur GPS inattendue.';
@@ -228,7 +231,8 @@ const ControllerCampaignForms: React.FC = () => {
             case 3: errorMessage = 'Délai de capture GPS dépassé.'; break;
           }
         }
-        setGeolocation({ latitude: null, longitude: null, accuracy: null, timestamp: null, isCapturing: false, error: errorMessage, province: null, provinceStatus: 'error' });
+        setGeolocation({ latitude: null, longitude: null, accuracy: null, timestamp: null, isCapturing: false, error: errorMessage, province: null, provinceStatus: 'idle' });
+        toast.error(`❌ ${errorMessage}`);
       },
       options
     );
@@ -405,10 +409,8 @@ const ControllerCampaignForms: React.FC = () => {
     );
 
     const provinceInFormData = formData['household.provinceFromGPS'] && formData['household.provinceFromGPS'].trim() !== '';
-    const hasProvince = geolocation.provinceStatus === 'success' || provinceInFormData;
-
-    if ((!hasGPS || !hasProvince) && !gpsInFormData) {
-      toast.error('❌ Veuillez capturer votre position GPS (province incluse) avant de soumettre le formulaire.');
+    if (!hasGPS && !gpsInFormData) {
+      toast.error('❌ Veuillez capturer votre position GPS avant de soumettre le formulaire.');
       // Faire défiler vers le champ GPS si visible
       const gpsField = document.querySelector('[placeholder*="GPS"], [placeholder*="gps"], [placeholder*="Géolocalisation"]');
       if (gpsField) {
@@ -479,10 +481,8 @@ const ControllerCampaignForms: React.FC = () => {
     );
 
     const provinceInPayload = submissionData.formData?.['household.provinceFromGPS'] && submissionData.formData['household.provinceFromGPS'].trim() !== '';
-    const hasProvince = geolocation.provinceStatus === 'success' || provinceInPayload;
-
-    if ((!hasGPS || !hasProvince) && !gpsInFormData) {
-      toast.error('❌ Veuillez capturer votre position GPS (province incluse) avant de sauvegarder le formulaire.');
+    if (!hasGPS && !gpsInFormData) {
+      toast.error('❌ Veuillez capturer votre position GPS avant de sauvegarder le formulaire.');
       const gpsField = document.querySelector('[placeholder*="GPS"], [placeholder*="gps"], [placeholder*="Géolocalisation"]');
       if (gpsField) {
         gpsField.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -713,24 +713,79 @@ const ControllerCampaignForms: React.FC = () => {
 
                             {/* Spécifique GPS */}
                             {(/geolocalisation/i.test(field.id) || /géolocalisation/i.test(field.label)) ? (
-                              <div className="flex flex-col sm:flex-row gap-2">
-                                <input
-                                  type="text"
-                                  value={formData[field.id] || ''}
-                                  onChange={(e) => handleFieldChange(field.id, e.target.value)}
-                                  className="flex-1 border rounded p-2 text-sm sm:text-base"
-                                  placeholder={field.placeholder || "Cliquez sur 'Capturer ma position GPS' pour obtenir automatiquement vos coordonnées"}
-                                  readOnly
-                                />
-                                <button
-                                  type="button"
-                                  onClick={captureGeolocation}
-                                  className={`px-3 sm:px-4 py-2 rounded transition-colors text-sm sm:text-base whitespace-nowrap ${geolocation.isCapturing ? 'bg-yellow-600 text-white cursor-wait' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
-                                  disabled={geolocation.isCapturing}
-                                >
-                                  {geolocation.isCapturing ? 'Capture...' : 'Capturer ma position GPS'}
-                                </button>
-                              </div>
+                              <LocationInput
+                                fieldId={field.id}
+                                value={formData[field.id] || ''}
+                                onChange={(fieldId, value) => {
+                                  // Adapter pour gérer les champs avec préfixes (household.geolocalisation)
+                                  if (fieldId.includes('_')) {
+                                    // C'est un champ d'adresse manuelle (province, city, etc.)
+                                    handleFieldChange(fieldId, value);
+                                  } else {
+                                    // C'est le champ GPS principal
+                                    handleFieldChange(fieldId, value);
+                                  }
+                                }}
+                                onGPSCapture={(fieldId) => {
+                                  // Utiliser captureGeolocation mais adapter pour le fieldId
+                                  if (!navigator.geolocation) {
+                                    setGeolocation(prev => ({ ...prev, error: 'Géolocalisation non supportée', provinceStatus: 'idle' }));
+                                    toast.error('❌ Géolocalisation non supportée par votre navigateur');
+                                    return;
+                                  }
+                                  setGeolocation(prev => ({ ...prev, isCapturing: true, error: null, provinceStatus: 'idle' }));
+                                  
+                                  // Options GPS optimisées pour une capture simple et fiable
+                                  const gpsOptions = {
+                                    enableHighAccuracy: true,  // Activer la haute précision GPS
+                                    timeout: 60000,           // 60 secondes (timeout plus long pour éviter les erreurs)
+                                    maximumAge: 0             // Forcer une nouvelle capture (pas de cache)
+                                  };
+                                  
+                                  navigator.geolocation.getCurrentPosition(
+                                    async (position) => {
+                                      const { latitude, longitude, accuracy } = position.coords;
+                                      
+                                      // Vérifier que les coordonnées sont valides
+                                      if (isNaN(latitude) || isNaN(longitude) || latitude === 0 || longitude === 0) {
+                                        setGeolocation(prev => ({ ...prev, isCapturing: false, error: 'Coordonnées GPS invalides', provinceStatus: 'idle' }));
+                                        toast.error('❌ Coordonnées GPS invalides. Veuillez réessayer.');
+                                        return;
+                                      }
+                                      
+                                      // Log pour débogage
+                                      console.log(`📍 GPS capturé: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}, Précision: ${Math.round(accuracy)}m`);
+                                      
+                                      const coordsValue = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+                                      handleFieldChange(fieldId, coordsValue);
+                                      setGeolocation(prev => ({ 
+                                        ...prev, 
+                                        latitude, 
+                                        longitude, 
+                                        isCapturing: false, 
+                                        province: null, 
+                                        provinceStatus: 'idle' 
+                                      }));
+                                      toast.success(`📍 Position GPS capturée : ${coordsValue}`);
+                                    },
+                                    (error) => {
+                                      let errorMessage = 'Erreur GPS inattendue.';
+                                      if (error && typeof error === 'object') {
+                                        switch ((error as any).code) {
+                                          case 1: errorMessage = 'Permission GPS refusée.'; break;
+                                          case 2: errorMessage = 'Position GPS indisponible.'; break;
+                                          case 3: errorMessage = 'Délai de capture GPS dépassé.'; break;
+                                        }
+                                      }
+                                      setGeolocation(prev => ({ ...prev, isCapturing: false, error: errorMessage, provinceStatus: 'idle' }));
+                                      toast.error(`❌ ${errorMessage}`);
+                                    },
+                                    gpsOptions
+                                  );
+                                }}
+                                required={field.required}
+                                className="border rounded p-2 text-sm sm:text-base"
+                              />
                             ) : null}
 
                             {field.type === 'text' && !field.id.toLowerCase().includes('geolocalisation') && (
@@ -945,24 +1000,6 @@ const ControllerCampaignForms: React.FC = () => {
                                 <span className="font-mono bg-green-100 px-2 py-1 rounded text-xs">
                                   {geolocation.latitude.toFixed(6)}, {geolocation.longitude.toFixed(6)}
                                 </span>
-                              </div>
-                            )}
-                            {geolocation.provinceStatus === 'loading' && (
-                              <div className="flex items-center gap-2 text-blue-600 text-xs sm:text-sm">
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                                <span>Détection de la province...</span>
-                              </div>
-                            )}
-                            {geolocation.province && geolocation.provinceStatus === 'success' && (
-                              <div className="flex items-center gap-2 text-green-700 text-xs sm:text-sm">
-                                <span>📍</span>
-                                <span>Province détectée : {geolocation.province}</span>
-                              </div>
-                            )}
-                            {geolocation.provinceStatus === 'error' && (
-                              <div className="flex items-center gap-2 text-red-600 text-xs sm:text-sm">
-                                <span>⚠️</span>
-                                <span>Province introuvable. Saisissez-la manuellement si nécessaire.</span>
                               </div>
                             )}
                             {geolocation.accuracy && (

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import { environment } from '../config/environment';
+import { getChartColor, CompatibleColors } from '../utils/colors';
 
 interface AnalystValidationStats {
   totalPending: number;
@@ -69,14 +70,14 @@ const AnalystValidationCharts: React.FC = () => {
         stats.totalPending
       ],
       backgroundColor: [
-        'rgba(34, 197, 94, 0.8)',    // Vert pour Validés
-        'rgba(251, 146, 60, 0.8)',    // Orange pour À revoir
-        'rgba(59, 130, 246, 0.8)'    // Bleu pour En attente
+        getChartColor(CompatibleColors.chart.green, 0.8),    // Vert pour Validés
+        getChartColor('#f97316', 0.8),    // Orange pour À revoir
+        getChartColor(CompatibleColors.chart.blue, 0.8)    // Bleu pour En attente
       ],
       borderColor: [
-        'rgba(34, 197, 94, 1)',
-        'rgba(251, 146, 60, 1)',
-        'rgba(59, 130, 246, 1)'
+        getChartColor(CompatibleColors.chart.green, 1),
+        getChartColor('#f97316', 1),
+        getChartColor(CompatibleColors.chart.blue, 1)
       ],
       borderWidth: 2,
     }]
@@ -88,8 +89,8 @@ const AnalystValidationCharts: React.FC = () => {
     datasets: [{
       label: 'Formulaires en attente',
       data: stats.pendingByEnumerator.map(e => e.count),
-      backgroundColor: 'rgba(59, 130, 246, 0.8)',
-      borderColor: 'rgba(59, 130, 246, 1)',
+      backgroundColor: getChartColor(CompatibleColors.chart.blue, 0.8),
+      borderColor: getChartColor(CompatibleColors.chart.blue, 1),
       borderWidth: 1,
     }]
   };
@@ -100,8 +101,8 @@ const AnalystValidationCharts: React.FC = () => {
     datasets: [{
       label: 'Formulaires validés',
       data: stats.validatedByDate.map(d => d.count),
-      backgroundColor: 'rgba(34, 197, 94, 0.8)',
-      borderColor: 'rgba(34, 197, 94, 1)',
+      backgroundColor: getChartColor(CompatibleColors.chart.green, 0.8),
+      borderColor: getChartColor(CompatibleColors.chart.green, 1),
       borderWidth: 1,
     }]
   };

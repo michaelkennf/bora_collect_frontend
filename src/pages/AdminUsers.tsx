@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import ConfirmModal from '../components/ConfirmModal';
 import UserCreationForm from '../components/UserCreationForm';
 import { environment } from '../config/environment';
@@ -188,7 +189,10 @@ export default function AdminUsers() {
       setShowReset(null);
       setResetPwd('');
       setResetError('');
-      alert('✅ Mot de passe réinitialisé avec succès');
+      toast.success('Mot de passe réinitialisé avec succès', {
+        autoClose: 3000,
+        position: 'top-right'
+      });
       fetchUsers();
     } catch (err: any) {
       setResetError(err.message || 'Erreur inconnue');

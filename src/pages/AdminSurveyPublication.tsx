@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-toastify';
 import { environment } from '../config/environment';
+import ConfirmationModal from '../components/ConfirmationModal';
 
 // Types et interfaces
 interface Survey {
@@ -68,6 +69,8 @@ const AdminSurveyPublication: React.FC = () => {
   const [loadingPMs, setLoadingPMs] = useState(false);
   const [selectedPMId, setSelectedPMId] = useState<string>('');
   const [assigningPM, setAssigningPM] = useState(false);
+  const [showDeleteSurveyModal, setShowDeleteSurveyModal] = useState(false);
+  const [surveyToDelete, setSurveyToDelete] = useState<{ id: string; title: string } | null>(null);
 
   // Configuration
   const apiBaseUrl = environment.apiBaseUrl;
@@ -404,10 +407,8 @@ const AdminSurveyPublication: React.FC = () => {
   }, [apiBaseUrl, getAuthToken, handleApiError, fetchSurveys]);
 
   // Fonction pour supprimer une enquête
-  const deleteSurvey = useCallback(async (surveyId: string) => {
-    if (!window.confirm('Êtes-vous sûr de vouloir supprimer cette enquête ?')) {
-      return;
-    }
+  const deleteSurvey = useCallback(async (surveyId: string, surveyTitle?: string) => {
+    // Cette fonction sera appelée depuis le modal de confirmation
 
     try {
       const token = getAuthToken();
@@ -901,7 +902,10 @@ const AdminSurveyPublication: React.FC = () => {
                             {/* Bouton Supprimer (si DRAFT ou TERMINATED) */}
                             {(survey.status === 'DRAFT' || survey.status === 'TERMINATED') && (
                               <button
-                                onClick={() => deleteSurvey(survey.id)}
+                                onClick={() => {
+                                  setSurveyToDelete({ id: survey.id, title: survey.title });
+                                  setShowDeleteSurveyModal(true);
+                                }}
                                 className="text-red-600 hover:text-red-900 bg-red-100 hover:bg-red-200 px-3 py-1 rounded-md text-sm font-medium transition-colors"
                               >
                                 Supprimer
@@ -1010,6 +1014,27 @@ const AdminSurveyPublication: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Modal de confirmation pour la suppression d'enquête */}
+        <ConfirmationModal
+          isOpen={showDeleteSurveyModal}
+          onClose={() => {
+            setShowDeleteSurveyModal(false);
+            setSurveyToDelete(null);
+          }}
+          onConfirm={async () => {
+            if (surveyToDelete) {
+              await deleteSurvey(surveyToDelete.id, surveyToDelete.title);
+              setShowDeleteSurveyModal(false);
+              setSurveyToDelete(null);
+            }
+          }}
+          title="Supprimer l'enquête"
+          message={`Êtes-vous sûr de vouloir supprimer l'enquête "${surveyToDelete?.title}" ? Cette action est irréversible.`}
+          confirmText="Supprimer"
+          cancelText="Annuler"
+          type="danger"
+        />
       </div>
     </div>
   );

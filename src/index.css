@@ -1,5 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500&display=swap');
-
+/* Polices système - Compatible avec tous les navigateurs et appareils */
+/* Plus besoin de Google Fonts pour éviter les erreurs de proxy */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -223,16 +223,20 @@
   }
 }
 
-/* Card shadows */
+/* Card shadows - Compatible avec tous les appareils */
+/* Fallback pour anciens navigateurs qui ne supportent pas rgba() */
 .card-shadow {
+  box-shadow: 0 1px 3px 0 rgb(0, 0, 0);
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
 }
 
 .card-shadow-hover {
+  box-shadow: 0 4px 6px -1px rgb(0, 0, 0);
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
 .card-shadow-lg {
+  box-shadow: 0 10px 15px -3px rgb(0, 0, 0);
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 
@@ -280,7 +284,13 @@ body {
   min-height: 100vh;
   background: #fff !important;
   color: #213547;
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  /* Polices système - Compatible avec tous les navigateurs et appareils */
+  /* Fallback gracieux si les polices système ne sont pas disponibles */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', system-ui, Arial, sans-serif;
+  font-feature-settings: 'kern' 1;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 h1 {

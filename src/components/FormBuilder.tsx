@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'react-toastify';
 import { environment } from '../config/environment';
+import ConfirmationModal from './ConfirmationModal';
 
 export interface FormField {
   id: string;
@@ -55,6 +56,8 @@ const FormBuilder: React.FC = () => {
   const [showSurveySelector, setShowSurveySelector] = useState(false);
   const [editingField, setEditingField] = useState<FormField | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showDeleteFormModal, setShowDeleteFormModal] = useState(false);
+  const [formToDelete, setFormToDelete] = useState<{ id: string; name: string } | null>(null);
   
   // Référence pour synchroniser les données des champs
   const fieldDataRef = useRef<Map<string, Partial<FormField>>>(new Map());
@@ -507,10 +510,8 @@ const FormBuilder: React.FC = () => {
     }
   }, [apiBaseUrl, forms]);
 
-  const deleteForm = useCallback(async (formId: string) => {
-    if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce formulaire ?')) {
-      return;
-    }
+  const deleteForm = useCallback(async (formId: string, formName?: string) => {
+    // Cette fonction sera appelée depuis le modal de confirmation
 
     try {
       const token = localStorage.getItem('token');
@@ -997,7 +998,10 @@ const FormBuilder: React.FC = () => {
                   ✏️ Modifier
                 </button>
                 <button
-                  onClick={() => deleteForm(form.id)}
+                  onClick={() => {
+                    setFormToDelete({ id: form.id, name: form.name });
+                    setShowDeleteFormModal(true);
+                  }}
                   className="bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700 transition-colors text-sm"
                 >
                   🗑️ Supprimer
@@ -1011,6 +1015,27 @@ const FormBuilder: React.FC = () => {
       {/* Modals */}
       {showSurveySelector && <SurveySelector />}
       {showBuilder && currentForm && <FormBuilderInterface />}
+
+      {/* Modal de confirmation pour la suppression de formulaire */}
+      <ConfirmationModal
+        isOpen={showDeleteFormModal}
+        onClose={() => {
+          setShowDeleteFormModal(false);
+          setFormToDelete(null);
+        }}
+        onConfirm={async () => {
+          if (formToDelete) {
+            await deleteForm(formToDelete.id, formToDelete.name);
+            setShowDeleteFormModal(false);
+            setFormToDelete(null);
+          }
+        }}
+        title="Supprimer le formulaire"
+        message={`Êtes-vous sûr de vouloir supprimer le formulaire "${formToDelete?.name}" ? Cette action est irréversible.`}
+        confirmText="Supprimer"
+        cancelText="Annuler"
+        type="danger"
+      />
     </div>
   );
 };

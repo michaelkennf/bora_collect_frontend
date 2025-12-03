@@ -13,6 +13,7 @@ import {
   LineElement,
 } from 'chart.js';
 import { environment } from '../config/environment';
+import { getChartColor, CompatibleColors } from '../utils/colors';
 
 ChartJS.register(
   CategoryScale,
@@ -148,16 +149,16 @@ export default function AdminStatistics({ onRefresh }: AdminStatisticsProps) {
       label: 'Utilisateurs par rôle',
       data: stats.users.byRole.map(item => item.count),
       backgroundColor: [
-        'rgba(59, 130, 246, 0.8)',
-        'rgba(16, 185, 129, 0.8)',
-        'rgba(245, 158, 11, 0.8)',
-        'rgba(239, 68, 68, 0.8)',
+        getChartColor(CompatibleColors.chart.blue, 0.8),
+        getChartColor(CompatibleColors.chart.green, 0.8),
+        getChartColor(CompatibleColors.chart.yellow, 0.8),
+        getChartColor(CompatibleColors.chart.red, 0.8),
       ],
       borderColor: [
-        'rgba(59, 130, 246, 1)',
-        'rgba(16, 185, 129, 1)',
-        'rgba(245, 158, 11, 1)',
-        'rgba(239, 68, 68, 1)',
+        getChartColor(CompatibleColors.chart.blue, 1),
+        getChartColor(CompatibleColors.chart.green, 1),
+        getChartColor(CompatibleColors.chart.yellow, 1),
+        getChartColor(CompatibleColors.chart.red, 1),
       ],
       borderWidth: 1,
     }]
@@ -169,14 +170,14 @@ export default function AdminStatistics({ onRefresh }: AdminStatisticsProps) {
       label: 'Enregistrements par statut',
       data: stats.records.byStatus.map(item => item.count),
       backgroundColor: [
-        'rgba(16, 185, 129, 0.8)',
-        'rgba(245, 158, 11, 0.8)',
-        'rgba(239, 68, 68, 0.8)',
+        getChartColor(CompatibleColors.chart.green, 0.8),
+        getChartColor(CompatibleColors.chart.yellow, 0.8),
+        getChartColor(CompatibleColors.chart.red, 0.8),
       ],
       borderColor: [
-        'rgba(16, 185, 129, 1)',
-        'rgba(245, 158, 11, 1)',
-        'rgba(239, 68, 68, 1)',
+        getChartColor(CompatibleColors.chart.green, 1),
+        getChartColor(CompatibleColors.chart.yellow, 1),
+        getChartColor(CompatibleColors.chart.red, 1),
       ],
       borderWidth: 1,
     }]
@@ -187,8 +188,8 @@ export default function AdminStatistics({ onRefresh }: AdminStatisticsProps) {
     datasets: [{
       label: 'Enregistrements par commune',
       data: stats.records.byCommune.map(item => item.count),
-      backgroundColor: 'rgba(147, 51, 234, 0.8)',
-      borderColor: 'rgba(147, 51, 234, 1)',
+      backgroundColor: getChartColor(CompatibleColors.chart.purple, 0.8),
+      borderColor: getChartColor(CompatibleColors.chart.purple, 1),
       borderWidth: 1,
     }]
   };

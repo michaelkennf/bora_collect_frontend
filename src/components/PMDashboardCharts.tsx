@@ -10,6 +10,7 @@ import {
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
 import { environment } from '../config/environment';
+import { getChartColor, CompatibleColors } from '../utils/colors';
 
 ChartJS.register(
   CategoryScale,
@@ -623,8 +624,8 @@ export default function PMDashboardCharts({
       {
         label: 'Objectifs de campagne',
         data: chartData.campaignsByPeriod.map((item: any) => item.count),
-        backgroundColor: 'rgba(59, 130, 246, 0.8)',
-        borderColor: 'rgba(59, 130, 246, 1)',
+        backgroundColor: getChartColor(CompatibleColors.chart.blue, 0.8),
+        borderColor: getChartColor(CompatibleColors.chart.blue, 1),
         borderWidth: 1,
       },
     ],
@@ -634,22 +635,22 @@ export default function PMDashboardCharts({
       {
         label: 'Masculin',
         data: chartData.campaignsByPeriod.map((item: any) => item.masculin),
-        backgroundColor: 'rgba(34, 197, 94, 0.8)',
-        borderColor: 'rgba(34, 197, 94, 1)',
+        backgroundColor: getChartColor(CompatibleColors.chart.green, 0.8),
+        borderColor: getChartColor(CompatibleColors.chart.green, 1),
         borderWidth: 1,
       },
       {
         label: 'Féminin',
         data: chartData.campaignsByPeriod.map((item: any) => item.feminin),
-        backgroundColor: 'rgba(239, 68, 68, 0.8)',
-        borderColor: 'rgba(239, 68, 68, 1)',
+        backgroundColor: getChartColor(CompatibleColors.chart.red, 0.8),
+        borderColor: getChartColor(CompatibleColors.chart.red, 1),
         borderWidth: 1,
       },
       {
         label: 'Autre',
         data: chartData.campaignsByPeriod.map((item: any) => item.autre),
-        backgroundColor: 'rgba(168, 85, 247, 0.8)',
-        borderColor: 'rgba(168, 85, 247, 1)',
+        backgroundColor: getChartColor(CompatibleColors.chart.purple, 0.8),
+        borderColor: getChartColor(CompatibleColors.chart.purple, 1),
         borderWidth: 1,
       },
     ],
