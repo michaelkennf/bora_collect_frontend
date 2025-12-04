@@ -88,11 +88,18 @@ const AdminUserManagement: React.FC = () => {
       });
 
       if (response.ok) {
-        const data = await response.json();
-        setUsers(data);
+        const responseData = await response.json();
+        // L'API peut retourner un objet avec { data: [...], pagination: {...} } ou directement un tableau
+        const usersArray = Array.isArray(responseData) 
+          ? responseData 
+          : (responseData?.data || []);
+        setUsers(usersArray);
+      } else {
+        setUsers([]);
       }
     } catch (error) {
       console.error('Erreur lors du chargement des utilisateurs:', error);
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -109,18 +116,31 @@ const AdminUserManagement: React.FC = () => {
       });
 
       if (response.ok) {
-        const data = await response.json();
-        console.log('🔍 AdminUserManagement - Campagnes reçues:', data);
-        setCampaigns(data);
+        const responseData = await response.json();
+        // L'API peut retourner un objet avec { data: [...], pagination: {...} } ou directement un tableau
+        const campaignsArray = Array.isArray(responseData) 
+          ? responseData 
+          : (responseData?.data || []);
+        console.log('🔍 AdminUserManagement - Campagnes reçues:', campaignsArray);
+        setCampaigns(campaignsArray);
+      } else {
+        setCampaigns([]);
       }
     } catch (error) {
       console.error('Erreur lors du chargement des campagnes:', error);
+      setCampaigns([]);
     } finally {
       setLoadingCampaigns(false);
     }
   };
 
   const applyFilters = () => {
+    // S'assurer que users est toujours un tableau
+    if (!Array.isArray(users)) {
+      setFilteredUsers([]);
+      return;
+    }
+    
     let filtered = [...users];
 
     // Filtrage par recherche textuelle

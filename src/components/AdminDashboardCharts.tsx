@@ -65,15 +65,29 @@ export default function AdminDashboardCharts({ users }: AdminDashboardChartsProp
     fetchPendingApprovals();
   }, []);
 
-  if (!users || users.length === 0) return null;
+  // Extraire le tableau d'utilisateurs si c'est un objet avec data
+  // Protection contre les valeurs null/undefined
+  let usersArray: any[] = [];
+  if (Array.isArray(users)) {
+    usersArray = users;
+  } else if (users && typeof users === 'object' && users !== null) {
+    const usersObj = users as any;
+    if (Array.isArray(usersObj.data)) {
+      usersArray = usersObj.data;
+    } else if (Array.isArray(usersObj)) {
+      usersArray = usersObj;
+    }
+  }
+
+  if (!usersArray || usersArray.length === 0) return null;
 
   // Statistiques des utilisateurs par rôle
   const usersByRole = {
-    admin: users.filter((u: any) => u.role === 'ADMIN').length,
-    controller: users.filter((u: any) => u.role === 'CONTROLLER').length,
+    admin: usersArray.filter((u: any) => u.role === 'ADMIN').length,
+    controller: usersArray.filter((u: any) => u.role === 'CONTROLLER').length,
     supervisor: 0, // Rôle SUPERVISOR supprimé
-    analyst: users.filter((u: any) => u.role === 'ANALYST').length,
-    projectManager: users.filter((u: any) => u.role === 'PROJECT_MANAGER').length,
+    analyst: usersArray.filter((u: any) => u.role === 'ANALYST').length,
+    projectManager: usersArray.filter((u: any) => u.role === 'PROJECT_MANAGER').length,
   };
 
   // Données pour le graphique en anneau - Répartition des utilisateurs par sexe
@@ -82,9 +96,9 @@ export default function AdminDashboardCharts({ users }: AdminDashboardChartsProp
     datasets: [
       {
         data: [
-          users.filter((u: any) => u.gender === 'MALE' && u.status === 'ACTIVE').length,
-          users.filter((u: any) => u.gender === 'FEMALE' && u.status === 'ACTIVE').length,
-          users.filter((u: any) => u.gender === 'OTHER' && u.status === 'ACTIVE').length,
+          usersArray.filter((u: any) => u.gender === 'MALE' && u.status === 'ACTIVE').length,
+          usersArray.filter((u: any) => u.gender === 'FEMALE' && u.status === 'ACTIVE').length,
+          usersArray.filter((u: any) => u.gender === 'OTHER' && u.status === 'ACTIVE').length,
         ],
         backgroundColor: [
           getChartColor(CompatibleColors.chart.blue, 0.8),   // Bleu pour masculin
@@ -139,7 +153,7 @@ export default function AdminDashboardCharts({ users }: AdminDashboardChartsProp
     const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
     const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
     
-    const count = users.filter((user: any) => {
+    const count = usersArray.filter((user: any) => {
       const userDate = new Date(user.createdAt);
       return userDate >= monthStart && userDate <= monthEnd;
     }).length;

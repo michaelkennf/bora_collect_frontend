@@ -70,19 +70,23 @@ export function DashboardAdmin() {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) throw new Error('Erreur lors du chargement des utilisateurs');
-      const data = await res.json();
-      setUsers(data);
+      const responseData = await res.json();
+      
+      // L'API peut retourner un objet avec { data: [...], pagination: {...} } ou directement un tableau
+      const usersArray = Array.isArray(responseData) ? responseData : (responseData?.data || []);
+      
+      setUsers(usersArray);
       
       // Calculer les statistiques des utilisateurs
       setUserStats({
-        totalUsers: data.length,
-        activeUsers: data.filter((u: any) => u.status === 'ACTIVE').length,
+        totalUsers: usersArray.length,
+        activeUsers: usersArray.filter((u: any) => u.status === 'ACTIVE').length,
         pendingApprovals: 0, // Sera mis à jour avec les vraies données
         usersByRole: {
-          admin: data.filter((u: any) => u.role === 'ADMIN' && u.status === 'ACTIVE').length,
-          controller: data.filter((u: any) => u.role === 'CONTROLLER' && u.status === 'ACTIVE').length,
+          admin: usersArray.filter((u: any) => u.role === 'ADMIN' && u.status === 'ACTIVE').length,
+          controller: usersArray.filter((u: any) => u.role === 'CONTROLLER' && u.status === 'ACTIVE').length,
           supervisor: 0, // Rôle SUPERVISOR supprimé
-          analyst: data.filter((u: any) => u.role === 'ANALYST' && u.status === 'ACTIVE').length,
+          analyst: usersArray.filter((u: any) => u.role === 'ANALYST' && u.status === 'ACTIVE').length,
         }
       });
     } catch (err: any) {
@@ -146,12 +150,15 @@ export function DashboardAdmin() {
       });
 
       if (response.ok) {
-        const campaigns = await response.json();
+        const responseData = await response.json();
+        // L'API peut retourner un objet avec { data: [...], pagination: {...} } ou directement un tableau
+        const campaignsArray = Array.isArray(responseData) ? responseData : (responseData?.data || []);
+        
         setCampaignStats({
-          totalCampaigns: campaigns.length,
-          activeCampaigns: campaigns.filter((c: any) => c.status === 'PUBLISHED').length,
-          completedCampaigns: campaigns.filter((c: any) => c.status === 'TERMINATED').length,
-          pendingCampaigns: campaigns.filter((c: any) => c.status === 'DRAFT').length
+          totalCampaigns: campaignsArray.length,
+          activeCampaigns: campaignsArray.filter((c: any) => c.status === 'PUBLISHED').length,
+          completedCampaigns: campaignsArray.filter((c: any) => c.status === 'TERMINATED').length,
+          pendingCampaigns: campaignsArray.filter((c: any) => c.status === 'DRAFT').length
         });
       }
     } catch (error) {
@@ -352,10 +359,15 @@ export default function AdminHome() {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) throw new Error('Erreur lors du chargement');
-      const data = await res.json();
-      setUsers(data);
+      const responseData = await res.json();
+      
+      // L'API peut retourner un objet avec { data: [...], pagination: {...} } ou directement un tableau
+      const usersArray = Array.isArray(responseData) ? responseData : (responseData?.data || []);
+      
+      setUsers(usersArray);
     } catch (err: any) {
       console.error('Erreur:', err.message);
+      setUsers([]); // S'assurer que users est toujours un tableau
     } finally {
       setLoading(false);
     }

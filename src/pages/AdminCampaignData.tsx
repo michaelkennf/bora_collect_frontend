@@ -128,10 +128,15 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
       });
 
       if (!res.ok) throw new Error('Erreur lors du chargement');
-      const data = await res.json();
-      setEnumeratorStats(data);
+      const responseData = await res.json();
+      // L'API peut retourner un objet avec { data: [...], pagination: {...} } ou directement un tableau
+      const statsArray = Array.isArray(responseData) 
+        ? responseData 
+        : (responseData?.data || []);
+      setEnumeratorStats(statsArray);
     } catch (err: any) {
       console.error('Erreur lors de la récupération des stats des enquêteurs:', err);
+      setEnumeratorStats([]);
     } finally {
       setEnumeratorStatsLoading(false);
     }
@@ -151,11 +156,16 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
       });
 
       if (!res.ok) throw new Error('Erreur lors du chargement');
-      const data = await res.json();
-      setEnumeratorSubmissions(data);
+      const responseData = await res.json();
+      // L'API peut retourner un objet avec { data: [...], pagination: {...} } ou directement un tableau/objet
+      const submissionsData = Array.isArray(responseData) 
+        ? responseData 
+        : (responseData?.data !== undefined ? responseData.data : responseData);
+      setEnumeratorSubmissions(submissionsData);
       setSelectedEnumeratorId(enumeratorId);
     } catch (err: any) {
       console.error('Erreur lors de la récupération des soumissions:', err);
+      setEnumeratorSubmissions(null);
     } finally {
       setEnumeratorSubmissionsLoading(false);
     }
@@ -172,8 +182,12 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
       });
 
       if (response.ok) {
-        const data = await response.json();
-        setCampaigns(data);
+        const responseData = await response.json();
+        // L'API peut retourner un objet avec { data: [...], pagination: {...} } ou directement un tableau
+        const campaignsArray = Array.isArray(responseData) 
+          ? responseData 
+          : (responseData?.data || []);
+        setCampaigns(campaignsArray);
       }
     } catch (error) {
       console.error('Erreur lors du chargement des campagnes:', error);
@@ -194,8 +208,12 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
       });
 
       if (response.ok) {
-        const data = await response.json();
-        setResponses(data);
+        const responseData = await response.json();
+        // L'API peut retourner un objet avec { data: [...], pagination: {...} } ou directement un tableau
+        const responsesArray = Array.isArray(responseData) 
+          ? responseData 
+          : (responseData?.data || []);
+        setResponses(responsesArray);
       } else {
         setResponses([]);
         toast.info('Aucune donnée trouvée pour cette campagne');
