@@ -83,20 +83,52 @@ const AdminUserManagement: React.FC = () => {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${environment.apiBaseUrl}/users`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // Charger tous les utilisateurs en paginant jusqu'à obtenir tous les résultats
+      let allUsers: User[] = [];
+      let page = 1;
+      let hasMore = true;
+      const limit = 500; // Limite max par page (selon le backend)
 
-      if (response.ok) {
-        const responseData = await response.json();
-        // L'API peut retourner un objet avec { data: [...], pagination: {...} } ou directement un tableau
-        const usersArray = Array.isArray(responseData) 
-          ? responseData 
-          : (responseData?.data || []);
-        setUsers(usersArray);
-      } else {
-        setUsers([]);
+      while (hasMore) {
+        const response = await fetch(`${environment.apiBaseUrl}/users?page=${page}&limit=${limit}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const responseData = await response.json();
+          
+          // Extraire les données (peut être un tableau ou un objet avec data)
+          let usersArray: User[] = [];
+          if (Array.isArray(responseData)) {
+            usersArray = responseData;
+            hasMore = usersArray.length === limit; // S'il y a exactement limit résultats, il y a peut-être plus
+          } else if (responseData?.data && Array.isArray(responseData.data)) {
+            usersArray = responseData.data;
+            // Vérifier s'il y a plus de pages
+            if (responseData.pagination) {
+              hasMore = responseData.pagination.hasMore || false;
+            } else {
+              hasMore = usersArray.length === limit;
+            }
+          } else {
+            hasMore = false;
+          }
+
+          allUsers = [...allUsers, ...usersArray];
+          
+          // Si on a reçu moins que la limite, on a atteint la fin
+          if (usersArray.length < limit) {
+            hasMore = false;
+          } else {
+            page++;
+          }
+        } else {
+          hasMore = false;
+        }
       }
+
+      setUsers(allUsers);
+      console.log(`✅ ${allUsers.length} utilisateurs chargés`);
     } catch (error) {
       console.error('Erreur lors du chargement des utilisateurs:', error);
       setUsers([]);
