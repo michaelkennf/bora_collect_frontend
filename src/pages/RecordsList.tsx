@@ -790,7 +790,66 @@ export default function RecordsList() {
                         </div>
                         <div className="bg-blue-50 p-3 rounded-lg">
                           <span className="font-medium text-gray-700">Géolocalisation :</span>
-                          <div className="mt-1 text-gray-900 font-semibold font-mono text-sm">{showDetails.formData?.['household.geolocalisation'] || showDetails.formData?.household?.geolocalisation || 'N/A'}</div>
+                          <div className="mt-1 text-gray-900 font-semibold font-mono text-sm">
+                            {(() => {
+                              const formData = showDetails.formData || {};
+                              
+                              // D'abord, chercher les coordonnées GPS
+                              const gps1 = formData['identification.geolocalisation'];
+                              if (gps1 && typeof gps1 === 'string' && gps1.trim() !== '' && gps1 !== 'N/A') return gps1;
+                              
+                              const gps2 = formData['household.geolocalisation'];
+                              if (gps2 && typeof gps2 === 'string' && gps2.trim() !== '' && gps2 !== 'N/A') return gps2;
+                              
+                              const gps3 = formData?.identification?.geolocalisation;
+                              if (gps3 && typeof gps3 === 'string' && gps3.trim() !== '' && gps3 !== 'N/A') return gps3;
+                              
+                              const gps4 = formData?.household?.geolocalisation;
+                              if (gps4 && typeof gps4 === 'string' && gps4.trim() !== '' && gps4 !== 'N/A') return gps4;
+                              
+                              // Si pas de GPS, chercher l'adresse manuelle complète
+                              const getAddressValue = (key: string): string | null => {
+                                const value = formData[key] || formData?.identification?.[key.split('.')[1]] || formData?.household?.[key.split('.')[1]];
+                                if (value && typeof value === 'string' && value.trim() !== '' && value.trim() !== 'N/A') {
+                                  return value.trim();
+                                }
+                                return null;
+                              };
+                              
+                              // Chercher la province
+                              const provinceKeys = ['identification.province', 'household.province', 'province'];
+                              let province: string | null = null;
+                              for (const key of provinceKeys) {
+                                province = getAddressValue(key);
+                                if (province) break;
+                              }
+                              
+                              // Chercher commune/quartier/ville
+                              const addressKeys = [
+                                'identification.communeQuartier', 'household.communeQuartier', 'communeQuartier',
+                                'identification.commune', 'household.commune', 'commune',
+                                'identification.quartier', 'household.quartier', 'quartier',
+                                'identification.ville', 'household.ville', 'ville',
+                                'identification.city', 'household.city', 'city'
+                              ];
+                              let address: string | null = null;
+                              for (const key of addressKeys) {
+                                address = getAddressValue(key);
+                                if (address) break;
+                              }
+                              
+                              // Construire l'adresse complète si disponible
+                              if (province && address) {
+                                return `${province}, ${address}`;
+                              } else if (address) {
+                                return address;
+                              } else if (province) {
+                                return province;
+                              }
+                              
+                              return 'N/A';
+                            })()}
+                          </div>
                         </div>
                       </div>
                     </div>

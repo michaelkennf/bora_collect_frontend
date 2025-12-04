@@ -112,6 +112,7 @@ export const exportEnquetesToExcel = (enquetes: any[], filename: string = 'enque
         // Essayer plusieurs formats possibles pour la géolocalisation
         const formData = enquete.formData || {};
         
+        // D'abord, chercher les coordonnées GPS
         // Format 1: identification.geolocalisation (nouveau format pour soumissions publiques)
         const gps1 = formData['identification.geolocalisation'];
         if (gps1 && typeof gps1 === 'string' && gps1.trim() !== '' && gps1 !== 'N/A') {
@@ -145,6 +146,46 @@ export const exportEnquetesToExcel = (enquetes: any[], filename: string = 'enque
         const gps6 = getValue('household.geolocalisation', 'household', 'geolocalisation');
         if (gps6 !== 'N/A' && gps6 && typeof gps6 === 'string' && gps6.trim() !== '') {
           return gps6;
+        }
+        
+        // Si pas de GPS, chercher l'adresse manuelle complète
+        const getAddressValue = (key: string): string | null => {
+          const value = getValue(key);
+          if (value && value !== 'N/A' && typeof value === 'string' && value.trim() !== '') {
+            return value.trim();
+          }
+          return null;
+        };
+        
+        // Chercher la province
+        const provinceKeys = ['identification.province', 'household.province', 'province'];
+        let province: string | null = null;
+        for (const key of provinceKeys) {
+          province = getAddressValue(key);
+          if (province) break;
+        }
+        
+        // Chercher commune/quartier/ville
+        const addressKeys = [
+          'identification.communeQuartier', 'household.communeQuartier', 'communeQuartier',
+          'identification.commune', 'household.commune', 'commune',
+          'identification.quartier', 'household.quartier', 'quartier',
+          'identification.ville', 'household.ville', 'ville',
+          'identification.city', 'household.city', 'city'
+        ];
+        let address: string | null = null;
+        for (const key of addressKeys) {
+          address = getAddressValue(key);
+          if (address) break;
+        }
+        
+        // Construire l'adresse complète si disponible
+        if (province && address) {
+          return `${province}, ${address}`;
+        } else if (address) {
+          return address;
+        } else if (province) {
+          return province;
         }
         
         // Log pour déboguer si aucune valeur GPS n'est trouvée
