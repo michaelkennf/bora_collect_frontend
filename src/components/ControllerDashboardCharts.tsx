@@ -13,6 +13,7 @@ import {
 import { Bar } from 'react-chartjs-2';
 import { environment } from '../config/environment';
 import { getChartColor, CompatibleColors } from '../utils/colors';
+import enhancedApiService from '../services/enhancedApiService';
 
 ChartJS.register(
   CategoryScale,
@@ -64,18 +65,12 @@ export default function ControllerDashboardCharts({ personalStats }: ControllerD
         const token = localStorage.getItem('token');
         if (!token) return;
 
-        // Récupérer les statistiques des enregistrements (route spécifique enquêteur)
-        const recordsResponse = await fetch(`${environment.apiBaseUrl}/records/controller`, {
-          headers: { 
-            Authorization: `Bearer ${token}`,
-          },
-          cache: 'no-store'
+        // Utilisation du nouveau service API
+        const responseData = await enhancedApiService.get<any>('/records/controller', {
+          skipCache: true, // Forcer le refresh pour les données critiques
         });
-
-        if (recordsResponse.ok) {
-          const responseData = await recordsResponse.json();
-          
-          console.log('📊 ControllerDashboardCharts - Données reçues:', responseData);
+        
+        console.log('📊 ControllerDashboardCharts - Données reçues:', responseData);
           
           // L'API retourne un objet avec { data: [...], pagination: {...} }
           // Extraire le tableau de records
@@ -113,10 +108,6 @@ export default function ControllerDashboardCharts({ personalStats }: ControllerD
           setChartData({
             recordsByMonth: last6Months
           });
-
-        } else {
-          console.error('❌ Erreur lors de la récupération des données:', recordsResponse.status);
-        }
       } catch (error) {
         console.error('❌ Erreur lors de la récupération des données:', error);
       } finally {

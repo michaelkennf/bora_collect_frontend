@@ -3,6 +3,9 @@ import { useParams, Link } from 'react-router-dom';
 import { CheckCircle, AlertCircle, Loader2, Send, ArrowLeft } from 'lucide-react';
 import { environment } from '../config/environment';
 import logo2 from '../assets/images/logo2.jpg';
+import enhancedApiService from '../services/enhancedApiService';
+import { getCitiesByProvince, getCommunesByCity } from '../data/citiesData';
+import { getQuartiersByCommune } from '../data/quartiersData';
 
 interface FormField {
   id: string;
@@ -107,16 +110,29 @@ const PublicFormPage = () => {
   const [submitterContact, setSubmitterContact] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  
+  // État pour le choix de localisation (GPS ou Adresse manuelle)
+  const [locationType, setLocationType] = useState<'gps' | 'address'>('gps');
+  const [addressData, setAddressData] = useState({
+    province: '',
+    city: '',
+    commune: '',
+    quartier: ''
+  });
+  const [customCity, setCustomCity] = useState('');
+  const [showCustomCity, setShowCustomCity] = useState(false);
+  const [customCommune, setCustomCommune] = useState('');
+  const [showCustomCommune, setShowCustomCommune] = useState(false);
+  const [customQuartier, setCustomQuartier] = useState('');
+  const [showCustomQuartier, setShowCustomQuartier] = useState(false);
 
   useEffect(() => {
     const validateLink = async () => {
       try {
-        const response = await fetch(`${environment.apiBaseUrl}/public-links/form/${token}`);
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Lien invalide ou expiré');
-        }
-        const data = await response.json();
+        // Utilisation du nouveau service API (skipAuth car c'est un lien public)
+        const data = await enhancedApiService.get<LinkData>(`/public-links/form/${token}`, {
+          skipAuth: true,
+        });
         // Logs réduits pour améliorer les performances
         setLinkData(data);
       } catch (err: any) {
@@ -168,7 +184,21 @@ const PublicFormPage = () => {
   }, [formData]);
 
   // Fonction pour valider soit GPS soit adresse manuelle
-  const validateLocation = (data: Record<string, any>): { isValid: boolean; message?: string } => {
+  const validateLocation = (data: Record<string, any>, useAddressData: boolean = false): { isValid: boolean; message?: string } => {
+    // Si on utilise les données d'adresse depuis le state (locationType === 'address')
+    if (useAddressData) {
+      // La validation des données d'adresse est faite avant l'appel à cette fonction
+      // On vérifie juste qu'il y a des données d'adresse dans data
+      const provinceKeys = Object.keys(data).filter(key => /province/i.test(key));
+      const communeKeys = Object.keys(data).filter(key => /commune/i.test(key) || /quartier/i.test(key));
+      if (provinceKeys.length > 0 && communeKeys.length > 0) {
+        return { isValid: true };
+      }
+      return {
+        isValid: false,
+        message: '❌ Pour utiliser une adresse manuelle, veuillez compléter tous les champs requis : province et commune/quartier.'
+      };
+    }
     // Vérifier si GPS est présent
     const hasGPS = Object.keys(data).some(key => {
       const value = data[key];
@@ -263,10 +293,13 @@ const PublicFormPage = () => {
   };
 
   // Fonction pour valider tous les champs obligatoires
-  const validateRequiredFields = (data: Record<string, any>, fields: FormField[]): { isValid: boolean; message?: string; missingField?: string } => {
+  const validateRequiredFields = (data: Record<string, any>, fields: FormField[], locationType: 'gps' | 'address', addressData: { province: string; commune: string }): { isValid: boolean; message?: string; missingField?: string } => {
     if (!fields || fields.length === 0) {
       return { isValid: true };
     }
+
+    // Vérifier si l'adresse est complète (pour ignorer le GPS si adresse choisie)
+    const hasCompleteAddress = locationType === 'address' && addressData.province && addressData.commune;
 
     for (const field of fields) {
       // Ignorer les champs de section et info
@@ -276,6 +309,11 @@ const PublicFormPage = () => {
 
       // Si le champ est obligatoire
       if (field.required) {
+        // Ignorer le champ GPS si l'utilisateur a choisi l'adresse manuelle et que l'adresse est complète
+        if (field.type === 'gps' && hasCompleteAddress) {
+          continue; // Le GPS n'est pas obligatoire si l'adresse est complète
+        }
+
         const fieldValue = data[field.id];
         
         // Vérifier si le champ est vide
@@ -346,8 +384,8 @@ const PublicFormPage = () => {
         });
       }
 
-      // Valider tous les champs obligatoires
-      const requiredFieldsValidation = validateRequiredFields(transformedFormData, formTemplate?.fields || []);
+      // Valider tous les champs obligatoires (en excluant le GPS si l'adresse est complète)
+      const requiredFieldsValidation = validateRequiredFields(transformedFormData, formTemplate?.fields || [], locationType, addressData);
       if (!requiredFieldsValidation.isValid) {
         setError(requiredFieldsValidation.message || 'Champs obligatoires manquants');
         setSubmitting(false);
@@ -364,20 +402,98 @@ const PublicFormPage = () => {
         return;
       }
 
-      // Valider la localisation (GPS ou adresse manuelle)
-      const locationValidation = validateLocation(transformedFormData);
-      if (!locationValidation.isValid) {
-        setError(locationValidation.message || 'Localisation requise');
-        setSubmitting(false);
-        // Faire défiler vers le champ GPS ou adresse si visible
-        const locationField = document.querySelector('[placeholder*="GPS"], [placeholder*="gps"], [placeholder*="Géolocalisation"], [placeholder*="province"], [placeholder*="commune"]');
-        if (locationField) {
-          locationField.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          (locationField as HTMLElement).focus();
-        } else {
-          window.scrollTo({ top: 0, behavior: 'smooth' });
+      // Vérifier si GPS est présent dans formData
+      const hasGPS = Object.keys(transformedFormData).some(key => {
+        const value = transformedFormData[key];
+        if (!value) return false;
+        const valueStr = String(value).trim();
+        if (/geolocalisation/i.test(key) || /GPS/i.test(key)) {
+          if (valueStr.includes(',') || valueStr.includes(';')) {
+            const coords = valueStr.split(/[,;]/).map(c => parseFloat(c.trim()));
+            if (coords.length >= 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
+              return true;
+            }
+          }
+          if (typeof value === 'object' && (value.latitude || value.longitude)) {
+            return true;
+          }
         }
-        return;
+        return false;
+      });
+
+      // Ajouter les données d'adresse si locationType === 'address'
+      if (locationType === 'address') {
+        // Vérifier que l'adresse est complète
+        if (!addressData.province || !addressData.commune) {
+          setError('❌ Pour utiliser une adresse manuelle, veuillez compléter tous les champs requis : province et commune/quartier.');
+          setSubmitting(false);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          return;
+        }
+
+        // Ajouter les données d'adresse dans formData avec les clés appropriées
+        // Chercher les clés existantes pour province et commune/quartier
+        const provinceKeys = Object.keys(transformedFormData).filter(key => /province/i.test(key));
+        const communeKeys = Object.keys(transformedFormData).filter(key => /commune/i.test(key) || /quartier/i.test(key));
+        
+        // Si on trouve des clés existantes, utiliser la première
+        if (provinceKeys.length > 0) {
+          transformedFormData[provinceKeys[0]] = addressData.province;
+        } else {
+          // Sinon, utiliser le format standard
+          transformedFormData['identification.province'] = addressData.province;
+        }
+        
+        if (communeKeys.length > 0) {
+          transformedFormData[communeKeys[0]] = showCustomCommune ? customCommune : addressData.commune;
+        } else {
+          transformedFormData['identification.communeQuartier'] = showCustomCommune ? customCommune : addressData.commune;
+        }
+        
+        // Ajouter city et quartier si disponibles
+        if (addressData.city || showCustomCity) {
+          transformedFormData['identification.city'] = showCustomCity ? customCity : addressData.city;
+        }
+        if (addressData.quartier || showCustomQuartier) {
+          transformedFormData['identification.quartier'] = showCustomQuartier ? customQuartier : addressData.quartier;
+        }
+      }
+
+      // Valider la localisation : GPS OU adresse complète (l'un ou l'autre)
+      // Si GPS est présent, c'est valide
+      if (hasGPS) {
+        // GPS présent, validation OK
+      } else if (locationType === 'address') {
+        // Vérifier que l'adresse est complète (déjà vérifié plus haut)
+        // Si on arrive ici, l'adresse est complète
+      } else {
+        // Pas de GPS et locationType === 'gps' mais GPS non capturé
+        // Vérifier si une adresse complète est présente dans formData
+        const provinceKeys = Object.keys(transformedFormData).filter(key => /province/i.test(key));
+        const communeKeys = Object.keys(transformedFormData).filter(key => /commune/i.test(key) || /quartier/i.test(key));
+        
+        const hasValidProvince = provinceKeys.some(key => {
+          const value = transformedFormData[key];
+          return value && String(value).trim() !== '';
+        });
+        
+        const hasValidCommune = communeKeys.some(key => {
+          const value = transformedFormData[key];
+          return value && String(value).trim() !== '';
+        });
+        
+        if (!hasValidProvince || !hasValidCommune) {
+          setError('❌ Veuillez soit capturer votre position GPS, soit compléter une adresse complète (province et commune/quartier) avant de soumettre le formulaire.');
+          setSubmitting(false);
+          const locationField = document.querySelector('[placeholder*="GPS"], [placeholder*="gps"], [placeholder*="Géolocalisation"], [name*="province"], [name*="commune"]');
+          if (locationField) {
+            locationField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            (locationField as HTMLElement).focus();
+          } else {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+          return;
+        }
       }
 
       // Vérifier que les données GPS sont présentes (pour logging)
@@ -390,22 +506,14 @@ const PublicFormPage = () => {
         console.log('📍 Adresse manuelle utilisée pour la localisation');
       }
 
-      const response = await fetch(`${environment.apiBaseUrl}/public-links/form/${token}/submit`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          formData: transformedFormData,
-          submitterName: submitterName || undefined,
-          submitterContact: submitterContact || undefined,
-        }),
+      // Utilisation du nouveau service API (skipAuth car c'est un lien public)
+      await enhancedApiService.post(`/public-links/form/${token}/submit`, {
+        formData: transformedFormData,
+        submitterName: submitterName || undefined,
+        submitterContact: submitterContact || undefined,
+      }, {
+        skipAuth: true,
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Erreur lors de la soumission');
-      }
 
       setSubmitted(true);
     } catch (err: any) {
@@ -504,6 +612,10 @@ const PublicFormPage = () => {
         );
       
       case 'gps':
+        // Ne rendre le champ GPS que si locationType === 'gps'
+        if (locationType !== 'gps') {
+          return null;
+        }
         return (
           <div className="space-y-3">
             <input
@@ -512,7 +624,7 @@ const PublicFormPage = () => {
               placeholder="Latitude, Longitude"
               value={formData[field.id] || ''}
               readOnly
-              required={field.required}
+              required={field.required && locationType === 'gps'}
               className={`${commonClasses} bg-slate-50`}
             />
             <button
@@ -870,6 +982,292 @@ const PublicFormPage = () => {
                 </div>
               </div>
             </div>
+
+            {/* Choix de localisation : GPS ou Adresse manuelle */}
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+              <label className="block text-sm font-medium text-slate-700 mb-3">
+                Méthode de localisation *
+              </label>
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLocationType('gps');
+                    // Nettoyer les données d'adresse si on passe à GPS
+                    setAddressData({ province: '', city: '', commune: '', quartier: '' });
+                  }}
+                  className={`p-4 rounded-lg border-2 transition-all ${
+                    locationType === 'gps'
+                      ? 'border-blue-600 bg-blue-100 text-blue-700'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span className="font-medium">GPS</span>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLocationType('address')}
+                  className={`p-4 rounded-lg border-2 transition-all ${
+                    locationType === 'address'
+                      ? 'border-blue-600 bg-blue-100 text-blue-700'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span className="font-medium">Adresse</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Champs d'adresse manuelle (si locationType === 'address') */}
+            {locationType === 'address' && (
+              <div className="bg-slate-50 rounded-xl p-4 mb-6 space-y-4">
+                <h3 className="text-sm font-semibold text-slate-700 mb-3">Adresse complète</h3>
+                
+                {/* Province */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Province *
+                  </label>
+                  <select
+                    value={addressData.province}
+                    onChange={(e) => {
+                      setAddressData(prev => ({
+                        ...prev,
+                        province: e.target.value,
+                        city: '',
+                        commune: '',
+                        quartier: ''
+                      }));
+                      setShowCustomCity(false);
+                      setCustomCity('');
+                      setShowCustomCommune(false);
+                      setCustomCommune('');
+                      setShowCustomQuartier(false);
+                      setCustomQuartier('');
+                    }}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required={locationType === 'address'}
+                  >
+                    <option value="">Sélectionnez votre province</option>
+                    <option value="BAS_UELE">Bas-Uélé</option>
+                    <option value="EQUATEUR">Équateur</option>
+                    <option value="HAUT_KATANGA">Haut-Katanga</option>
+                    <option value="HAUT_LOMAMI">Haut-Lomami</option>
+                    <option value="HAUT_UELE">Haut-Uélé</option>
+                    <option value="ITURI">Ituri</option>
+                    <option value="KASAI">Kasaï</option>
+                    <option value="KASAI_CENTRAL">Kasaï-Central</option>
+                    <option value="KASAI_ORIENTAL">Kasaï-Oriental</option>
+                    <option value="KINSHASA">Kinshasa</option>
+                    <option value="KONGO_CENTRAL">Kongo-Central</option>
+                    <option value="KWANGO">Kwango</option>
+                    <option value="KWILU">Kwilu</option>
+                    <option value="LOMAMI">Lomami</option>
+                    <option value="LUALABA">Lualaba</option>
+                    <option value="MAI_NDOMBE">Mai-Ndombe</option>
+                    <option value="MANIEMA">Maniema</option>
+                    <option value="MONGALA">Mongala</option>
+                    <option value="NORD_KIVU">Nord-Kivu</option>
+                    <option value="NORD_UBANGI">Nord-Ubangi</option>
+                    <option value="SANKURU">Sankuru</option>
+                    <option value="SUD_KIVU">Sud-Kivu</option>
+                    <option value="SUD_UBANGI">Sud-Ubangi</option>
+                    <option value="TANGANYIKA">Tanganyika</option>
+                    <option value="TSHOPO">Tshopo</option>
+                    <option value="TSHUAPA">Tshuapa</option>
+                  </select>
+                </div>
+
+                {/* Ville */}
+                {addressData.province && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Ville ou Territoire *
+                    </label>
+                    <select
+                      value={showCustomCity ? 'CUSTOM' : addressData.city}
+                      onChange={(e) => {
+                        if (e.target.value === 'CUSTOM') {
+                          setShowCustomCity(true);
+                          setAddressData(prev => ({
+                            ...prev,
+                            city: '',
+                            commune: '',
+                            quartier: ''
+                          }));
+                        } else {
+                          setShowCustomCity(false);
+                          setCustomCity('');
+                          setAddressData(prev => ({
+                            ...prev,
+                            city: e.target.value,
+                            commune: '',
+                            quartier: ''
+                          }));
+                        }
+                        setShowCustomCommune(false);
+                        setCustomCommune('');
+                        setShowCustomQuartier(false);
+                        setCustomQuartier('');
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required={locationType === 'address'}
+                    >
+                      <option value="">Sélectionnez votre ville ou territoire</option>
+                      {getCitiesByProvince(addressData.province).map((city, index) => (
+                        <option key={index} value={city.name}>
+                          {city.name}
+                        </option>
+                      ))}
+                      <option value="CUSTOM">Ma ville n'est pas dans la liste</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* Ville personnalisée */}
+                {showCustomCity && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Nom de votre ville ou territoire *
+                    </label>
+                    <input
+                      type="text"
+                      value={customCity}
+                      onChange={(e) => setCustomCity(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Entrez le nom de votre ville ou territoire"
+                      required={locationType === 'address' && showCustomCity}
+                    />
+                  </div>
+                )}
+
+                {/* Commune */}
+                {(addressData.city || showCustomCity) && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Commune *
+                    </label>
+                    <select
+                      value={showCustomCommune ? 'CUSTOM' : addressData.commune}
+                      onChange={(e) => {
+                        if (e.target.value === 'CUSTOM') {
+                          setShowCustomCommune(true);
+                          setAddressData(prev => ({
+                            ...prev,
+                            commune: '',
+                            quartier: ''
+                          }));
+                        } else {
+                          setShowCustomCommune(false);
+                          setCustomCommune('');
+                          setAddressData(prev => ({
+                            ...prev,
+                            commune: e.target.value,
+                            quartier: ''
+                          }));
+                        }
+                        setShowCustomQuartier(false);
+                        setCustomQuartier('');
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required={locationType === 'address'}
+                    >
+                      <option value="">Sélectionnez votre commune</option>
+                      {!showCustomCity && getCommunesByCity(addressData.province, addressData.city).map((commune, index) => (
+                        <option key={index} value={commune}>
+                          {commune}
+                        </option>
+                      ))}
+                      <option value="CUSTOM">Ma commune n'est pas dans la liste</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* Commune personnalisée */}
+                {showCustomCommune && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Nom de votre commune *
+                    </label>
+                    <input
+                      type="text"
+                      value={customCommune}
+                      onChange={(e) => setCustomCommune(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Entrez le nom de votre commune"
+                      required={locationType === 'address' && showCustomCommune}
+                    />
+                  </div>
+                )}
+
+                {/* Quartier */}
+                {(addressData.commune || showCustomCommune) && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Quartier *
+                    </label>
+                    <select
+                      value={showCustomQuartier ? 'CUSTOM' : addressData.quartier}
+                      onChange={(e) => {
+                        if (e.target.value === 'CUSTOM') {
+                          setShowCustomQuartier(true);
+                          setAddressData(prev => ({
+                            ...prev,
+                            quartier: ''
+                          }));
+                        } else {
+                          setShowCustomQuartier(false);
+                          setCustomQuartier('');
+                          setAddressData(prev => ({
+                            ...prev,
+                            quartier: e.target.value
+                          }));
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required={locationType === 'address'}
+                    >
+                      <option value="">Sélectionnez votre quartier</option>
+                      {!showCustomCommune && !showCustomCity && getQuartiersByCommune(addressData.province, addressData.city, addressData.commune).map((quartier, index) => (
+                        <option key={index} value={quartier}>
+                          {quartier}
+                        </option>
+                      ))}
+                      <option value="CUSTOM">Mon quartier n'est pas dans la liste</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* Quartier personnalisé */}
+                {showCustomQuartier && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Nom de votre quartier *
+                    </label>
+                    <input
+                      type="text"
+                      value={customQuartier}
+                      onChange={(e) => setCustomQuartier(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Entrez le nom de votre quartier"
+                      required={locationType === 'address' && showCustomQuartier}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Form Fields */}
             <div className="space-y-6">

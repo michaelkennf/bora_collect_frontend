@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { toast } from 'react-toastify';
 import { environment } from '../config/environment';
+import enhancedApiService from '../services/enhancedApiService';
+import Pagination from '../components/Pagination';
 
 interface EnumeratorRequest {
   id: string;
@@ -33,6 +35,9 @@ const PMEnumeratorRequests: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [action, setAction] = useState<'approve' | 'reject'>('approve');
   const [comments, setComments] = useState('');
+  // États pour la pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(50);
 
   const apiBaseUrl = environment.apiBaseUrl;
 
@@ -89,34 +94,13 @@ const PMEnumeratorRequests: React.FC = () => {
 
       console.log('🔍 Fetching enumerator requests from:', `${apiBaseUrl}/users/pm-enumerator-requests`);
       
-      const response = await fetch(`${apiBaseUrl}/users/pm-enumerator-requests`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        signal: AbortSignal.timeout(environment.apiTimeout)
+      // Utilisation du nouveau service API
+      const requests = await enhancedApiService.get<any[]>('/users/pm-enumerator-requests', {
+        skipCache: true, // Forcer le refresh
       });
       
-      console.log('📡 Response status:', response.status);
-      console.log('📡 Response ok:', response.ok);
-
-      if (response.ok) {
-        const requests = await response.json();
-        console.log('✅ Enumerator requests loaded:', requests.length);
-        setEnumeratorRequests(requests);
-      } else if (response.status === 401) {
-        console.log('🔒 Unauthorized - token may be expired');
-        // Ne pas afficher de toast pour éviter les notifications répétées
-      } else if (response.status === 403) {
-        console.log('🚫 Forbidden - user may not have proper permissions');
-        // Ne pas afficher de notification d'erreur pour les PM connectés
-      } else if (response.status === 404) {
-        console.log('🔍 Route non trouvée - vérifier que le backend est démarré');
-        // Ne pas afficher de toast pour éviter les notifications répétées
-      } else {
-        console.log(`❌ Erreur ${response.status}: ${response.statusText}`);
-        // Ne pas afficher de toast pour éviter les notifications répétées
-      }
+      console.log('✅ Enumerator requests loaded:', requests.length);
+      setEnumeratorRequests(requests);
     } catch (error) {
       console.log('❌ Network error:', error);
       // Ne pas afficher de toast pour éviter les notifications répétées
@@ -134,22 +118,13 @@ const PMEnumeratorRequests: React.FC = () => {
 
       console.log('🔍 Fetching PM stats from:', `${apiBaseUrl}/users/pm-approval-stats`);
       
-      const response = await fetch(`${apiBaseUrl}/users/pm-approval-stats`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        signal: AbortSignal.timeout(environment.apiTimeout)
+      // Utilisation du nouveau service API
+      const statsData = await enhancedApiService.get<PMStats>('/users/pm-approval-stats', {
+        skipCache: true, // Forcer le refresh
       });
-
-      if (response.ok) {
-        const statsData = await response.json();
-        console.log('✅ PM stats loaded:', statsData);
-        setStats(statsData);
-      } else {
-        console.log('❌ Failed to load PM stats:', response.status, response.statusText);
-        // Ne pas afficher de toast pour éviter les notifications répétées
-      }
+      
+      console.log('✅ PM stats loaded:', statsData);
+      setStats(statsData);
     } catch (error) {
       console.log('❌ Error loading PM stats:', error);
       // Ne pas afficher de toast pour éviter les notifications répétées
@@ -166,27 +141,16 @@ const PMEnumeratorRequests: React.FC = () => {
         return;
       }
 
-      const response = await fetch(`${apiBaseUrl}/users/${requestId}/${action}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          comments: comments
-        })
+      // Utilisation du nouveau service API
+      await enhancedApiService.post(`/users/${requestId}/${action}`, {
+        comments: comments
       });
 
-      if (response.ok) {
-        toast.success(`Enquêteur ${action === 'approve' ? 'approuvé' : 'rejeté'} avec succès`);
-        setShowModal(false);
-        setComments('');
-        await fetchEnumeratorRequests();
-        await fetchPMStats();
-      } else {
-        const errorData = await response.json();
-        toast.error(errorData.message || `Erreur lors de l'${action === 'approve' ? 'approbation' : 'rejet'}`);
-      }
+      toast.success(`Enquêteur ${action === 'approve' ? 'approuvé' : 'rejeté'} avec succès`);
+      setShowModal(false);
+      setComments('');
+      await fetchEnumeratorRequests();
+      await fetchPMStats();
     } catch (error) {
       console.error('Erreur lors de l\'approbation:', error);
       toast.error('Erreur de connexion au serveur');
@@ -201,6 +165,15 @@ const PMEnumeratorRequests: React.FC = () => {
     setComments('');
     setShowModal(true);
   };
+
+  // Calculer les demandes paginées
+  const paginatedRequests = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    return enumeratorRequests.slice(startIndex, endIndex);
+  }, [enumeratorRequests, currentPage, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(enumeratorRequests.length / pageSize));
 
   if (loading) {
     return (
@@ -260,7 +233,7 @@ const PMEnumeratorRequests: React.FC = () => {
               Aucune demande d'enquêteur en attente
             </div>
           ) : (
-            enumeratorRequests.map((request) => (
+            paginatedRequests.map((request) => (
               <div key={request.id} className="px-6 py-4">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
@@ -307,6 +280,20 @@ const PMEnumeratorRequests: React.FC = () => {
             ))
           )}
         </div>
+        
+        {/* Pagination - affichée même avec 1 page */}
+        {enumeratorRequests.length > 0 && (
+          <div className="px-6 py-4 border-t border-gray-200">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages || 1}
+              totalItems={enumeratorRequests.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              loading={loading}
+            />
+          </div>
+        )}
       </div>
 
       {/* Modal de confirmation */}

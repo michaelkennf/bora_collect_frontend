@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { toast } from 'react-toastify';
 import { environment } from '../../config/environment';
+import enhancedApiService from '../../services/enhancedApiService';
+import Pagination from '../../components/Pagination';
 
 interface PendingUser {
   id: string;
@@ -49,6 +51,9 @@ const PMApprovalRequests: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   const [comments, setComments] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'PENDING' | 'APPROVED' | 'REJECTED'>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  // États pour la pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(50);
   
   // États pour l'effet de retournement
   const [flippedCards, setFlippedCards] = useState<Record<string, boolean>>({});
@@ -123,35 +128,21 @@ const PMApprovalRequests: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
         return;
       }
 
-      // Récupérer toutes les demandes (sans filtre de statut)
-      const allResponse = await fetch(`${environment.apiBaseUrl}/users/pm-pending-approvals`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+      // Utilisation du nouveau service API
+      const allData = await enhancedApiService.get<PendingUser[]>('/users/pm-pending-approvals', {
+        skipCache: true, // Forcer le refresh
       });
-
-      if (allResponse.ok) {
-        const allData = await allResponse.json();
-        setAllUsers(allData);
-        
-        // Filtrer selon le statut sélectionné
-        if (status && status !== 'all') {
-          const filtered = allData.filter((user: PendingUser) => 
-            user.surveyApplications?.some((app: any) => app.status === status)
-          );
-          setPendingUsers(filtered);
-        } else {
-          setPendingUsers(allData);
-        }
-      } else if (allResponse.status === 401) {
-        console.log('🔐 Session expirée - redirection vers login');
-      } else if (allResponse.status === 403) {
-        console.log('🚫 Forbidden - user may not have proper permissions');
-      } else if (allResponse.status === 404) {
-        console.log('🔍 Route non trouvée - vérifier que le backend est démarré');
+      
+      setAllUsers(allData);
+      
+      // Filtrer selon le statut sélectionné
+      if (status && status !== 'all') {
+        const filtered = allData.filter((user: PendingUser) => 
+          user.surveyApplications?.some((app: any) => app.status === status)
+        );
+        setPendingUsers(filtered);
       } else {
-        console.log(`❌ Erreur ${allResponse.status}: ${allResponse.statusText}`);
+        setPendingUsers(allData);
       }
     } catch (error) {
       console.log('❌ Erreur de connexion au serveur:', error);
@@ -167,17 +158,12 @@ const PMApprovalRequests: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
         return;
       }
 
-      const response = await fetch(`${environment.apiBaseUrl}/users/pm-approval-stats`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+      // Utilisation du nouveau service API
+      const data = await enhancedApiService.get<ApprovalStats>('/users/pm-approval-stats', {
+        skipCache: true, // Forcer le refresh
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data);
-      }
+      
+      setStats(data);
     } catch (error) {
       // Erreur silencieuse pour les stats
     }
@@ -187,41 +173,30 @@ const PMApprovalRequests: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
     setApproving(userId);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${environment.apiBaseUrl}/users/${userId}/pm-approve`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: action === 'approve' ? 'APPROVE' : 'REJECT',
-          comments: comments.trim() || undefined,
-        }),
+      // Utilisation du nouveau service API
+      await enhancedApiService.post(`/users/${userId}/pm-approve`, {
+        action: action === 'approve' ? 'APPROVE' : 'REJECT',
+        comments: comments.trim() || undefined,
       });
-
-      if (response.ok) {
-        const actionText = action === 'approve' ? 'approuvé' : 'rejeté';
-        toast.success(`Utilisateur ${actionText} avec succès !`);
-        
-        // Mettre à jour les listes
-        await fetchPendingApprovals();
-        await fetchApprovalStats();
-        
-        // Déclencher un événement pour mettre à jour la page enquêteur si c'est une approbation
-        if (action === 'approve') {
-          window.dispatchEvent(new CustomEvent('enumeratorApproved', { 
-            detail: { userId } 
-          }));
-        }
-        
-        // Fermer le modal
-        setShowModal(false);
-        setSelectedUser(null);
-        setComments('');
-      } else {
-        const errorData = await response.json();
-        toast.error(errorData.message || `Erreur lors de l'${action === 'approve' ? 'approbation' : 'rejet'}`);
+      
+      const actionText = action === 'approve' ? 'approuvé' : 'rejeté';
+      toast.success(`Utilisateur ${actionText} avec succès !`);
+      
+      // Mettre à jour les listes
+      await fetchPendingApprovals();
+      await fetchApprovalStats();
+      
+      // Déclencher un événement pour mettre à jour la page enquêteur si c'est une approbation
+      if (action === 'approve') {
+        window.dispatchEvent(new CustomEvent('enumeratorApproved', { 
+          detail: { userId } 
+        }));
       }
+      
+      // Fermer le modal
+      setShowModal(false);
+      setSelectedUser(null);
+      setComments('');
     } catch (error) {
       toast.error('Erreur de connexion au serveur');
     } finally {
@@ -270,7 +245,7 @@ const PMApprovalRequests: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   };
 
   // Filtrer les utilisateurs selon le terme de recherche
-  const filteredUsers = pendingUsers.filter((user) => {
+  const filteredUsers = useMemo(() => pendingUsers.filter((user) => {
     if (!searchTerm.trim()) return true;
     
     const searchLower = searchTerm.toLowerCase();
@@ -289,7 +264,21 @@ const PMApprovalRequests: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
       getRoleLabel(user.role).toLowerCase().includes(searchLower) ||
       getGenderLabel(user.gender).toLowerCase().includes(searchLower)
     );
-  });
+  }), [pendingUsers, searchTerm]);
+
+  // Calculer les utilisateurs paginés
+  const paginatedUsers = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    return filteredUsers.slice(startIndex, endIndex);
+  }, [filteredUsers, currentPage, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
+
+  // Réinitialiser à la page 1 quand les filtres changent
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, searchTerm]);
 
   if (loading) {
     return (
@@ -612,6 +601,20 @@ const PMApprovalRequests: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+          
+          {/* Pagination - affichée même avec 1 page */}
+          {filteredUsers.length > 0 && (
+            <div className="px-6 py-4 border-t border-gray-200">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages || 1}
+                totalItems={filteredUsers.length}
+                pageSize={pageSize}
+                onPageChange={setCurrentPage}
+                loading={loading}
+              />
             </div>
           )}
         </div>

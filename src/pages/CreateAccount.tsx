@@ -5,6 +5,7 @@ import { environment } from '../config/environment';
 import { getCitiesByProvince, getCommunesByCity } from '../data/citiesData';
 import { getQuartiersByCommune } from '../data/quartiersData';
 import ProjectManagerRegistration from './ProjectManagerRegistration';
+import enhancedApiService from '../services/enhancedApiService';
 
 const CreateAccount = () => {
   const [step, setStep] = useState<'select-role' | 'form'>('select-role');
@@ -29,7 +30,7 @@ const CreateAccount = () => {
   const [showCustomCommune, setShowCustomCommune] = useState(false);
   const [customQuartier, setCustomQuartier] = useState('');
   const [showCustomQuartier, setShowCustomQuartier] = useState(false);
-  const [campaigns, setCampaigns] = useState([]);
+  const [campaigns, setCampaigns] = useState<any[]>([]);
   const [loadingCampaigns, setLoadingCampaigns] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -42,13 +43,11 @@ const CreateAccount = () => {
     const loadCampaigns = async () => {
       setLoadingCampaigns(true);
       try {
-        const response = await fetch(`${environment.apiBaseUrl}/users/campaigns`);
-        if (response.ok) {
-          const campaignsData = await response.json();
-          setCampaigns(campaignsData);
-        } else {
-          console.error('Erreur lors du chargement des campagnes');
-        }
+        // Utilisation du nouveau service API (skipAuth car pas encore connecté)
+        const campaignsData = await enhancedApiService.get<any[]>('/users/campaigns', {
+          skipAuth: true,
+        });
+        setCampaigns(campaignsData);
       } catch (error) {
         console.error('Erreur lors du chargement des campagnes:', error);
       } finally {
@@ -196,36 +195,28 @@ const CreateAccount = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${environment.apiBaseUrl}/users/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          password: formData.password,
-          role: selectedRole,
-          gender: formData.gender || undefined,
-          contact: formData.contact || undefined,
-          whatsapp: formData.whatsapp || undefined,
-          province: formData.province || undefined,
-          city: showCustomCity ? customCity : (formData.city || undefined),
-          commune: showCustomCommune ? customCommune : (formData.commune || undefined),
-          quartier: showCustomQuartier ? customQuartier : (formData.quartier || undefined),
-          campaignId: formData.campaignId || undefined
-        }),
+      // Utilisation du nouveau service API (skipAuth car pas encore connecté)
+      await enhancedApiService.post('/users/register', {
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        role: selectedRole,
+        gender: formData.gender || undefined,
+        contact: formData.contact || undefined,
+        whatsapp: formData.whatsapp || undefined,
+        province: formData.province || undefined,
+        city: showCustomCity ? customCity : (formData.city || undefined),
+        commune: showCustomCommune ? customCommune : (formData.commune || undefined),
+        quartier: showCustomQuartier ? customQuartier : (formData.quartier || undefined),
+        campaignId: formData.campaignId || undefined
+      }, {
+        skipAuth: true,
       });
 
-      if (response.ok || response.status === 201) {
-        // Rediriger vers la page de succès avec l'email
-        navigate('/account-created', { 
-          state: { email: formData.email } 
-        });
-      } else {
-        const errorData = await response.json();
-        setError(errorData.message || 'Erreur lors de la création du compte');
-      }
+      // Rediriger vers la page de succès avec l'email
+      navigate('/account-created', { 
+        state: { email: formData.email } 
+      });
     } catch (err) {
       setError('Erreur de connexion au serveur');
     } finally {

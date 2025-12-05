@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { environment } from '../config/environment';
 import EnumeratorDailyStats from './EnumeratorDailyStats';
 import { Bar } from 'react-chartjs-2';
+import Pagination from './Pagination';
+import enhancedApiService from '../services/enhancedApiService';
 
 interface Enumerator {
   id: string;
@@ -30,6 +32,30 @@ export default function EnumeratorListWithDailyStats({ onViewForms }: Enumerator
   const [selectedEnumerator, setSelectedEnumerator] = useState<Enumerator | null>(null);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  // États pour la pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(50);
+
+  // Tous les hooks doivent être appelés AVANT les returns conditionnels
+  const filteredEnumerators = useMemo(() => enumerators.filter(e =>
+    e.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    e.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    e.commune?.toLowerCase().includes(searchTerm.toLowerCase())
+  ), [enumerators, searchTerm]);
+
+  // Calculer les enquêteurs paginés
+  const paginatedEnumerators = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    return filteredEnumerators.slice(startIndex, endIndex);
+  }, [filteredEnumerators, currentPage, pageSize]);
+
+  const totalPages = Math.ceil(filteredEnumerators.length / pageSize);
+
+  // Réinitialiser à la page 1 quand la recherche change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   useEffect(() => {
     const fetchEnumerators = async () => {
@@ -37,27 +63,20 @@ export default function EnumeratorListWithDailyStats({ onViewForms }: Enumerator
         const token = localStorage.getItem('token');
         if (!token) return;
 
-        const response = await fetch(`${environment.apiBaseUrl}/validation/enumerators-stats`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
+        // Utilisation du nouveau service API
+        const data = await enhancedApiService.get<{ enumerators: any[] }>('/validation/enumerators-stats', {
+          skipCache: true, // Forcer le refresh pour les stats
         });
-
-        if (response.ok) {
-          const data = await response.json();
-          const normalizedEnumerators = (data.enumerators || []).map((enumerator: any) => ({
-            ...enumerator,
-            totalForms: Number(enumerator.totalForms ?? 0),
-            validatedForms: Number(enumerator.validatedForms ?? 0),
-            needsReviewForms: Number(enumerator.needsReviewForms ?? 0),
-            pendingForms: Number(enumerator.pendingForms ?? 0),
-            formsLast7Days: Number(enumerator.formsLast7Days ?? 0),
-          }));
-          setEnumerators(normalizedEnumerators);
-        } else {
-          setError('Erreur lors du chargement des données');
-        }
+        
+        const normalizedEnumerators = (data.enumerators || []).map((enumerator: any) => ({
+          ...enumerator,
+          totalForms: Number(enumerator.totalForms ?? 0),
+          validatedForms: Number(enumerator.validatedForms ?? 0),
+          needsReviewForms: Number(enumerator.needsReviewForms ?? 0),
+          pendingForms: Number(enumerator.pendingForms ?? 0),
+          formsLast7Days: Number(enumerator.formsLast7Days ?? 0),
+        }));
+        setEnumerators(normalizedEnumerators);
       } catch (err) {
         console.error('Erreur:', err);
         setError('Erreur de connexion au serveur');
@@ -102,12 +121,6 @@ export default function EnumeratorListWithDailyStats({ onViewForms }: Enumerator
       />
     );
   }
-
-  const filteredEnumerators = enumerators.filter(e =>
-    e.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    e.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    e.commune?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   const totalForms = enumerators.reduce((sum, e) => sum + (e.totalForms ?? 0), 0);
   const totalValidatedForms = enumerators.reduce((sum, e) => sum + (e.validatedForms ?? 0), 0);
@@ -167,7 +180,7 @@ export default function EnumeratorListWithDailyStats({ onViewForms }: Enumerator
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredEnumerators.map((enumerator) => {
+            {paginatedEnumerators.map((enumerator) => {
               const totalForEnumerator = enumerator.totalForms ?? 0;
               const validatedForEnumerator = enumerator.validatedForms ?? 0;
               const validationRate = totalForEnumerator > 0 
@@ -225,6 +238,20 @@ export default function EnumeratorListWithDailyStats({ onViewForms }: Enumerator
           </tbody>
         </table>
       </div>
+
+      {/* Pagination */}
+      {filteredEnumerators.length > 0 && totalPages > 1 && (
+        <div className="mt-6">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredEnumerators.length}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            loading={loading}
+          />
+        </div>
+      )}
 
       {filteredEnumerators.length === 0 && (
         <div className="text-center py-8 text-gray-500">

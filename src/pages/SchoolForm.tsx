@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import { Loader2 } from 'lucide-react';
 import { localStorageService } from '../services/localStorageService';
 import { syncService } from '../services/syncService';
+import enhancedApiService from '../services/enhancedApiService';
 
 // Types pour les solutions de cuisson propre
 interface HouseholdData {
@@ -718,20 +719,10 @@ export default function SchoolForm() {
       }
 
       // ÉTAPE 4: Tentative d'envoi au serveur (endpoint système)
-      // Logs réduits pour améliorer les performances
-      const response = await fetch('https://api.collect.fikiri.co/records/system', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ formData: form })
+      // Utilisation du nouveau service API
+      const result = await enhancedApiService.post<{ id: string }>('https://api.collect.fikiri.co/records/system', {
+        formData: form
       });
-
-      // ÉTAPE 5: Traitement de la réponse du serveur
-      if (response.ok) {
-        // SUCCÈS: Le serveur a accepté le formulaire
-        const result = await response.json();
         // Logs réduits pour améliorer les performances
         
         // Nettoyer le stockage local (optionnel, mais recommandé)
@@ -752,31 +743,6 @@ export default function SchoolForm() {
         
         // Rediriger vers la page du contrôleur
         navigate('/controleur');
-        
-      } else {
-        // ÉCHEC: Le serveur a rejeté le formulaire
-        let errorMessage = 'Erreur lors de la soumission au serveur';
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.message || errorMessage;
-        } catch (parseError) {
-          console.warn('Impossible de parser la réponse d\'erreur du serveur');
-        }
-        
-        console.error('❌ Erreur serveur:', errorMessage);
-        
-        // NOTIFICATION SIMPLE : Formulaire sauvegardé localement
-        toast.success('✅ Formulaire sauvegardé localement');
-        
-        // Réinitialiser le formulaire
-        setForm(initialForm);
-        setGeolocation({ latitude: null, longitude: null, accuracy: null, timestamp: null, isCapturing: false, error: null, province: null, provinceStatus: 'idle' });
-        
-        // Programmer la synchronisation automatique
-        setTimeout(() => {
-          syncService.syncLocalRecords();
-        }, 2000);
-      }
 
     } catch (error: any) {
       // ERREUR: Exception JavaScript (réseau, parsing, etc.)

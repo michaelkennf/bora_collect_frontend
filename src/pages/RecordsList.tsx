@@ -3,6 +3,8 @@ import { toast } from 'react-toastify';
 import { syncService } from '../services/syncService';
 import { localStorageService } from '../services/localStorageService';
 import { environment } from '../config/environment';
+import enhancedApiService from '../services/enhancedApiService';
+import { VirtualizedList } from '../components/VirtualizedList';
 
 interface Record {
   id: string;
@@ -149,29 +151,28 @@ export default function RecordsList() {
 
       console.log('🔍 Récupération du formulaire pour la campagne:', campaignId);
       
-      const response = await fetch(`${environment.apiBaseUrl}/forms/by-survey/${campaignId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const forms = await response.json();
-        console.log('✅ Formulaires récupérés:', forms);
-        
-        // Prendre le premier formulaire actif
-        const activeForm = forms.find((form: any) => form.isActive);
-        if (activeForm) {
-          setSelectedCampaignForm(activeForm);
-          console.log('✅ Formulaire sélectionné:', activeForm);
-        } else {
-          setSelectedCampaignForm(null);
-          console.log('⚠️ Aucun formulaire actif trouvé');
-        }
-      } else {
-        console.error('❌ Erreur lors de la récupération du formulaire:', response.status);
+      // Utilisation du nouveau service API
+      const formsData = await enhancedApiService.get<any>(`/forms/by-survey/${campaignId}`);
+      
+      // Extraire le tableau de formulaires (peut être directement un tableau ou dans { data: [...] })
+      const forms = Array.isArray(formsData) ? formsData : (formsData?.data || []);
+      console.log('✅ Formulaires récupérés:', forms);
+      
+      // Vérifier que forms est bien un tableau
+      if (!Array.isArray(forms)) {
+        console.error('❌ Les formulaires ne sont pas un tableau:', forms);
         setSelectedCampaignForm(null);
+        return;
+      }
+      
+      // Prendre le premier formulaire actif
+      const activeForm = forms.find((form: any) => form.isActive);
+      if (activeForm) {
+        setSelectedCampaignForm(activeForm);
+        console.log('✅ Formulaire sélectionné:', activeForm);
+      } else {
+        setSelectedCampaignForm(null);
+        console.log('⚠️ Aucun formulaire actif trouvé');
       }
     } catch (error) {
       console.error('❌ Erreur lors de la récupération du formulaire:', error);
@@ -377,32 +378,22 @@ export default function RecordsList() {
         return;
       }
 
-      const response = await fetch(`${environment.apiBaseUrl}/users/enumerator-campaigns`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const applicationsData = await response.json();
-        console.log('✅ Applications approuvées chargées:', applicationsData);
-        
-        // Extraire les campagnes des applications
-        const campaignsFromApplications = applicationsData.map((app: any) => ({
-          id: app.survey.id,
-          title: app.survey.title,
-          description: app.survey.description,
-          status: app.survey.status,
-          publishedAt: app.survey.publishedAt,
-          publisher: app.survey.publisher
-        }));
-        
-        setCampaigns(campaignsFromApplications);
-        console.log('✅ Campagnes extraites:', campaignsFromApplications);
-      } else {
-        console.error('❌ Erreur lors du chargement des campagnes:', response.status);
-      }
+      // Utilisation du nouveau service API
+      const applicationsData = await enhancedApiService.get<any[]>('/users/enumerator-campaigns');
+      console.log('✅ Applications approuvées chargées:', applicationsData);
+      
+      // Extraire les campagnes des applications
+      const campaignsFromApplications = applicationsData.map((app: any) => ({
+        id: app.survey.id,
+        title: app.survey.title,
+        description: app.survey.description,
+        status: app.survey.status,
+        publishedAt: app.survey.publishedAt,
+        publisher: app.survey.publisher
+      }));
+      
+      setCampaigns(campaignsFromApplications);
+      console.log('✅ Campagnes extraites:', campaignsFromApplications);
     } catch (error) {
       console.error('❌ Erreur de connexion au serveur:', error);
       setError('Erreur de connexion au serveur');
@@ -441,17 +432,11 @@ export default function RecordsList() {
       
       console.log('🔍 Chargement des enregistrements:', { apiUrl, campaignId, currentUserId });
       
-      const res = await fetch(apiUrl, {
-        headers: { Authorization: `Bearer ${token}` },
+      // Utilisation du nouveau service API
+      const endpoint = apiUrl.replace(environment.apiBaseUrl, '');
+      const responseData = await enhancedApiService.get<any>(endpoint, {
+        skipCache: true, // Forcer le refresh pour les données critiques
       });
-      
-      console.log('🔍 Réponse du serveur:', res.status, res.statusText);
-      
-      if (!res.ok) {
-        throw new Error('Erreur lors du chargement des enregistrements');
-      }
-      
-      const responseData = await res.json();
       
       // L'API peut retourner un objet avec { data: [...], pagination: {...} } ou directement un tableau
       // Extraire le tableau de records

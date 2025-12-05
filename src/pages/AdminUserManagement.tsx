@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { environment } from '../config/environment';
 import { useNotification } from '../hooks/useNotification';
 import NotificationContainer from '../components/NotificationContainer';
+import Pagination from '../components/Pagination';
+import enhancedApiService from '../services/enhancedApiService';
 
 interface User {
   id: string;
@@ -28,7 +30,6 @@ interface User {
 
 const AdminUserManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
-  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [loadingCampaigns, setLoadingCampaigns] = useState(false);
@@ -45,6 +46,11 @@ const AdminUserManagement: React.FC = () => {
     role: ''
   });
   const [searchTerm, setSearchTerm] = useState('');
+  // États pour la pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(50);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
   const { notifications, showSuccess, showError, removeNotification } = useNotification();
 
@@ -68,155 +74,111 @@ const AdminUserManagement: React.FC = () => {
     { value: 'ANALYST', label: 'Analyste' }
   ];
 
-  useEffect(() => {
-    fetchUsers();
-    fetchCampaigns();
-  }, []);
+  // Les filtres sont maintenant appliqués côté serveur, donc on utilise directement users
+  // Plus besoin de filtrer côté client
+  const filteredUsers = users;
+  const paginatedUsers = users; // Les données sont déjà paginées côté serveur
 
-  useEffect(() => {
-    applyFilters();
-  }, [users, filters, searchTerm]);
-
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async (page: number = currentPage) => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      // Charger tous les utilisateurs en paginant jusqu'à obtenir tous les résultats
-      let allUsers: User[] = [];
-      let page = 1;
-      let hasMore = true;
-      const limit = 500; // Limite max par page (selon le backend)
-
-      while (hasMore) {
-        const response = await fetch(`${environment.apiBaseUrl}/users?page=${page}&limit=${limit}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-
-        if (response.ok) {
-          const responseData = await response.json();
-          
-          // Extraire les données (peut être un tableau ou un objet avec data)
-          let usersArray: User[] = [];
-          if (Array.isArray(responseData)) {
-            usersArray = responseData;
-            hasMore = usersArray.length === limit; // S'il y a exactement limit résultats, il y a peut-être plus
-          } else if (responseData?.data && Array.isArray(responseData.data)) {
-            usersArray = responseData.data;
-            // Vérifier s'il y a plus de pages
-            if (responseData.pagination) {
-              hasMore = responseData.pagination.hasMore || false;
-            } else {
-              hasMore = usersArray.length === limit;
-            }
-          } else {
-            hasMore = false;
-          }
-
-          allUsers = [...allUsers, ...usersArray];
-          
-          // Si on a reçu moins que la limite, on a atteint la fin
-          if (usersArray.length < limit) {
-            hasMore = false;
-          } else {
-            page++;
-          }
-        } else {
-          hasMore = false;
-        }
+      // Construire les paramètres de requête avec filtres
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: pageSize.toString()
+      });
+      
+      if (searchTerm.trim()) {
+        params.append('search', searchTerm.trim());
+      }
+      if (filters.gender) {
+        params.append('gender', filters.gender);
+      }
+      if (filters.province) {
+        params.append('province', filters.province);
+      }
+      if (filters.campaign) {
+        params.append('campaign', filters.campaign);
+      }
+      if (filters.role) {
+        params.append('role', filters.role);
       }
 
-      setUsers(allUsers);
-      console.log(`✅ ${allUsers.length} utilisateurs chargés`);
+      // Utilisation du nouveau service API avec filtres côté serveur
+      const responseData = await enhancedApiService.get<any>(`/users?${params.toString()}`, {
+        skipCache: true, // Forcer le refresh pour les données critiques
+      });
+      
+      // Extraire les données et pagination
+      const usersArray = Array.isArray(responseData) 
+        ? responseData 
+        : (responseData?.data || []);
+      
+      const pagination = responseData?.pagination;
+      
+      if (pagination) {
+        setTotalUsers(pagination.total || usersArray.length);
+        setTotalPages(pagination.totalPages || Math.ceil((pagination.total || usersArray.length) / pageSize));
+        setCurrentPage(pagination.page || page);
+      } else {
+        setTotalUsers(usersArray.length);
+        setTotalPages(Math.ceil(usersArray.length / pageSize));
+        setCurrentPage(page);
+      }
+
+      setUsers(usersArray);
+      console.log(`✅ ${usersArray.length} utilisateurs chargés (page ${page}/${pagination?.totalPages || 1})`);
     } catch (error) {
       console.error('Erreur lors du chargement des utilisateurs:', error);
       setUsers([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [pageSize, searchTerm, filters]);
 
-  const fetchCampaigns = async () => {
+  const fetchCampaigns = useCallback(async () => {
     setLoadingCampaigns(true);
     try {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${environment.apiBaseUrl}/surveys/admin`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        const responseData = await response.json();
-        // L'API peut retourner un objet avec { data: [...], pagination: {...} } ou directement un tableau
-        const campaignsArray = Array.isArray(responseData) 
-          ? responseData 
-          : (responseData?.data || []);
-        console.log('🔍 AdminUserManagement - Campagnes reçues:', campaignsArray);
-        setCampaigns(campaignsArray);
-      } else {
-        setCampaigns([]);
-      }
+      // Utilisation du nouveau service API
+      const responseData = await enhancedApiService.get<any>('/surveys/admin');
+      
+      // L'API peut retourner un objet avec { data: [...], pagination: {...} } ou directement un tableau
+      const campaignsArray = Array.isArray(responseData) 
+        ? responseData 
+        : (responseData?.data || []);
+      console.log('🔍 AdminUserManagement - Campagnes reçues:', campaignsArray);
+      setCampaigns(campaignsArray);
     } catch (error) {
       console.error('Erreur lors du chargement des campagnes:', error);
       setCampaigns([]);
     } finally {
       setLoadingCampaigns(false);
     }
-  };
+  }, []);
 
-  const applyFilters = () => {
-    // S'assurer que users est toujours un tableau
-    if (!Array.isArray(users)) {
-      setFilteredUsers([]);
-      return;
-    }
-    
-    let filtered = [...users];
+  useEffect(() => {
+    fetchCampaigns();
+    fetchUsers(1); // Charger la première page au montage
+  }, [fetchCampaigns]);
 
-    // Filtrage par recherche textuelle
-    if (searchTerm.trim()) {
-      const searchLower = searchTerm.toLowerCase();
-      filtered = filtered.filter(user => 
-        user.name?.toLowerCase().includes(searchLower) ||
-        user.email?.toLowerCase().includes(searchLower) ||
-        user.contact?.toLowerCase().includes(searchLower) ||
-        user.whatsapp?.toLowerCase().includes(searchLower) ||
-        user.province?.toLowerCase().includes(searchLower) ||
-        user.city?.toLowerCase().includes(searchLower) ||
-        user.commune?.toLowerCase().includes(searchLower) ||
-        user.quartier?.toLowerCase().includes(searchLower) ||
-        user.campaign?.title?.toLowerCase().includes(searchLower) ||
-        getRoleLabel(user.role).toLowerCase().includes(searchLower) ||
-        getStatusLabel(user.status).toLowerCase().includes(searchLower)
-      );
-    }
-
-    if (filters.gender) {
-      filtered = filtered.filter(user => user.gender === filters.gender);
-    }
-
-    if (filters.province) {
-      filtered = filtered.filter(user => user.province === filters.province);
-    }
-
-    if (filters.campaign) {
-      filtered = filtered.filter(user => user.campaignId === filters.campaign);
-    }
-
-    if (filters.role) {
-      filtered = filtered.filter(user => user.role === filters.role);
-    }
-
-    setFilteredUsers(filtered);
-  };
+  // Recharger les données quand les filtres ou la recherche changent
+  useEffect(() => {
+    setCurrentPage(1);
+    fetchUsers(1);
+  }, [searchTerm, filters.gender, filters.province, filters.campaign, filters.role, fetchUsers]);
 
   const handleFilterChange = (key: string, value: string) => {
     setFilters(prev => ({
       ...prev,
       [key]: value
     }));
+    // Le useEffect se chargera de recharger les données
   };
 
   const clearFilters = () => {
@@ -243,20 +205,13 @@ const AdminUserManagement: React.FC = () => {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${environment.apiBaseUrl}/users/${userId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // Utilisation du nouveau service API
+      await enhancedApiService.delete(`/users/${userId}`);
 
-      if (response.ok) {
-        // Recharger la liste des utilisateurs
-        await fetchUsers();
-        setConfirmDeleteId(null);
-        showSuccess('Utilisateur supprimé avec succès');
-      } else {
-        const errorData = await response.json();
-        showError(errorData.message || 'Erreur lors de la suppression de l\'utilisateur');
-      }
+      // Recharger la liste des utilisateurs
+      await fetchUsers();
+      setConfirmDeleteId(null);
+      showSuccess('Utilisateur supprimé avec succès');
     } catch (error) {
       console.error('Erreur lors de la suppression:', error);
       showError('Erreur de connexion lors de la suppression de l\'utilisateur');
@@ -282,24 +237,15 @@ const AdminUserManagement: React.FC = () => {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${environment.apiBaseUrl}/users/${userId}/reset-password`, {
-        method: 'PUT',
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ password: newPassword })
+      // Utilisation du nouveau service API
+      await enhancedApiService.put(`/users/${userId}/reset-password`, {
+        password: newPassword
       });
 
-      if (response.ok) {
-        setResetPasswordId(null);
-        setNewPassword('');
-        setConfirmPassword('');
-        showSuccess('Mot de passe réinitialisé avec succès');
-      } else {
-        const errorData = await response.json();
-        showError(errorData.message || 'Erreur lors de la réinitialisation du mot de passe');
-      }
+      setResetPasswordId(null);
+      setNewPassword('');
+      setConfirmPassword('');
+      showSuccess('Mot de passe réinitialisé avec succès');
     } catch (error) {
       console.error('Erreur lors de la réinitialisation:', error);
       showError('Erreur de connexion lors de la réinitialisation du mot de passe');
@@ -668,7 +614,7 @@ const AdminUserManagement: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredUsers.map((user) => (
+              {paginatedUsers.map((user) => (
                 <tr key={user.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
@@ -755,6 +701,23 @@ const AdminUserManagement: React.FC = () => {
             <p className="mt-1 text-sm text-gray-500">
               Aucun utilisateur ne correspond aux filtres sélectionnés.
             </p>
+          </div>
+        )}
+        
+        {/* Pagination - affichée même avec 1 page */}
+        {filteredUsers.length > 0 && (
+          <div className="px-6 py-4 border-t border-gray-200">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages || 1}
+              totalItems={totalUsers || filteredUsers.length}
+              pageSize={pageSize}
+              onPageChange={(page) => {
+                setCurrentPage(page);
+                fetchUsers(page);
+              }}
+              loading={loading}
+            />
           </div>
         )}
       </div>

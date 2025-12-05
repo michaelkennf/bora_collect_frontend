@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'react-toastify';
 import { environment } from '../config/environment';
+import Pagination from '../components/Pagination';
+import enhancedApiService from '../services/enhancedApiService';
 
 interface Campaign {
   id: string;
@@ -36,6 +38,9 @@ const AdminCampaignManagement: React.FC = () => {
     status: ''
   });
   const [searchTerm, setSearchTerm] = useState('');
+  // États pour la pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(50);
   // États pour l'assignation de PM
   const [showAssignPMModal, setShowAssignPMModal] = useState(false);
   const [selectedCampaignForPM, setSelectedCampaignForPM] = useState<Campaign | null>(null);
@@ -74,24 +79,53 @@ const AdminCampaignManagement: React.FC = () => {
 
   useEffect(() => {
     applyFilters();
+    // Réinitialiser à la page 1 quand les filtres changent
+    setCurrentPage(1);
   }, [campaigns, filters, searchTerm]);
+
+  // Calculer les campagnes paginées
+  const paginatedCampaigns = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    return filteredCampaigns.slice(startIndex, endIndex);
+  }, [filteredCampaigns, currentPage, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredCampaigns.length / pageSize));
 
   const fetchCampaigns = async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      if (!token) return;
-
-      const response = await fetch(`${environment.apiBaseUrl}/surveys/admin`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setCampaigns(data);
+      if (!token) {
+        console.error('❌ Aucun token trouvé');
+        return;
       }
-    } catch (error) {
+
+      // Vérifier que l'utilisateur est bien ADMIN
+      const user = localStorage.getItem('user');
+      if (user) {
+        const userData = JSON.parse(user);
+        if (userData.role !== 'ADMIN') {
+          console.error('❌ Accès refusé : rôle non autorisé', userData.role);
+          toast.error('Vous n\'avez pas les permissions nécessaires pour accéder à cette page');
+          return;
+        }
+      }
+
+      // Utilisation du nouveau service API
+      const data = await enhancedApiService.get<any>('/surveys/admin', {
+        skipCache: true, // Forcer le refresh pour les données critiques
+      });
+      
+      setCampaigns(data);
+    } catch (error: any) {
       console.error('Erreur lors du chargement des campagnes:', error);
+      // Ne pas déconnecter si c'est juste une erreur de chargement
+      if (error?.message?.includes('Session expirée') || error?.message?.includes('401')) {
+        toast.error('Session expirée. Veuillez vous reconnecter.');
+      } else {
+        toast.error('Erreur lors du chargement des campagnes');
+      }
     } finally {
       setLoading(false);
     }
@@ -249,26 +283,17 @@ const AdminCampaignManagement: React.FC = () => {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${environment.apiBaseUrl}/surveys/${selectedCampaignForPM.id}/create-and-assign-pm`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      // Utilisation du nouveau service API
+      const result = await enhancedApiService.post<any>(
+        `/surveys/${selectedCampaignForPM.id}/create-and-assign-pm`,
+        {
           name: pmFormData.name.trim(),
           email: pmFormData.email.trim(),
           password: pmFormData.password,
           contact: pmFormData.contact.trim()
-        }),
-      });
+        }
+      );
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const result = await response.json();
       toast.success(result.message || 'PM créé et assigné avec succès !');
       setShowAssignPMModal(false);
       setSelectedCampaignForPM(null);
@@ -486,7 +511,7 @@ const AdminCampaignManagement: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredCampaigns.map((campaign) => (
+              {paginatedCampaigns.map((campaign) => (
                 <tr key={campaign.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div>
@@ -551,6 +576,20 @@ const AdminCampaignManagement: React.FC = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination - affichée même avec 1 page */}
+        {filteredCampaigns.length > 0 && (
+          <div className="px-6 py-4 border-t border-gray-200">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages || 1}
+              totalItems={filteredCampaigns.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              loading={loading}
+            />
+          </div>
+        )}
 
         {filteredCampaigns.length === 0 && (
           <div className="text-center py-12">

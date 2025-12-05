@@ -14,6 +14,7 @@ import CarteRDCSVG from '../components/CarteRDCSVG';
 import PNUDFooter from '../components/PNUDFooter';
 import NotificationPanel from '../components/NotificationPanel';
 import { environment } from '../config/environment';
+import enhancedApiService from '../services/enhancedApiService';
 
 export function DashboardAdmin() {
   const [users, setUsers] = useState<any[]>([]);
@@ -66,11 +67,10 @@ export function DashboardAdmin() {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${environment.apiBaseUrl}/users`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      // Utilisation du nouveau service API
+      const responseData = await enhancedApiService.get<any>('/users', {
+        skipCache: true,
       });
-      if (!res.ok) throw new Error('Erreur lors du chargement des utilisateurs');
-      const responseData = await res.json();
       
       // L'API peut retourner un objet avec { data: [...], pagination: {...} } ou directement un tableau
       const usersArray = Array.isArray(responseData) ? responseData : (responseData?.data || []);
@@ -108,23 +108,12 @@ export function DashboardAdmin() {
         const token = localStorage.getItem('token');
         if (!token) return;
 
-        const response = await fetch(`${environment.apiBaseUrl}/auth/me`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        if (response.ok) {
-          const userData = await response.json();
-          console.log('🔍 AdminHome - Données utilisateur chargées:', userData.user);
-          console.log('🔍 AdminHome - profilePhoto:', userData.user.profilePhoto);
-          setUser(userData.user);
-          localStorage.setItem('user', JSON.stringify(userData.user));
-        } else {
-          // Fallback sur localStorage si l'API échoue
-          const u = localStorage.getItem('user');
-          if (u) setUser(JSON.parse(u));
-        }
+        // Utilisation du nouveau service API
+        const userData = await enhancedApiService.get<{ user: any }>('/auth/me');
+        console.log('🔍 AdminHome - Données utilisateur chargées:', userData.user);
+        console.log('🔍 AdminHome - profilePhoto:', userData.user.profilePhoto);
+        setUser(userData.user);
+        localStorage.setItem('user', JSON.stringify(userData.user));
       } catch (error) {
         console.error('Erreur lors du chargement des données utilisateur:', error);
         // Fallback sur localStorage en cas d'erreur
@@ -142,25 +131,20 @@ export function DashboardAdmin() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${environment.apiBaseUrl}/surveys/admin`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+      // Utilisation du nouveau service API
+      const responseData = await enhancedApiService.get<any>('/surveys/admin', {
+        skipCache: true,
       });
-
-      if (response.ok) {
-        const responseData = await response.json();
-        // L'API peut retourner un objet avec { data: [...], pagination: {...} } ou directement un tableau
-        const campaignsArray = Array.isArray(responseData) ? responseData : (responseData?.data || []);
-        
-        setCampaignStats({
-          totalCampaigns: campaignsArray.length,
-          activeCampaigns: campaignsArray.filter((c: any) => c.status === 'PUBLISHED').length,
-          completedCampaigns: campaignsArray.filter((c: any) => c.status === 'TERMINATED').length,
-          pendingCampaigns: campaignsArray.filter((c: any) => c.status === 'DRAFT').length
-        });
-      }
+      
+      // L'API peut retourner un objet avec { data: [...], pagination: {...} } ou directement un tableau
+      const campaignsArray = Array.isArray(responseData) ? responseData : (responseData?.data || []);
+      
+      setCampaignStats({
+        totalCampaigns: campaignsArray.length,
+        activeCampaigns: campaignsArray.filter((c: any) => c.status === 'PUBLISHED').length,
+        completedCampaigns: campaignsArray.filter((c: any) => c.status === 'TERMINATED').length,
+        pendingCampaigns: campaignsArray.filter((c: any) => c.status === 'DRAFT').length
+      });
     } catch (error) {
       console.error('Erreur lors du chargement des statistiques de campagnes:', error);
     }
@@ -173,20 +157,14 @@ export function DashboardAdmin() {
         const token = localStorage.getItem('token');
         if (!token) return;
 
-        const response = await fetch(`${environment.apiBaseUrl}/users/approval-stats`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
+        // Utilisation du nouveau service API
+        const data = await enhancedApiService.get<any>('/users/approval-stats', {
+          skipCache: true,
         });
-
-        if (response.ok) {
-          const data = await response.json();
-          setUserStats(prev => ({
-            ...prev,
-            pendingApprovals: data.pending || 0
-          }));
-        }
+        setUserStats(prev => ({
+          ...prev,
+          pendingApprovals: data.pending || 0
+        }));
       } catch (error) {
         console.error('Erreur lors du chargement des demandes d\'approbation:', error);
       }
@@ -355,11 +333,10 @@ export default function AdminHome() {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${environment.apiBaseUrl}/users`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      // Utilisation du nouveau service API
+      const responseData = await enhancedApiService.get<any>('/users', {
+        skipCache: true,
       });
-      if (!res.ok) throw new Error('Erreur lors du chargement');
-      const responseData = await res.json();
       
       // L'API peut retourner un objet avec { data: [...], pagination: {...} } ou directement un tableau
       const usersArray = Array.isArray(responseData) ? responseData : (responseData?.data || []);
@@ -379,19 +356,11 @@ export default function AdminHome() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const res = await fetch(`${environment.apiBaseUrl}/surveys/admin/pending-counts`, {
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+      // Utilisation du nouveau service API
+      const data = await enhancedApiService.get<any>('/surveys/admin/pending-counts', {
+        skipCache: true,
       });
       
-      if (!res.ok) {
-        console.error('❌ Erreur lors du chargement des compteurs:', res.status, res.statusText);
-        return;
-      }
-      
-      const data = await res.json();
       console.log('🔔 Admin Home - Compteurs mis à jour:', data);
       setPendingCounts(data);
     } catch (err: any) {
@@ -411,22 +380,10 @@ export default function AdminHome() {
         const token = localStorage.getItem('token');
         if (!token) return;
 
-        // Charger les données utilisateur depuis le serveur pour avoir les données fraîches
-        const response = await fetch(`${environment.apiBaseUrl}/auth/me`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        if (response.ok) {
-          const userData = await response.json();
-          setUser(userData);
-          localStorage.setItem('user', JSON.stringify(userData));
-        } else {
-          // Fallback sur localStorage si l'API échoue
-          const u = localStorage.getItem('user');
-          if (u) setUser(JSON.parse(u));
-        }
+        // Utilisation du nouveau service API
+        const userData = await enhancedApiService.get<{ user: any }>('/auth/me');
+        setUser(userData.user);
+        localStorage.setItem('user', JSON.stringify(userData.user));
       } catch (error) {
         console.error('Erreur lors du chargement des données utilisateur:', error);
         // Fallback sur localStorage en cas d'erreur

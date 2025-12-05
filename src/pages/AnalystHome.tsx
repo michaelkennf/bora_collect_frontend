@@ -11,9 +11,11 @@ import ExportNotification from '../components/ExportNotification';
 import SuccessNotification from '../components/SuccessNotification';
 import PNUDFooter from '../components/PNUDFooter';
 import ConfirmationModal from '../components/ConfirmationModal';
+import Pagination from '../components/Pagination';
 import { toast } from 'react-toastify';
 import { environment } from '../config/environment';
 import { getChartColor, getChartColors, CompatibleColors } from '../utils/colors';
+import enhancedApiService from '../services/enhancedApiService';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -71,11 +73,13 @@ export default function AnalystHome() {
 const [recordActionLocked, setRecordActionLocked] = useState(false);
 const [recordActionMessage, setRecordActionMessage] = useState<string | null>(null);
   const [communeFilter, setCommuneFilter] = useState('');
+  const [provinceFilter, setProvinceFilter] = useState('');
   const [campaignData, setCampaignData] = useState<any>(null);
   const [campaignLoading, setCampaignLoading] = useState(false);
   const [enumeratorStats, setEnumeratorStats] = useState<any[]>([]);
   const [enumeratorStatsLoading, setEnumeratorStatsLoading] = useState(false);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+  const [hasTriedReloadRecords, setHasTriedReloadRecords] = useState(false);
   const [enumeratorSubmissions, setEnumeratorSubmissions] = useState<any>(null);
   const [enumeratorSubmissionsLoading, setEnumeratorSubmissionsLoading] = useState(false);
   const [analystStats, setAnalystStats] = useState<any>(null);
@@ -160,22 +164,11 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
         if (!token) return;
 
         // Charger les données utilisateur depuis le serveur pour avoir les données fraîches
-        const response = await fetch(`${environment.apiBaseUrl}/auth/me`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        if (response.ok) {
-          const userData = await response.json();
-          // Logs réduits pour améliorer les performances
-          setUser(userData.user);
-          localStorage.setItem('user', JSON.stringify(userData.user));
-        } else {
-          // Fallback sur localStorage si l'API échoue
-          const u = localStorage.getItem('user');
-          if (u) setUser(JSON.parse(u));
-        }
+        const userData = await enhancedApiService.get<{ user: any }>('/auth/me');
+        
+        // Logs réduits pour améliorer les performances
+        setUser(userData.user);
+        localStorage.setItem('user', JSON.stringify(userData.user));
       } catch (error) {
         console.error('Erreur lors du chargement des données utilisateur:', error);
         // Fallback sur localStorage en cas d'erreur
@@ -222,25 +215,15 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
   const fetchAnalystCampaignData = useCallback(async () => {
     setCampaignLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('Token non trouvé');
-      }
-
-      const res = await fetch(`${environment.apiBaseUrl}/users/analyst-campaign-data`, {
-        headers: { 
-          Authorization: `Bearer ${token}`
-        },
-        cache: 'no-store'
+      // Utilisation du nouveau service API avec gestion automatique des erreurs
+      const data = await enhancedApiService.get<any>('/users/analyst-campaign-data', {
+        skipCache: true, // Forcer le refresh pour les données critiques
       });
       
-      if (!res.ok) {
-        throw new Error(`Erreur HTTP: ${res.status}`);
-      }
-      
-      const data = await res.json();
       setCampaignData(data);
+      console.log('✅ Campaign data chargée:', data);
     } catch (err: any) {
+      console.error('❌ Erreur lors du chargement de campaign data:', err);
       setCampaignData(null);
     } finally {
       setCampaignLoading(false);
@@ -250,24 +233,11 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
   const fetchAnalystStats = async () => {
     setStatsLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('Token non trouvé');
-      }
-
-      const res = await fetch(`${environment.apiBaseUrl}/records/analyst-stats`, {
-        headers: { 
-          Authorization: `Bearer ${token}`
-        },
-        cache: 'no-store'
+      // Utilisation du nouveau service API
+      const data = await enhancedApiService.get<any>('/records/analyst-stats', {
+        skipCache: true, // Forcer le refresh pour les stats
       });
-      
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Erreur HTTP: ${res.status} - ${errorText}`);
-      }
-      
-      const data = await res.json();
+
       console.log('📊 AnalystStats reçues:', {
         totalRecords: data.totalRecords,
         totalByApplication: data.totalByApplication,
@@ -276,8 +246,7 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
       });
       setAnalystStats(data);
     } catch (err: any) {
-      console.error('❌ Erreur lors de la récupération des statistiques:', err.message);
-      console.error('❌ Stack trace:', err.stack);
+      console.error('❌ Erreur lors de la récupération des stats analyst:', err);
       setAnalystStats(null);
     } finally {
       setStatsLoading(false);
@@ -290,7 +259,6 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
     console.log('🔍 AnalystHome: Début du chargement des données');
     try {
       await Promise.all([
-        fetchRecords(1),
         fetchAnalystCampaignData(),
         fetchAnalystStats(),
         fetchValidationStats()
@@ -299,31 +267,65 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
     } catch (error) {
       console.error('❌ AnalystHome: Erreur lors du chargement des données:', error);
     }
-  }, []); // Dépendances vides = ne change jamais
+  }, []); // Dépendances vides pour éviter les rechargements en boucle
 
-  // Charger les stats des enquêteurs quand on arrive sur la page enquetes
+  // Charger les records après que les stats soient chargées
   useEffect(() => {
-    if (view === 'enquetes' && !selectedEnumeratorId) {
-      // Utiliser la campagne de campaignData si disponible
+    // Charger les records une fois que les stats sont disponibles
+    if (analystStats || campaignData) {
+      fetchRecords(1);
+    }
+  }, [analystStats, campaignData]); // Charger quand ces données sont disponibles
+
+  // Sélectionner automatiquement la campagne dès que les données sont disponibles
+  useEffect(() => {
+    // Ne sélectionner que si aucune campagne n'est déjà sélectionnée
+    if (!selectedCampaignId && !campaignLoading) {
+      // Priorité 1: Utiliser la campagne de campaignData si disponible
       if (campaignData?.campaign?.id) {
         const campaignId = campaignData.campaign.id;
-        if (!selectedCampaignId) {
-          setSelectedCampaignId(campaignId);
-          fetchEnumeratorStats(campaignId);
-        } else if (selectedCampaignId === campaignId && enumeratorStats.length === 0) {
-          // Recharger les stats si la campagne est déjà sélectionnée mais qu'il n'y a pas de stats
-          fetchEnumeratorStats(campaignId);
-        }
-      } else if (records.length > 0 && !selectedCampaignId) {
-        // Fallback: utiliser la première campagne trouvée dans les records
-        const firstRecordWithSurvey = records.find((r: any) => r.surveyId);
-        if (firstRecordWithSurvey?.surveyId) {
-          setSelectedCampaignId(firstRecordWithSurvey.surveyId);
-          fetchEnumeratorStats(firstRecordWithSurvey.surveyId);
+        console.log('🔍 Auto-sélection de la campagne depuis campaignData:', campaignId);
+        setSelectedCampaignId(campaignId);
+        // Charger les stats enquêteurs immédiatement
+        fetchEnumeratorStats(campaignId);
+        return;
+      }
+      
+      // Priorité 2: Utiliser la campagne depuis analystStats
+      if (analystStats?.campaign?.id) {
+        const campaignId = analystStats.campaign.id;
+        console.log('🔍 Auto-sélection de la campagne depuis analystStats:', campaignId);
+        setSelectedCampaignId(campaignId);
+        // Charger les stats enquêteurs immédiatement
+        fetchEnumeratorStats(campaignId);
+        return;
+      }
+      
+      // Priorité 3: Utiliser la première campagne trouvée dans les records
+      if (records.length > 0) {
+        const firstRecordWithSurvey = records.find((r: any) => r.surveyId || r.campaignId);
+        const surveyId = firstRecordWithSurvey?.surveyId || firstRecordWithSurvey?.campaignId;
+        if (surveyId) {
+          console.log('🔍 Auto-sélection de la campagne depuis records:', surveyId);
+          setSelectedCampaignId(surveyId);
+          // Charger les stats enquêteurs immédiatement
+          fetchEnumeratorStats(surveyId);
+          return;
         }
       }
     }
-  }, [view, campaignData, records, selectedCampaignId, selectedEnumeratorId, enumeratorStats.length]);
+  }, [campaignData, analystStats, records, selectedCampaignId, campaignLoading]);
+
+  // Charger les stats des enquêteurs quand on arrive sur la page enquetes avec une campagne sélectionnée
+  useEffect(() => {
+    if (view === 'enquetes' && selectedCampaignId && !selectedEnumeratorId) {
+      // Recharger les stats si elles sont vides ou si la campagne a changé
+      if (enumeratorStats.length === 0 && !enumeratorStatsLoading) {
+        console.log('🔍 Chargement des stats enquêteurs pour la campagne:', selectedCampaignId);
+        fetchEnumeratorStats(selectedCampaignId);
+      }
+    }
+  }, [view, selectedCampaignId, selectedEnumeratorId, enumeratorStats.length, enumeratorStatsLoading]);
 
   // Récupérer les enquêtes (chargement automatique dès la connexion)
   useEffect(() => {
@@ -333,6 +335,15 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
     
     loadAllData();
   }, []); // Charger uniquement une fois au montage du composant
+
+  // Recharger les données quand les filtres changent (avec debounce pour search)
+  useEffect(() => {
+    // Ne recharger que si on a déjà chargé des données une fois
+    if (hasTriedReloadRecords || records.length > 0 || analystStats) {
+      setCurrentPage(1);
+      fetchRecords(1);
+    }
+  }, [debouncedSearch, communeFilter, provinceFilter]);
 
   // Fonction pour récupérer les informations d'un utilisateur
   const fetchUserInfo = async (userId: string): Promise<string> => {
@@ -385,23 +396,11 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
     console.log('🔍 fetchValidationStats: Début');
     setValidationLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('Token non trouvé');
-      }
-
-      const res = await fetch(`${environment.apiBaseUrl}/validation/analyst-stats`, {
-        headers: { 
-          Authorization: `Bearer ${token}`
-        },
-        cache: 'no-store'
+      // Utilisation du nouveau service API
+      const data = await enhancedApiService.get('/validation/analyst-stats', {
+        skipCache: true, // Forcer le refresh pour les stats
       });
-      
-      if (!res.ok) {
-        throw new Error(`Erreur HTTP: ${res.status}`);
-      }
-      
-      const data = await res.json();
+
       console.log('📊 Stats de validation reçues:', data);
       setValidationStats(data);
     } catch (err: any) {
@@ -498,35 +497,58 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
   const [totalRecords, setTotalRecords] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
 
-  // Récupérer les enquêtes - AVEC PAGINATION (optimisé pour 15 000+ enregistrements)
+  // Les campagnes seront récupérées depuis les stats (analystStats.campaign)
+  // Pas besoin d'un endpoint séparé car l'analyste n'a pas accès à /surveys/admin
+
+  // Récupérer les enquêtes - AVEC PAGINATION ET FILTRES (optimisé pour 15 000+ enregistrements)
   const fetchRecords = async (page: number = 1) => {
-    console.log('🔍 fetchRecords: Début', { page, pageSize });
+    console.log('🔍 fetchRecords: Début', { page, pageSize, search: debouncedSearch, communeFilter, provinceFilter });
     setRecordsLoading(true);
     setRecordsError('');
     try {
-      const res = await fetch(`${environment.apiBaseUrl}/records/analyst?page=${page}&limit=${pageSize}`, {
-        headers: { 
-          Authorization: `Bearer ${localStorage.getItem('token')}`
-        },
-        cache: 'no-store'
+      // Construire les paramètres de requête avec filtres
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: pageSize.toString()
       });
-      if (!res.ok) throw new Error('Erreur lors du chargement');
-      const response = await res.json();
+      
+      if (debouncedSearch) {
+        params.append('search', debouncedSearch);
+      }
+      if (communeFilter) {
+        params.append('commune', communeFilter);
+      }
+      if (provinceFilter) {
+        params.append('province', provinceFilter);
+      }
+
+      // Utilisation du nouveau service API avec cache intelligent et filtres
+      const response = await enhancedApiService.get<any>(`/records/analyst?${params.toString()}`, {
+        skipCache: true, // Forcer le refresh pour les données critiques
+      });
       
       // Gérer la réponse paginée ou l'ancien format (rétrocompatibilité)
       const data = response.data || response;
       const pagination = response.pagination;
       
+      // S'assurer que data est un tableau
+      const recordsArray = Array.isArray(data) ? data : [];
+      
       if (pagination) {
-        setTotalRecords(pagination.total);
-        setTotalPages(pagination.totalPages);
-        setCurrentPage(pagination.page);
+        setTotalRecords(pagination.total || recordsArray.length);
+        setTotalPages(pagination.totalPages || Math.ceil((pagination.total || recordsArray.length) / pageSize));
+        setCurrentPage(pagination.page || page);
+      } else {
+        // Si pas de pagination, utiliser la longueur du tableau
+        setTotalRecords(recordsArray.length);
+        setTotalPages(Math.ceil(recordsArray.length / pageSize));
+        setCurrentPage(page);
       }
       
-      console.log('📊 Récupération des enquêtes:', data.length, 'enregistrements trouvés', pagination ? `(page ${pagination.page}/${pagination.totalPages})` : '');
+      console.log('📊 Récupération des enquêtes:', recordsArray.length, 'enregistrements trouvés', pagination ? `(page ${pagination.page || page}/${pagination.totalPages || Math.ceil(recordsArray.length / pageSize)})` : '');
       
       // Les données incluent déjà l'author depuis le backend - Plus besoin de requêtes N+1
-      const enrichedRecords = data.map((record: any) => ({
+      const enrichedRecords = recordsArray.map((record: any) => ({
         ...record,
         authorName: record.author?.name || 'N/A'
       }));
@@ -536,26 +558,19 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
     } catch (err: any) {
       console.error('❌ Erreur lors de la récupération des enquêtes:', err);
       setRecordsError(err.message || 'Erreur inconnue');
+      setRecords([]);
     } finally {
       setRecordsLoading(false);
       console.log('🔍 fetchRecords: Terminé');
     }
   };
 
-  // Appliquer les filtres aux records (utilise debouncedSearch pour éviter trop de re-renders)
+  // Les filtres sont maintenant appliqués côté serveur, donc on utilise directement records
+  // On garde seulement le filtre par enquêteur sélectionné (côté client car c'est une sélection UI)
   const filteredRecords = records.filter(record => {
-    // Filtre par nom du ménage (utilise la valeur debounced)
-    const nomOuCode = record.formData?.['identification.nomOuCode'] || record.formData?.household?.nomOuCode || '';
-    const matchesSearch = !debouncedSearch || nomOuCode.toLowerCase().includes(debouncedSearch.toLowerCase());
-    
-    // Filtre par commune
-    const communeQuartier = record.formData?.['identification.communeQuartier'] || record.formData?.household?.communeQuartier || '';
-    const matchesCommune = !communeFilter || communeQuartier === communeFilter;
-    
-    // Filtre par enquêteur sélectionné
+    // Filtre par enquêteur sélectionné (côté client car c'est une sélection UI)
     const matchesEnumerator = !selectedEnumeratorId || record.authorId === selectedEnumeratorId;
-    
-    return matchesSearch && matchesCommune && matchesEnumerator;
+    return matchesEnumerator;
   });
 
   // Fonction pour afficher les notifications d'export
@@ -579,7 +594,7 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
 
   // Fonction pour récupérer les statistiques des enquêteurs par campagne
   // Fonction pour exporter tous les formulaires (optimisée - génération côté serveur)
-  const exportAllEnumeratorsSubmissions = async (campaignId: string) => {
+  const exportAllEnumeratorsSubmissions = async (campaignId?: string) => {
     try {
       setExportNotification({
         isVisible: true,
@@ -592,15 +607,21 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
         throw new Error('Token d\'authentification manquant');
       }
 
+      // Utiliser la campagne depuis analystStats ou campaignData si campaignId n'est pas fourni
+      const finalCampaignId = campaignId || analystStats?.campaign?.id || campaignData?.campaign?.id;
+      
+      if (!finalCampaignId) {
+        throw new Error('Aucune campagne trouvée. Veuillez sélectionner une campagne.');
+      }
+
       // Utiliser le nouvel endpoint optimisé côté serveur
-      const response = await fetch(
-        `${environment.apiBaseUrl}/records/analyst/export`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        }
-      );
+      // Le backend récupère automatiquement la campagne depuis l'utilisateur, mais on peut aussi passer campaignId en query param si nécessaire
+      const url = `${environment.apiBaseUrl}/records/analyst/export${finalCampaignId ? `?campaignId=${finalCampaignId}` : ''}`;
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Erreur lors de l\'export' }));
@@ -611,9 +632,9 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
       const blob = await response.blob();
       
       // Créer un lien de téléchargement
-      const url = window.URL.createObjectURL(blob);
+      const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = url;
+      link.href = blobUrl;
       
       // Extraire le nom du fichier depuis les headers ou utiliser un nom par défaut
       const contentDisposition = response.headers.get('Content-Disposition');
@@ -629,7 +650,7 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      window.URL.revokeObjectURL(blobUrl);
 
       setExportNotification({
         isVisible: true,
@@ -658,9 +679,34 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
         }
       });
 
-      if (!res.ok) throw new Error('Erreur lors du chargement');
-      const data = await res.json();
-      setEnumeratorStats(data);
+      if (!res.ok) {
+        console.error('❌ Erreur HTTP lors du chargement des stats enquêteurs:', res.status, res.statusText);
+        setEnumeratorStats([]);
+        return;
+      }
+
+      // Vérifier si la réponse est vide
+      const text = await res.text();
+      if (!text || text.trim() === '') {
+        console.warn('⚠️ Réponse vide pour les stats des enquêteurs');
+        setEnumeratorStats([]);
+        return;
+      }
+
+      // Parser le JSON
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (parseError) {
+        console.error('❌ Erreur de parsing JSON pour les stats enquêteurs:', parseError, 'Réponse:', text);
+        setEnumeratorStats([]);
+        return;
+      }
+
+      // S'assurer que data est un tableau
+      const statsArray = Array.isArray(data) ? data : (data?.data || []);
+      setEnumeratorStats(statsArray);
+      console.log('✅ Stats enquêteurs chargées:', statsArray.length);
     } catch (err: any) {
       console.error('Erreur lors de la récupération des stats des enquêteurs:', err);
     } finally {
@@ -681,12 +727,37 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
         }
       });
 
-      if (!res.ok) throw new Error('Erreur lors du chargement');
-      const data = await res.json();
+      if (!res.ok) {
+        console.error('❌ Erreur HTTP lors du chargement des soumissions:', res.status, res.statusText);
+        setEnumeratorSubmissions(null);
+        return;
+      }
+
+      // Vérifier si la réponse est vide
+      const text = await res.text();
+      if (!text || text.trim() === '') {
+        console.warn('⚠️ Réponse vide pour les soumissions de l\'enquêteur');
+        setEnumeratorSubmissions({ appSubmissions: [], publicSubmissions: [], total: 0 });
+        setSelectedEnumeratorId(enumeratorId);
+        return;
+      }
+
+      // Parser le JSON
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (parseError) {
+        console.error('❌ Erreur de parsing JSON pour les soumissions:', parseError, 'Réponse:', text);
+        setEnumeratorSubmissions(null);
+        return;
+      }
+
       setEnumeratorSubmissions(data);
-    setSelectedEnumeratorId(enumeratorId);
+      setSelectedEnumeratorId(enumeratorId);
+      console.log('✅ Soumissions chargées pour l\'enquêteur:', enumeratorId, data);
     } catch (err: any) {
-      console.error('Erreur lors de la récupération des soumissions:', err);
+      console.error('❌ Erreur lors de la récupération des soumissions:', err);
+      setEnumeratorSubmissions(null);
     } finally {
       setEnumeratorSubmissionsLoading(false);
     }
@@ -1947,9 +2018,48 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
                           </option>
                         ))}
                       </select>
-                          </div>
-                          </div>
-                        </div>
+                    </div>
+                    {/* Filtre par province */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Filtrer par province
+                      </label>
+                      <select
+                        value={provinceFilter}
+                        onChange={(e) => setProvinceFilter(e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="">Toutes les provinces</option>
+                        <option value="KINSHASA">Kinshasa</option>
+                        <option value="BAS_UELE">Bas-Uélé</option>
+                        <option value="EQUATEUR">Équateur</option>
+                        <option value="HAUT_KATANGA">Haut-Katanga</option>
+                        <option value="HAUT_LOMAMI">Haut-Lomami</option>
+                        <option value="HAUT_UELE">Haut-Uélé</option>
+                        <option value="ITURI">Ituri</option>
+                        <option value="KASAI">Kasaï</option>
+                        <option value="KASAI_CENTRAL">Kasaï-Central</option>
+                        <option value="KASAI_ORIENTAL">Kasaï-Oriental</option>
+                        <option value="KONGO_CENTRAL">Kongo Central</option>
+                        <option value="KWANGO">Kwango</option>
+                        <option value="KWILU">Kwilu</option>
+                        <option value="LOMAMI">Lomami</option>
+                        <option value="LUALABA">Lualaba</option>
+                        <option value="MAI_NDOMBE">Mai-Ndombe</option>
+                        <option value="MANIEMA">Maniema</option>
+                        <option value="MONGALA">Mongala</option>
+                        <option value="NORD_KIVU">Nord-Kivu</option>
+                        <option value="NORD_UBANGI">Nord-Ubangi</option>
+                        <option value="SANKURU">Sankuru</option>
+                        <option value="SUD_KIVU">Sud-Kivu</option>
+                        <option value="SUD_UBANGI">Sud-Ubangi</option>
+                        <option value="TANGANYIKA">Tanganyika</option>
+                        <option value="TSHOPO">Tshopo</option>
+                        <option value="TSHUAPA">Tshuapa</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
 
                 {/* Chargement des stats */}
                 {enumeratorStatsLoading ? (
@@ -2009,10 +2119,85 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
                     Aucun enquêteur trouvé pour cette campagne
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    Veuillez sélectionner une campagne pour voir les enquêteurs
+                  <div className="bg-white rounded-lg shadow-lg p-6">
+                    <div className="text-center py-8">
+                      <p className="text-gray-500 mb-4">Veuillez sélectionner une campagne pour voir les enquêteurs</p>
+                      {campaignData?.campaign && (
+                        <button
+                          onClick={() => {
+                            const campaignId = campaignData.campaign.id;
+                            setSelectedCampaignId(campaignId);
+                            fetchEnumeratorStats(campaignId);
+                          }}
+                          className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
+                        >
+                          Charger la campagne : {campaignData.campaign.title}
+                        </button>
+                      )}
+                      {records.length > 0 && !campaignData?.campaign && (
+                        <div className="mt-4">
+                          <p className="text-sm text-gray-600 mb-2">Sélectionner une campagne depuis vos enregistrements :</p>
+                          <select
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                setSelectedCampaignId(e.target.value);
+                                fetchEnumeratorStats(e.target.value);
+                              }
+                            }}
+                            className="w-full max-w-md mx-auto px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          >
+                            <option value="">-- Sélectionner une campagne --</option>
+                            {Array.from(new Set(records.map((r: any) => r.surveyId || r.campaignId).filter(Boolean))).map((surveyId: string) => {
+                              const record = records.find((r: any) => (r.surveyId || r.campaignId) === surveyId);
+                              const surveyTitle = record?.survey?.title || `Campagne ${surveyId.substring(0, 8)}...`;
+                              return (
+                                <option key={surveyId} value={surveyId}>
+                                  {surveyTitle}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+                      )}
+                      {analystStats && analystStats.totalRecords > 0 && records.length === 0 && !campaignData?.campaign && (
+                        <div className="mt-4">
+                          <p className="text-sm text-gray-600 mb-2">
+                            Vous avez {analystStats.totalRecords} enregistrements mais aucune campagne assignée.
+                          </p>
+                          <p className="text-xs text-gray-500 mb-4">
+                            Veuillez contacter un administrateur pour vous assigner une campagne, ou rechargez la page pour voir si les enregistrements se chargent.
+                          </p>
+                          <button
+                            onClick={() => {
+                              fetchRecords(1);
+                              fetchAnalystCampaignData();
+                            }}
+                            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                          >
+                            Recharger les données
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Pagination pour les records - affichée même s'il n'y a qu'une seule page */}
+            {view === 'enquetes' && !selectedEnumeratorId && records.length > 0 && (
+              <div className="mt-6">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages || 1}
+                  totalItems={totalRecords || records.length}
+                  pageSize={pageSize}
+                  onPageChange={(page) => {
+                    setCurrentPage(page);
+                    fetchRecords(page);
+                  }}
+                  loading={false}
+                />
               </div>
             )}
           </div>

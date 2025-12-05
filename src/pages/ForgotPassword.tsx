@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Mail, KeyRound, CheckCircle, Loader2, Eye, EyeOff } from 'lucide-react';
 import logo2 from '../assets/images/logo2.jpg';
 import { environment } from '../config/environment';
+import enhancedApiService from '../services/enhancedApiService';
 
 type Step = 'email' | 'code' | 'newPassword' | 'success';
 
@@ -26,20 +27,13 @@ const ForgotPassword: React.FC = () => {
     setLoading(true);
 
     try {
-      const response = await fetch(`${environment.apiBaseUrl}/auth/forgot-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+      // Utilisation du nouveau service API (skipAuth car pas encore connecté)
+      const data = await enhancedApiService.post<{ message: string }>('/auth/forgot-password', { email }, {
+        skipAuth: true,
       });
-
-      const data = await response.json();
       
-      if (response.ok) {
-        setMessage(data.message);
-        setStep('code');
-      } else {
-        setError(data.message || 'Une erreur est survenue');
-      }
+      setMessage(data.message);
+      setStep('code');
     } catch (err) {
       setError('Erreur de connexion au serveur');
     } finally {
@@ -54,19 +48,13 @@ const ForgotPassword: React.FC = () => {
     setLoading(true);
 
     try {
-      const response = await fetch(`${environment.apiBaseUrl}/auth/verify-reset-code`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, code }),
+      // Utilisation du nouveau service API (skipAuth car pas encore connecté)
+      await enhancedApiService.post('/auth/verify-reset-code', { email, code }, {
+        skipAuth: true,
       });
-
-      const data = await response.json();
       
-      if (response.ok) {
-        setStep('newPassword');
-      } else {
-        setError(data.message || 'Code invalide ou expiré');
-      }
+      setStep('newPassword');
+      setMessage(''); // Effacer les messages précédents
     } catch (err) {
       setError('Erreur de connexion au serveur');
     } finally {
@@ -92,19 +80,14 @@ const ForgotPassword: React.FC = () => {
     setLoading(true);
 
     try {
-      const response = await fetch(`${environment.apiBaseUrl}/auth/reset-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, code, newPassword }),
+      // Utilisation du nouveau service API (skipAuth car pas encore connecté)
+      await enhancedApiService.post('/auth/reset-password', { email, code, newPassword }, {
+        skipAuth: true,
       });
-
-      const data = await response.json();
       
-      if (response.ok) {
-        setStep('success');
-      } else {
-        setError(data.message || 'Erreur lors de la réinitialisation');
-      }
+      setStep('success');
+      setError(''); // Effacer les erreurs
+      setMessage(''); // Effacer les messages
     } catch (err) {
       setError('Erreur de connexion au serveur');
     } finally {
@@ -118,16 +101,13 @@ const ForgotPassword: React.FC = () => {
     setLoading(true);
 
     try {
-      const response = await fetch(`${environment.apiBaseUrl}/auth/forgot-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+      // Utilisation du nouveau service API (skipAuth car pas encore connecté)
+      await enhancedApiService.post('/auth/forgot-password', { email }, {
+        skipAuth: true,
       });
-
-      if (response.ok) {
-        setMessage('Un nouveau code a été envoyé');
-        setCode('');
-      }
+      
+      setMessage('Un nouveau code a été envoyé');
+      setCode('');
     } catch (err) {
       setError('Erreur lors du renvoi du code');
     } finally {
@@ -218,7 +198,11 @@ const ForgotPassword: React.FC = () => {
                 type="text"
                 id="code"
                 value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                onChange={(e) => {
+                  const cleanedCode = e.target.value.replace(/\D/g, '').slice(0, 6);
+                  setCode(cleanedCode);
+                  setError(''); // Effacer l'erreur quand l'utilisateur tape
+                }}
                 className="w-full px-4 py-3 text-center text-2xl tracking-[0.5em] font-bold border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="000000"
                 maxLength={6}

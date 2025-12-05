@@ -5,6 +5,7 @@ import { environment } from '../config/environment';
 import { getCitiesByProvince, getCommunesByCity } from '../data/citiesData';
 import { getQuartiersByCommune } from '../data/quartiersData';
 import ConfirmationModal from '../components/ConfirmationModal';
+import enhancedApiService from '../services/enhancedApiService';
 
 interface PublicLink {
   id: string;
@@ -107,14 +108,7 @@ const Settings: React.FC = () => {
         }
 
         // Ensuite, mettre à jour depuis le serveur en arrière-plan
-        const response = await fetch(`${environment.apiBaseUrl}/auth/me`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        if (response.ok) {
-          const userData = await response.json();
+        const userData = await enhancedApiService.get<{ user: any }>('/auth/me');
           console.log('🔍 Settings - Données utilisateur mises à jour depuis le serveur:', userData.user);
           
           // Si la photo a été supprimée localement, ne pas la restaurer depuis le serveur
@@ -145,7 +139,6 @@ const Settings: React.FC = () => {
             selectedODD: userData.user.selectedODD || '',
             numberOfEnumerators: userData.user.numberOfEnumerators || ''
           }));
-        }
       } catch (error) {
         console.error('Erreur lors du chargement des données utilisateur:', error);
       }
@@ -169,22 +162,12 @@ const Settings: React.FC = () => {
       setLoadingLinks(true);
       try {
         // Charger les liens existants
-        const linksResponse = await fetch(`${environment.apiBaseUrl}/public-links/my-links`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (linksResponse.ok) {
-          const linksData = await linksResponse.json();
-          setPublicLinks(linksData);
-        }
+        const linksData = await enhancedApiService.get<PublicLink[]>('/public-links/my-links');
+        setPublicLinks(linksData);
 
         // Charger les campagnes disponibles
-        const surveysResponse = await fetch(`${environment.apiBaseUrl}/public-links/available-surveys`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (surveysResponse.ok) {
-          const surveysData = await surveysResponse.json();
-          setAvailableSurveys(surveysData);
-        }
+        const surveysData = await enhancedApiService.get<AvailableSurvey[]>('/public-links/available-surveys');
+        setAvailableSurveys(surveysData);
       } catch (error) {
         console.error('Erreur lors du chargement des liens publics:', error);
       } finally {
@@ -214,9 +197,7 @@ const Settings: React.FC = () => {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
-      if (!surveysResponse.ok) return;
-      
-      const surveys = await surveysResponse.json();
+      const surveys = await enhancedApiService.get<AvailableSurvey[]>('/public-links/available-surveys');
       let totalAppSubmissions = 0;
       let totalPublicSubmissions = 0;
 
@@ -224,23 +205,13 @@ const Settings: React.FC = () => {
       for (const survey of surveys) {
         try {
           // Stats des soumissions par app
-          const appResponse = await fetch(`${environment.apiBaseUrl}/records/controller?campaignId=${survey.id}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          if (appResponse.ok) {
-            const appData = await appResponse.json();
-            totalAppSubmissions += Array.isArray(appData) ? appData.length : 0;
-          }
+          const appData = await enhancedApiService.get<any>(`/records/controller?campaignId=${survey.id}`);
+          totalAppSubmissions += Array.isArray(appData) ? appData.length : (appData?.data?.length || 0);
 
           // Stats des soumissions par lien public (depuis les liens de l'utilisateur)
-          const linksResponse = await fetch(`${environment.apiBaseUrl}/public-links/my-links`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          if (linksResponse.ok) {
-            const linksData = await linksResponse.json();
-            const surveyLinks = linksData.filter((link: PublicLink) => link.survey?.id === survey.id);
-            totalPublicSubmissions += surveyLinks.reduce((sum: number, link: PublicLink) => sum + (link._count?.submissions || 0), 0);
-          }
+          const linksData = await enhancedApiService.get<PublicLink[]>('/public-links/my-links');
+          const surveyLinks = linksData.filter((link: PublicLink) => link.survey?.id === survey.id);
+          totalPublicSubmissions += surveyLinks.reduce((sum: number, link: PublicLink) => sum + (link._count?.submissions || 0), 0);
         } catch (error) {
           console.error(`Erreur lors du chargement des stats pour la campagne ${survey.id}:`, error);
         }
@@ -318,18 +289,14 @@ const Settings: React.FC = () => {
 
     try {
       const endpoint = isActive ? 'deactivate' : 'reactivate';
-      const response = await fetch(`${environment.apiBaseUrl}/public-links/${linkId}/${endpoint}`, {
-        method: 'PATCH',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        setPublicLinks(prev =>
-          prev.map(link =>
-            link.id === linkId ? { ...link, isActive: !isActive } : link
-          )
-        );
-      }
+      // Utilisation du nouveau service API
+      await enhancedApiService.patch(`/public-links/${linkId}/${endpoint}`);
+      
+      setPublicLinks(prev =>
+        prev.map(link =>
+          link.id === linkId ? { ...link, isActive: !isActive } : link
+        )
+      );
     } catch (error) {
       console.error('Erreur lors de la modification du lien:', error);
     }
@@ -417,33 +384,21 @@ const Settings: React.FC = () => {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch(`${environment.apiBaseUrl}/upload/profile-photo`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        setProfilePhoto(result.photoUrl);
-        setPhotoDeletedLocally(false);
-        setMessage('Photo de profil mise à jour avec succès');
-        setMessageType('success');
-        
-        // Mettre à jour les données utilisateur dans localStorage
-        const updatedUser = { ...user, profilePhoto: result.photoUrl };
-        localStorage.setItem('user', JSON.stringify(updatedUser));
-        setUser(updatedUser);
-        
-        // Déclencher l'événement pour mettre à jour l'interface
-        window.dispatchEvent(new CustomEvent('userProfileUpdated', { detail: updatedUser }));
-      } else {
-        const error = await response.json();
-        setMessage(error.message || 'Erreur lors de l\'upload de la photo');
-        setMessageType('error');
-      }
+      // Utilisation du nouveau service API pour l'upload
+      const result = await enhancedApiService.upload<{ photoUrl: string }>('/upload/profile-photo', formData);
+      
+      setProfilePhoto(result.photoUrl);
+      setPhotoDeletedLocally(false);
+      setMessage('Photo de profil mise à jour avec succès');
+      setMessageType('success');
+      
+      // Mettre à jour les données utilisateur dans localStorage
+      const updatedUser = { ...user, profilePhoto: result.photoUrl };
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      setUser(updatedUser);
+      
+      // Déclencher l'événement pour mettre à jour l'interface
+      window.dispatchEvent(new CustomEvent('userProfileUpdated', { detail: updatedUser }));
     } catch (error) {
       setMessage('Erreur de connexion lors de l\'upload');
       setMessageType('error');
@@ -460,31 +415,21 @@ const Settings: React.FC = () => {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${environment.apiBaseUrl}/upload/profile-photo`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        setProfilePhoto(null);
-        setPhotoDeletedLocally(true);
-        setMessage('Photo de profil supprimée avec succès');
-        setMessageType('success');
-        
-        // Mettre à jour les données utilisateur dans localStorage
-        const updatedUser = { ...user, profilePhoto: null };
-        localStorage.setItem('user', JSON.stringify(updatedUser));
-        setUser(updatedUser);
-        
-        // Déclencher l'événement pour mettre à jour l'interface
-        window.dispatchEvent(new CustomEvent('userProfileUpdated', { detail: updatedUser }));
-      } else {
-        const error = await response.json();
-        setMessage(error.message || 'Erreur lors de la suppression de la photo');
-        setMessageType('error');
-      }
+      // Utilisation du nouveau service API
+      await enhancedApiService.delete('/upload/profile-photo');
+      
+      setProfilePhoto(null);
+      setPhotoDeletedLocally(true);
+      setMessage('Photo de profil supprimée avec succès');
+      setMessageType('success');
+      
+      // Mettre à jour les données utilisateur dans localStorage
+      const updatedUser = { ...user, profilePhoto: null };
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      setUser(updatedUser);
+      
+      // Déclencher l'événement pour mettre à jour l'interface
+      window.dispatchEvent(new CustomEvent('userProfileUpdated', { detail: updatedUser }));
     } catch (error) {
       setMessage('Erreur de connexion lors de la suppression');
       setMessageType('error');
@@ -516,32 +461,20 @@ const Settings: React.FC = () => {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${environment.apiBaseUrl}/auth/change-password`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          currentPassword: settings.currentPassword,
-          newPassword: settings.newPassword
-        })
+      // Utilisation du nouveau service API
+      await enhancedApiService.post('/auth/change-password', {
+        currentPassword: settings.currentPassword,
+        newPassword: settings.newPassword
       });
 
-      if (response.ok) {
-        setMessage('Mot de passe modifié avec succès');
-        setMessageType('success');
-        setSettings(prev => ({
-          ...prev,
-          currentPassword: '',
-          newPassword: '',
-          confirmPassword: ''
-        }));
-      } else {
-        const errorData = await response.json();
-        setMessage(errorData.message || 'Erreur lors de la modification du mot de passe');
-        setMessageType('error');
-      }
+      setMessage('Mot de passe modifié avec succès');
+      setMessageType('success');
+      setSettings(prev => ({
+        ...prev,
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      }));
     } catch (error) {
       setMessage('Erreur de connexion au serveur');
       setMessageType('error');
@@ -582,21 +515,11 @@ const Settings: React.FC = () => {
       console.log('🔍 Settings - Token:', !!token);
       console.log('🔍 Settings - Données:', requestData);
 
-      const response = await fetch(`${environment.apiBaseUrl}/users/update-profile`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(requestData)
-      });
+      // Utilisation du nouveau service API
+      await enhancedApiService.put('/users/update-profile', requestData);
 
-      console.log('🔍 Settings - Réponse status:', response.status);
-      console.log('🔍 Settings - Réponse ok:', response.ok);
-
-      if (response.ok) {
-        setMessage('Identité mise à jour avec succès');
-        setMessageType('success');
+      setMessage('Identité mise à jour avec succès');
+      setMessageType('success');
         // Mettre à jour les données utilisateur dans localStorage
         const userData = localStorage.getItem('user');
         if (userData) {
@@ -606,11 +529,6 @@ const Settings: React.FC = () => {
           userObj.whatsapp = settings.whatsapp;
           localStorage.setItem('user', JSON.stringify(userObj));
         }
-      } else {
-        const errorData = await response.json();
-        setMessage(errorData.message || 'Erreur lors de la mise à jour de l\'identité');
-        setMessageType('error');
-      }
     } catch (error) {
       setMessage('Erreur de connexion au serveur');
       setMessageType('error');
@@ -1206,7 +1124,7 @@ const Settings: React.FC = () => {
       )}
 
       {/* Section Liens Publics - Uniquement pour les enquêteurs (CONTROLLER) */}
-      {user?.role === 'CONTROLLER' && (
+      {user && user.role === 'CONTROLLER' && (
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2 bg-blue-100 rounded-lg">

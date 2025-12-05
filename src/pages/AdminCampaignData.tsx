@@ -5,6 +5,22 @@ import { extractFormEntries } from '../utils/formDataUtils';
 import { exportEnquetesToExcel } from '../utils/excelExport';
 import { Download } from 'lucide-react';
 import SuccessNotification from '../components/SuccessNotification';
+import enhancedApiService from '../services/enhancedApiService';
+import Pagination from '../components/Pagination';
+// Virtualisation - import conditionnel avec fallback
+// Note: react-window doit être installé avec: npm install react-window @types/react-window
+// @ts-ignore - Module optionnel, peut ne pas être installé
+let List: any = null;
+if (typeof window !== 'undefined') {
+  try {
+    // @ts-ignore
+    const reactWindow = require('react-window');
+    List = reactWindow.FixedSizeList;
+  } catch (e) {
+    // react-window non installé - fallback sur rendu normal
+    // L'application fonctionnera sans virtualisation
+  }
+}
 
 interface Campaign {
   id: string;
@@ -78,20 +94,21 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
   });
   const [showResetModal, setShowResetModal] = useState(false);
   const [resetting, setResetting] = useState(false);
+  
+  // États pour la pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(50); // 50 réponses par page
+  const [totalResponses, setTotalResponses] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
-  // Styles CSS pour les animations 3D
-  const flipCardStyles = `
-    .perspective-1000 {
-      perspective: 1000px;
+  // Styles CSS optimisés (remplace les animations 3D coûteuses)
+  const cardStyles = `
+    .stat-card {
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
-    .transform-style-preserve-3d {
-      transform-style: preserve-3d;
-    }
-    .backface-hidden {
-      backface-visibility: hidden;
-    }
-    .rotate-y-180 {
-      transform: rotateY(180deg);
+    .stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
   `;
 
@@ -107,12 +124,34 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
     fetchCampaigns();
   }, []);
 
+  // Debounce pour fetchEnumeratorStats
+  const debounceTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  const debouncedFetchEnumeratorStats = (campaignId: string) => {
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+    }
+    debounceTimer.current = setTimeout(() => {
+      fetchEnumeratorStats(campaignId);
+    }, 500); // Attendre 500ms après le dernier appel
+  };
+
   useEffect(() => {
     if (selectedCampaign) {
-      fetchCampaignResponses(selectedCampaign);
-      fetchEnumeratorStats(selectedCampaign);
+      setCurrentPage(1); // Réinitialiser à la page 1 quand on change de campagne
+      fetchCampaignResponses(selectedCampaign, 1);
+      debouncedFetchEnumeratorStats(selectedCampaign);
     }
   }, [selectedCampaign]);
+  
+  // Nettoyer le timer au démontage
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+    };
+  }, []);
 
   // Fonction pour récupérer les statistiques des enquêteurs par campagne
   const fetchEnumeratorStats = async (campaignId: string) => {
@@ -121,14 +160,11 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const res = await fetch(`${environment.apiBaseUrl}/records/campaign/${campaignId}/enumerators/stats`, {
-        headers: { 
-          Authorization: `Bearer ${token}`
-        }
+      // Utilisation du nouveau service API
+      const responseData = await enhancedApiService.get<any>(`/records/campaign/${campaignId}/enumerators/stats`, {
+        skipCache: true,
       });
-
-      if (!res.ok) throw new Error('Erreur lors du chargement');
-      const responseData = await res.json();
+      
       // L'API peut retourner un objet avec { data: [...], pagination: {...} } ou directement un tableau
       const statsArray = Array.isArray(responseData) 
         ? responseData 
@@ -149,14 +185,11 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const res = await fetch(`${environment.apiBaseUrl}/records/campaign/${campaignId}/enumerator/${enumeratorId}/submissions`, {
-        headers: { 
-          Authorization: `Bearer ${token}`
-        }
+      // Utilisation du nouveau service API
+      const responseData = await enhancedApiService.get<any>(`/records/campaign/${campaignId}/enumerator/${enumeratorId}/submissions`, {
+        skipCache: true,
       });
-
-      if (!res.ok) throw new Error('Erreur lors du chargement');
-      const responseData = await res.json();
+      
       // L'API peut retourner un objet avec { data: [...], pagination: {...} } ou directement un tableau/objet
       const submissionsData = Array.isArray(responseData) 
         ? responseData 
@@ -177,18 +210,16 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${environment.apiBaseUrl}/surveys/admin`, {
-        headers: { Authorization: `Bearer ${token}` }
+      // Utilisation du nouveau service API
+      const responseData = await enhancedApiService.get<any>('/surveys/admin', {
+        skipCache: true,
       });
-
-      if (response.ok) {
-        const responseData = await response.json();
-        // L'API peut retourner un objet avec { data: [...], pagination: {...} } ou directement un tableau
-        const campaignsArray = Array.isArray(responseData) 
-          ? responseData 
-          : (responseData?.data || []);
-        setCampaigns(campaignsArray);
-      }
+      
+      // L'API peut retourner un objet avec { data: [...], pagination: {...} } ou directement un tableau
+      const campaignsArray = Array.isArray(responseData) 
+        ? responseData 
+        : (responseData?.data || []);
+      setCampaigns(campaignsArray);
     } catch (error) {
       console.error('Erreur lors du chargement des campagnes:', error);
       toast.error('Erreur lors du chargement des campagnes');
@@ -197,31 +228,43 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
     }
   };
 
-  const fetchCampaignResponses = async (campaignId: string) => {
+  const fetchCampaignResponses = async (campaignId: string, page: number = 1) => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${environment.apiBaseUrl}/records/campaign/${campaignId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        const responseData = await response.json();
-        // L'API peut retourner un objet avec { data: [...], pagination: {...} } ou directement un tableau
-        const responsesArray = Array.isArray(responseData) 
-          ? responseData 
-          : (responseData?.data || []);
-        setResponses(responsesArray);
+      // Utilisation du nouveau service API avec pagination
+      const responseData = await enhancedApiService.get<any>(
+        `/records/campaign/${campaignId}?page=${page}&limit=${pageSize}`,
+        {
+          skipCache: true,
+        }
+      );
+      
+      // L'API peut retourner un objet avec { data: [...], pagination: {...} } ou directement un tableau
+      const responsesArray = Array.isArray(responseData) 
+        ? responseData 
+        : (responseData?.data || []);
+      setResponses(responsesArray);
+      
+      // Mettre à jour la pagination
+      if (responseData.pagination) {
+        setTotalResponses(responseData.pagination.total || responsesArray.length);
+        setTotalPages(responseData.pagination.totalPages || Math.ceil((responseData.pagination.total || responsesArray.length) / pageSize));
+        setCurrentPage(responseData.pagination.page || page);
       } else {
-        setResponses([]);
-        toast.info('Aucune donnée trouvée pour cette campagne');
+        // Fallback si pas de pagination dans la réponse
+        setTotalResponses(responsesArray.length);
+        setTotalPages(Math.ceil(responsesArray.length / pageSize));
+        setCurrentPage(page);
       }
     } catch (error) {
       console.error('Erreur lors du chargement des réponses:', error);
       toast.error('Erreur lors du chargement des données');
       setResponses([]);
+      setTotalResponses(0);
+      setTotalPages(0);
     } finally {
       setLoading(false);
     }
@@ -446,8 +489,8 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      {/* Styles CSS pour les animations 3D */}
-      <style dangerouslySetInnerHTML={{ __html: flipCardStyles }} />
+      {/* Styles CSS optimisés */}
+      <style dangerouslySetInnerHTML={{ __html: cardStyles }} />
       
       <div className="max-w-7xl mx-auto">
         {/* En-tête */}
@@ -538,79 +581,67 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
         {/* Statistiques avec cartes animées */}
         {selectedCampaign && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            {/* Carte Total Réponses */}
+            {/* Carte Total Réponses - Optimisée */}
             <div 
-              className="relative w-full h-32 cursor-pointer perspective-1000 hover:scale-105 transition-transform duration-300"
+              className="stat-card bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 cursor-pointer"
               onClick={() => toggleCardFlip('totalResponses')}
             >
-              <div className={`relative w-full h-full transition-transform duration-700 transform-style-preserve-3d ${
-                flippedCards.totalResponses ? 'rotate-y-180' : ''
-              }`}>
-                {/* Recto */}
-                <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg hover:shadow-xl flex items-center justify-center transition-shadow duration-300">
-                  <div className="text-center text-white">
-                    <div className="mb-2 hover:scale-110 transition-transform duration-200 relative">
-                      <div className="absolute inset-0 bg-white opacity-20 rounded-full blur-sm"></div>
-                      <svg className="w-8 h-8 mx-auto relative z-10 drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24">
+              <div className="text-center text-white">
+                {!flippedCards.totalResponses ? (
+                  <>
+                    <div className="mb-2 relative">
+                      <svg className="w-8 h-8 mx-auto drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                       </svg>
                     </div>
                     <div className="text-sm font-semibold">Total Réponses</div>
-                    <div className="text-xs opacity-80 mt-1 animate-pulse">Cliquez pour voir</div>
-                  </div>
-                </div>
-                {/* Verso */}
-                <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg flex items-center justify-center rotate-y-180">
-                  <div className="text-center text-white">
+                    <div className="text-xs opacity-80 mt-1">Cliquez pour voir</div>
+                  </>
+                ) : (
+                  <>
                     <div className="text-3xl font-bold mb-2">
                       {loading ? (
                         <div className="animate-pulse bg-white/20 rounded w-12 h-8 mx-auto"></div>
                       ) : (
-                        <span className="animate-bounce hover:animate-pulse transition-all duration-300 hover:scale-110 hover:text-yellow-200">
-                          {responses.length}
+                        <span className="transition-all duration-300">
+                          {totalResponses}
                         </span>
                       )}
                     </div>
                     <div className="text-xs">
-                      <div>Campagne sélectionnée</div>
+                      <div>Total: {totalResponses} réponses</div>
                       <div className="font-semibold mt-1">
                         {campaigns.find(c => c.id === selectedCampaign)?.title || 'N/A'}
                       </div>
                     </div>
-                  </div>
-                </div>
+                  </>
+                )}
               </div>
             </div>
 
-            {/* Carte Réponses Valides */}
+            {/* Carte Réponses Valides - Optimisée */}
             <div 
-              className="relative w-full h-32 cursor-pointer perspective-1000 hover:scale-105 transition-transform duration-300"
+              className="stat-card bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 cursor-pointer"
               onClick={() => toggleCardFlip('validResponses')}
             >
-              <div className={`relative w-full h-full transition-transform duration-700 transform-style-preserve-3d ${
-                flippedCards.validResponses ? 'rotate-y-180' : ''
-              }`}>
-                {/* Recto */}
-                <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg hover:shadow-xl flex items-center justify-center transition-shadow duration-300">
-                  <div className="text-center text-white">
-                    <div className="mb-2 hover:scale-110 transition-transform duration-200 relative">
-                      <div className="absolute inset-0 bg-white opacity-20 rounded-full blur-sm"></div>
-                      <svg className="w-8 h-8 mx-auto relative z-10 drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24">
+              <div className="text-center text-white">
+                {!flippedCards.validResponses ? (
+                  <>
+                    <div className="mb-2 relative">
+                      <svg className="w-8 h-8 mx-auto drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </div>
                     <div className="text-sm font-semibold">Réponses Valides</div>
-                    <div className="text-xs opacity-80 mt-1 animate-pulse">Cliquez pour voir</div>
-                  </div>
-                </div>
-                {/* Verso */}
-                <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg flex items-center justify-center rotate-y-180">
-                  <div className="text-center text-white">
+                    <div className="text-xs opacity-80 mt-1">Cliquez pour voir</div>
+                  </>
+                ) : (
+                  <>
                     <div className="text-3xl font-bold mb-2">
                       {loading ? (
                         <div className="animate-pulse bg-white/20 rounded w-12 h-8 mx-auto"></div>
                       ) : (
-                        <span className="animate-bounce hover:animate-pulse transition-all duration-300 hover:scale-110 hover:text-yellow-200">
+                        <span className="transition-all duration-300">
                           {responses.filter(r => r.analystValidationStatus === 'VALIDATED').length}
                         </span>
                       )}
@@ -618,46 +649,40 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
                     <div className="text-xs">
                       <div>Statut: Validés</div>
                       <div className="font-semibold mt-1">
-                        {responses.length > 0 ? 
-                          `${Math.round((responses.filter(r => r.analystValidationStatus === 'VALIDATED').length / responses.length) * 100)}%` : 
+                        {totalResponses > 0 ? 
+                          `${Math.round((responses.filter(r => r.analystValidationStatus === 'VALIDATED').length / totalResponses) * 100)}%` : 
                           '0%'
                         }
                       </div>
                     </div>
-                  </div>
-                </div>
+                  </>
+                )}
               </div>
             </div>
 
-            {/* Carte En Attente */}
+            {/* Carte En Attente - Optimisée */}
             <div 
-              className="relative w-full h-32 cursor-pointer perspective-1000 hover:scale-105 transition-transform duration-300"
+              className="stat-card bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl shadow-lg p-6 cursor-pointer"
               onClick={() => toggleCardFlip('pendingResponses')}
             >
-              <div className={`relative w-full h-full transition-transform duration-700 transform-style-preserve-3d ${
-                flippedCards.pendingResponses ? 'rotate-y-180' : ''
-              }`}>
-                {/* Recto */}
-                <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl shadow-lg hover:shadow-xl flex items-center justify-center transition-shadow duration-300">
-                  <div className="text-center text-white">
-                    <div className="mb-2 hover:scale-110 transition-transform duration-200 relative">
-                      <div className="absolute inset-0 bg-white opacity-20 rounded-full blur-sm"></div>
-                      <svg className="w-8 h-8 mx-auto relative z-10 drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24">
+              <div className="text-center text-white">
+                {!flippedCards.pendingResponses ? (
+                  <>
+                    <div className="mb-2 relative">
+                      <svg className="w-8 h-8 mx-auto drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </div>
                     <div className="text-sm font-semibold">En Attente</div>
-                    <div className="text-xs opacity-80 mt-1 animate-pulse">Cliquez pour voir</div>
-                  </div>
-                </div>
-                {/* Verso */}
-                <div className="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl shadow-lg flex items-center justify-center rotate-y-180">
-                  <div className="text-center text-white">
+                    <div className="text-xs opacity-80 mt-1">Cliquez pour voir</div>
+                  </>
+                ) : (
+                  <>
                     <div className="text-3xl font-bold mb-2">
                       {loading ? (
                         <div className="animate-pulse bg-white/20 rounded w-12 h-8 mx-auto"></div>
                       ) : (
-                        <span className="animate-bounce hover:animate-pulse transition-all duration-300 hover:scale-110 hover:text-yellow-200">
+                        <span className="transition-all duration-300">
                           {responses.filter(r => r.analystValidationStatus === 'PENDING' || r.analystValidationStatus === null || r.analystValidationStatus === undefined).length}
                         </span>
                       )}
@@ -665,16 +690,33 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
                     <div className="text-xs">
                       <div>Statut: En attente</div>
                       <div className="font-semibold mt-1">
-                        {responses.length > 0 ? 
-                          `${Math.round((responses.filter(r => r.analystValidationStatus === 'PENDING' || r.analystValidationStatus === null || r.analystValidationStatus === undefined).length / responses.length) * 100)}%` : 
+                        {totalResponses > 0 ? 
+                          `${Math.round((responses.filter(r => r.analystValidationStatus === 'PENDING' || r.analystValidationStatus === null || r.analystValidationStatus === undefined).length / totalResponses) * 100)}%` : 
                           '0%'
                         }
                       </div>
                     </div>
-                  </div>
-                </div>
+                  </>
+                )}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Pagination - affichée même avec 1 page */}
+        {selectedCampaign && totalPages > 0 && (
+          <div className="bg-white rounded-lg shadow p-4 mb-6">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages || 1}
+              totalItems={totalResponses}
+              pageSize={pageSize}
+              onPageChange={(newPage) => {
+                setCurrentPage(newPage);
+                fetchCampaignResponses(selectedCampaign, newPage);
+              }}
+              loading={loading}
+            />
           </div>
         )}
 
@@ -767,73 +809,159 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
                   </div>
                 </div>
 
-                {/* Liste des formulaires par application */}
+                {/* Liste des formulaires par application - Virtualisée */}
                 {enumeratorSubmissions.appSubmissions && enumeratorSubmissions.appSubmissions.length > 0 && (
                   <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 mb-4 sm:mb-6">
                     <h3 className="text-lg font-semibold mb-4 text-blue-800">Formulaires soumis par application ({enumeratorSubmissions.appSubmissions.length})</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {enumeratorSubmissions.appSubmissions.map((submission: any) => (
-                        <div
-                          key={submission.id}
-                          className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
-                          onClick={() => {
-                            setSelectedResponse(submission);
-                            setShowDetailModal(true);
-                          }}
+                    {List ? (
+                      <div className="h-[400px]">
+                        <List
+                          height={400}
+                          itemCount={enumeratorSubmissions.appSubmissions.length}
+                          itemSize={120}
+                          width="100%"
+                          itemData={enumeratorSubmissions.appSubmissions}
                         >
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">Application</span>
-                            <span className={`text-xs px-2 py-1 rounded-full ${
-                              submission.analystValidationStatus === 'VALIDATED' ? 'bg-green-100 text-green-800' :
-                              submission.analystValidationStatus === 'NEEDS_REVIEW' ? 'bg-orange-100 text-orange-800' :
-                              'bg-gray-100 text-gray-800'
-                            }`}>
-                              {submission.analystValidationStatus === 'VALIDATED' ? 'Validé' :
-                               submission.analystValidationStatus === 'NEEDS_REVIEW' ? 'À revoir' :
-                               'En attente'}
-                            </span>
+                          {({ index, style, data }: { index: number; style: React.CSSProperties; data: any[] }) => {
+                            const submission = data[index];
+                            return (
+                              <div style={style} className="px-2">
+                                <div
+                                  className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer bg-white"
+                                  onClick={() => {
+                                    setSelectedResponse(submission);
+                                    setShowDetailModal(true);
+                                  }}
+                                >
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">Application</span>
+                                    <span className={`text-xs px-2 py-1 rounded-full ${
+                                      submission.analystValidationStatus === 'VALIDATED' ? 'bg-green-100 text-green-800' :
+                                      submission.analystValidationStatus === 'NEEDS_REVIEW' ? 'bg-orange-100 text-orange-800' :
+                                      'bg-gray-100 text-gray-800'
+                                    }`}>
+                                      {submission.analystValidationStatus === 'VALIDATED' ? 'Validé' :
+                                       submission.analystValidationStatus === 'NEEDS_REVIEW' ? 'À revoir' :
+                                       'En attente'}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm font-medium text-gray-900 mt-2">
+                                    {submission.formData?.['identification.nomOuCode'] || submission.formData?.household?.nomOuCode || 'N/A'}
+                                  </p>
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    {new Date(submission.createdAt).toLocaleDateString('fr-FR')}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          }}
+                        </List>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {enumeratorSubmissions.appSubmissions.map((submission: any) => (
+                          <div
+                            key={submission.id}
+                            className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
+                            onClick={() => {
+                              setSelectedResponse(submission);
+                              setShowDetailModal(true);
+                            }}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">Application</span>
+                              <span className={`text-xs px-2 py-1 rounded-full ${
+                                submission.analystValidationStatus === 'VALIDATED' ? 'bg-green-100 text-green-800' :
+                                submission.analystValidationStatus === 'NEEDS_REVIEW' ? 'bg-orange-100 text-orange-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {submission.analystValidationStatus === 'VALIDATED' ? 'Validé' :
+                                 submission.analystValidationStatus === 'NEEDS_REVIEW' ? 'À revoir' :
+                                 'En attente'}
+                              </span>
+                            </div>
+                            <p className="text-sm font-medium text-gray-900 mt-2">
+                              {submission.formData?.['identification.nomOuCode'] || submission.formData?.household?.nomOuCode || 'N/A'}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {new Date(submission.createdAt).toLocaleDateString('fr-FR')}
+                            </p>
                           </div>
-                          <p className="text-sm font-medium text-gray-900 mt-2">
-                            {submission.formData?.['identification.nomOuCode'] || submission.formData?.household?.nomOuCode || 'N/A'}
-                          </p>
-                          <p className="text-xs text-gray-500 mt-1">
-                            {new Date(submission.createdAt).toLocaleDateString('fr-FR')}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {/* Liste des formulaires par lien public */}
+                {/* Liste des formulaires par lien public - Virtualisée */}
                 {enumeratorSubmissions.publicSubmissions && enumeratorSubmissions.publicSubmissions.length > 0 && (
                   <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6">
                     <h3 className="text-lg font-semibold mb-4 text-green-800">Formulaires soumis par lien public ({enumeratorSubmissions.publicSubmissions.length})</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {enumeratorSubmissions.publicSubmissions.map((submission: any) => (
-                        <div
-                          key={submission.id}
-                          className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
-                          onClick={() => {
-                            setSelectedResponse(submission);
-                            setShowDetailModal(true);
-                          }}
+                    {List ? (
+                      <div className="h-[400px]">
+                        <List
+                          height={400}
+                          itemCount={enumeratorSubmissions.publicSubmissions.length}
+                          itemSize={120}
+                          width="100%"
+                          itemData={enumeratorSubmissions.publicSubmissions}
                         >
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Lien public</span>
-                            {submission.submitterName && (
-                              <span className="text-xs text-gray-600">{submission.submitterName}</span>
-                            )}
+                          {({ index, style, data }: { index: number; style: React.CSSProperties; data: any[] }) => {
+                            const submission = data[index];
+                            return (
+                              <div style={style} className="px-2">
+                                <div
+                                  className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer bg-white"
+                                  onClick={() => {
+                                    setSelectedResponse(submission);
+                                    setShowDetailModal(true);
+                                  }}
+                                >
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Lien public</span>
+                                    {submission.submitterName && (
+                                      <span className="text-xs text-gray-600">{submission.submitterName}</span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm font-medium text-gray-900 mt-2">
+                                    {submission.formData?.['identification.nomOuCode'] || submission.formData?.household?.nomOuCode || 'N/A'}
+                                  </p>
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    {new Date(submission.createdAt).toLocaleDateString('fr-FR')}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          }}
+                        </List>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {enumeratorSubmissions.publicSubmissions.map((submission: any) => (
+                          <div
+                            key={submission.id}
+                            className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
+                            onClick={() => {
+                              setSelectedResponse(submission);
+                              setShowDetailModal(true);
+                            }}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Lien public</span>
+                              {submission.submitterName && (
+                                <span className="text-xs text-gray-600">{submission.submitterName}</span>
+                              )}
+                            </div>
+                            <p className="text-sm font-medium text-gray-900 mt-2">
+                              {submission.formData?.['identification.nomOuCode'] || submission.formData?.household?.nomOuCode || 'N/A'}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {new Date(submission.createdAt).toLocaleDateString('fr-FR')}
+                            </p>
                           </div>
-                          <p className="text-sm font-medium text-gray-900 mt-2">
-                            {submission.formData?.['identification.nomOuCode'] || submission.formData?.household?.nomOuCode || 'N/A'}
-                          </p>
-                          <p className="text-xs text-gray-500 mt-1">
-                            {new Date(submission.createdAt).toLocaleDateString('fr-FR')}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -853,43 +981,96 @@ const AdminCampaignData: React.FC<AdminCampaignDataProps> = ({ onBack }) => {
                     <p className="mt-4 text-gray-600">Chargement des enquêteurs...</p>
                   </div>
                 ) : enumeratorStats.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {enumeratorStats.map((enumerator: any) => (
-                      <div
-                        key={enumerator.id}
-                        className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
-                        onClick={() => {
-                          if (selectedCampaign) {
-                            fetchEnumeratorSubmissions(enumerator.id, selectedCampaign);
-                          }
-                        }}
+                  // Virtualisation pour les grandes listes d'enquêteurs
+                  List ? (
+                    <div className="h-[600px]">
+                      <List
+                        height={600}
+                        itemCount={enumeratorStats.length}
+                        itemSize={180}
+                        width="100%"
+                        itemData={enumeratorStats}
                       >
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                              <span className="text-blue-600 font-bold">
-                                {enumerator.name.charAt(0).toUpperCase()}
-                              </span>
+                        {({ index, style, data }: { index: number; style: React.CSSProperties; data: any[] }) => {
+                          const enumerator = data[index];
+                          return (
+                            <div style={style} className="px-2">
+                              <div
+                                className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer bg-white"
+                                onClick={() => {
+                                  if (selectedCampaign) {
+                                    fetchEnumeratorSubmissions(enumerator.id, selectedCampaign);
+                                  }
+                                }}
+                              >
+                                <div className="flex items-center justify-between mb-3">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                      <span className="text-blue-600 font-bold">
+                                        {enumerator.name.charAt(0).toUpperCase()}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <p className="font-semibold text-gray-900">{enumerator.name}</p>
+                                      <p className="text-xs text-gray-500">{enumerator.email}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 mt-3">
+                                  <div className="text-center p-2 bg-blue-50 rounded">
+                                    <div className="text-lg font-bold text-blue-600">{enumerator.appSubmissionsCount || 0}</div>
+                                    <div className="text-xs text-blue-800">Par app</div>
+                                  </div>
+                                  <div className="text-center p-2 bg-green-50 rounded">
+                                    <div className="text-lg font-bold text-green-600">{enumerator.publicLinkSubmissionsCount || 0}</div>
+                                    <div className="text-xs text-green-800">Par lien</div>
+                                  </div>
+                                </div>
+                              </div>
                             </div>
-                            <div>
-                              <p className="font-semibold text-gray-900">{enumerator.name}</p>
-                              <p className="text-xs text-gray-500">{enumerator.email}</p>
+                          );
+                        }}
+                      </List>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {enumeratorStats.map((enumerator: any) => (
+                        <div
+                          key={enumerator.id}
+                          className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
+                          onClick={() => {
+                            if (selectedCampaign) {
+                              fetchEnumeratorSubmissions(enumerator.id, selectedCampaign);
+                            }
+                          }}
+                        >
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                <span className="text-blue-600 font-bold">
+                                  {enumerator.name.charAt(0).toUpperCase()}
+                                </span>
+                              </div>
+                              <div>
+                                <p className="font-semibold text-gray-900">{enumerator.name}</p>
+                                <p className="text-xs text-gray-500">{enumerator.email}</p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 mt-3">
+                            <div className="text-center p-2 bg-blue-50 rounded">
+                              <div className="text-lg font-bold text-blue-600">{enumerator.appSubmissionsCount || 0}</div>
+                              <div className="text-xs text-blue-800">Par app</div>
+                            </div>
+                            <div className="text-center p-2 bg-green-50 rounded">
+                              <div className="text-lg font-bold text-green-600">{enumerator.publicLinkSubmissionsCount || 0}</div>
+                              <div className="text-xs text-green-800">Par lien</div>
                             </div>
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-2 mt-3">
-                          <div className="text-center p-2 bg-blue-50 rounded">
-                            <div className="text-lg font-bold text-blue-600">{enumerator.appSubmissionsCount || 0}</div>
-                            <div className="text-xs text-blue-800">Par app</div>
-                          </div>
-                          <div className="text-center p-2 bg-green-50 rounded">
-                            <div className="text-lg font-bold text-green-600">{enumerator.publicLinkSubmissionsCount || 0}</div>
-                            <div className="text-xs text-green-800">Par lien</div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )
                 ) : (
                   <div className="text-center py-8 text-gray-500">
                     Aucun enquêteur trouvé pour cette campagne

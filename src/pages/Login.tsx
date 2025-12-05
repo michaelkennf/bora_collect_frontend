@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import logo2 from '../assets/images/logo2.jpg';
 import { environment } from '../config/environment';
+import enhancedApiService from '../services/enhancedApiService';
 
 const Login = () => {
   const [username, setUsername] = useState('');
@@ -17,25 +18,22 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      // Utiliser la configuration dual pour l'URL de l'API
-      const loginUrl = `${environment.apiBaseUrl}/auth/login`;
-      console.log('🔗 Tentative de connexion à:', loginUrl);
+      // Utiliser le chemin relatif - enhancedApiService ajoute déjà baseURL
+      const loginEndpoint = '/auth/login';
+      console.log('🔗 Tentative de connexion à:', `${environment.apiBaseUrl}${loginEndpoint}`);
       console.log('🔍 Configuration API:', {
         apiBaseUrl: environment.apiBaseUrl,
         envVar: import.meta.env.VITE_API_BASE_URL,
         default: 'http://localhost:3000'
       });
       
-      const response = await fetch(loginUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email: username, password }),
+      // Utilisation du nouveau service API (skipAuth car c'est le login)
+      const data = await enhancedApiService.post<{
+        access_token: string;
+        user: any;
+      }>(loginEndpoint, { email: username, password }, {
+        skipAuth: true, // Pas de token pour le login
       });
-
-      if (response.ok || response.status === 201) {
-        const data = await response.json();
         
         // Vérifier si un autre compte est déjà connecté sur ce navigateur
         const existingUser = localStorage.getItem('user');
@@ -123,14 +121,23 @@ const Login = () => {
             console.log('🔄 Redirection vers / (rôle inconnu)');
             navigate('/');
         }
-      } else {
-        const errorData = await response.json();
-        setError(errorData.message || 'Erreur de connexion');
-        console.error('❌ Erreur de connexion:', errorData);
-      }
-    } catch (err) {
+    } catch (err: any) {
       console.error('❌ Erreur réseau:', err);
-      setError('Erreur de connexion au serveur');
+      // Afficher le message d'erreur du serveur s'il existe
+      const errorMessage = err?.message || 'Erreur de connexion au serveur';
+      
+      // Si le message contient "Identifiants incorrects" ou similaire, l'afficher tel quel
+      if (errorMessage.includes('Identifiants incorrects') || 
+          errorMessage.includes('incorrects') ||
+          errorMessage.includes('incorrect')) {
+        setError('L\'adresse email ou le mot de passe est incorrect');
+      } else if (errorMessage.includes('Session expirée')) {
+        setError('Session expirée. Veuillez vous reconnecter.');
+      } else if (errorMessage.includes('verrouillé') || errorMessage.includes('Trop de tentatives')) {
+        setError(errorMessage);
+      } else {
+        setError('L\'adresse email ou le mot de passe est incorrect');
+      }
     } finally {
       setIsLoading(false);
     }

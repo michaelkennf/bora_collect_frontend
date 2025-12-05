@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { environment } from '../../config/environment';
 import { toast } from 'react-toastify';
 import { extractFormEntries, flattenFormDataToObject } from '../../utils/formDataUtils';
 import { exportEnquetesToExcel } from '../../utils/excelExport';
 import { Download } from 'lucide-react';
 import SuccessNotification from '../../components/SuccessNotification';
+import Pagination from '../../components/Pagination';
+import enhancedApiService from '../../services/enhancedApiService';
 
 // Styles CSS pour les animations de retournement
 const flipCardStyles = `
@@ -59,6 +61,9 @@ const PMValidatedForms: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState<'all' | 'VALIDATED' | 'NEEDS_REVIEW'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [flippedCards, setFlippedCards] = useState<{ [key: string]: boolean }>({});
+  // États pour la pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(50);
   const [enumeratorStats, setEnumeratorStats] = useState<any[]>([]);
   const [enumeratorStatsLoading, setEnumeratorStatsLoading] = useState(false);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
@@ -91,7 +96,18 @@ const PMValidatedForms: React.FC = () => {
 
   useEffect(() => {
     filterForms();
+    // Réinitialiser à la page 1 quand les filtres changent
+    setCurrentPage(1);
   }, [validatedForms, filterStatus, searchTerm]);
+
+  // Calculer les formulaires paginés
+  const paginatedForms = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    return filteredForms.slice(startIndex, endIndex);
+  }, [filteredForms, currentPage, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredForms.length / pageSize));
 
   // Charger les stats des enquêteurs quand une campagne est sélectionnée
   useEffect(() => {
@@ -106,25 +122,20 @@ const PMValidatedForms: React.FC = () => {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${environment.apiBaseUrl}/surveys/pm-validated-forms`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+      // Utilisation du nouveau service API
+      const data = await enhancedApiService.get<any[]>('/surveys/pm-validated-forms', {
+        skipCache: true,
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        // Extraire les campagnes uniques
-        const uniqueCampaigns = Array.from(
-          new Map(data.map((form: ValidatedForm) => [form.surveyId, form.survey])).values()
-        ).filter(Boolean) as Array<{ id: string; title: string; description?: string }>;
-        setCampaigns(uniqueCampaigns);
-        
-        // Sélectionner automatiquement la première campagne si disponible
-        if (uniqueCampaigns.length > 0 && !selectedCampaignId) {
-          setSelectedCampaignId(uniqueCampaigns[0].id);
-        }
+      
+      // Extraire les campagnes uniques
+      const uniqueCampaigns = Array.from(
+        new Map(data.map((form: ValidatedForm) => [form.surveyId, form.survey])).values()
+      ).filter(Boolean) as Array<{ id: string; title: string; description?: string }>;
+      setCampaigns(uniqueCampaigns);
+      
+      // Sélectionner automatiquement la première campagne si disponible
+      if (uniqueCampaigns.length > 0 && !selectedCampaignId) {
+        setSelectedCampaignId(uniqueCampaigns[0].id);
       }
     } catch (error) {
       console.error('Erreur lors du chargement des campagnes:', error);
@@ -138,14 +149,11 @@ const PMValidatedForms: React.FC = () => {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const res = await fetch(`${environment.apiBaseUrl}/records/campaign/${campaignId}/enumerators/stats`, {
-        headers: { 
-          Authorization: `Bearer ${token}`
-        }
+      // Utilisation du nouveau service API
+      const data = await enhancedApiService.get<any>(`/records/campaign/${campaignId}/enumerators/stats`, {
+        skipCache: true,
       });
-
-      if (!res.ok) throw new Error('Erreur lors du chargement');
-      const data = await res.json();
+      
       setEnumeratorStats(data);
     } catch (err: any) {
       console.error('Erreur lors de la récupération des stats des enquêteurs:', err);
@@ -161,14 +169,11 @@ const PMValidatedForms: React.FC = () => {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const res = await fetch(`${environment.apiBaseUrl}/records/campaign/${campaignId}/enumerator/${enumeratorId}/submissions`, {
-        headers: { 
-          Authorization: `Bearer ${token}`
-        }
+      // Utilisation du nouveau service API
+      const data = await enhancedApiService.get<any>(`/records/campaign/${campaignId}/enumerator/${enumeratorId}/submissions`, {
+        skipCache: true,
       });
-
-      if (!res.ok) throw new Error('Erreur lors du chargement');
-      const data = await res.json();
+      
       setEnumeratorSubmissions(data);
       setSelectedEnumeratorId(enumeratorId);
     } catch (err: any) {
@@ -187,26 +192,8 @@ const PMValidatedForms: React.FC = () => {
         return;
       }
 
-      const response = await fetch(`${environment.apiBaseUrl}/surveys/pm-validated-forms`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.status === 401) {
-        console.log('⚠️ Token expiré ou invalide, déconnexion');
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
-        return;
-      }
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
+      // Utilisation du nouveau service API
+      const data = await enhancedApiService.get<any[]>('/surveys/pm-validated-forms');
       console.log('✅ Formulaires validés récupérés:', data);
       setValidatedForms(data);
     } catch (error) {
@@ -753,7 +740,7 @@ const PMValidatedForms: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-4">
-            {filteredForms.map((form) => (
+            {paginatedForms.map((form) => (
               <div
                 key={form.id}
                 onClick={() => setSelectedForm(form)}
@@ -796,6 +783,20 @@ const PMValidatedForms: React.FC = () => {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+        
+        {/* Pagination - affichée même avec 1 page */}
+        {filteredForms.length > 0 && (
+          <div className="mt-6">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages || 1}
+              totalItems={filteredForms.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              loading={loading}
+            />
           </div>
         )}
         </div>
