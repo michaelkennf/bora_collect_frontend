@@ -1,20 +1,32 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense, lazy } from 'react';
 import { useNavigate } from 'react-router-dom';
 import logo2 from '../assets/images/logo2.jpg';
-import AdminDashboard from './AdminDashboard';
-import AdminUserManagement from './AdminUserManagement';
-import AdminCampaignManagement from './AdminCampaignManagement';
-import AdminPendingApprovals from './AdminPendingApprovals';
-import AdminPMRequests from './AdminPMRequests';
-import AdminCreateProjectManager from './AdminCreateProjectManager';
-import AdminCampaignData from './AdminCampaignData';
-import AdminSettings from './AdminSettings';
 import AdminDashboardCharts from '../components/AdminDashboardCharts';
 import CarteRDCSVG from '../components/CarteRDCSVG';
 import PNUDFooter from '../components/PNUDFooter';
 import NotificationPanel from '../components/NotificationPanel';
 import { environment } from '../config/environment';
 import enhancedApiService from '../services/enhancedApiService';
+
+// Lazy loading pour toutes les pages admin
+const AdminDashboard = lazy(() => import('./AdminDashboard'));
+const AdminUserManagement = lazy(() => import('./AdminUserManagement'));
+const AdminCampaignManagement = lazy(() => import('./AdminCampaignManagement'));
+const AdminPendingApprovals = lazy(() => import('./AdminPendingApprovals'));
+const AdminPMRequests = lazy(() => import('./AdminPMRequests'));
+const AdminCreateProjectManager = lazy(() => import('./AdminCreateProjectManager'));
+const AdminCampaignData = lazy(() => import('./AdminCampaignData'));
+const AdminSettings = lazy(() => import('./AdminSettings'));
+
+// Composant de chargement pour les pages lazy
+const PageLoadingFallback = () => (
+  <div className="flex items-center justify-center p-8">
+    <div className="text-center">
+      <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <p className="mt-2 text-gray-600">Chargement...</p>
+    </div>
+  </div>
+);
 
 export function DashboardAdmin() {
   const [users, setUsers] = useState<any[]>([]);
@@ -755,32 +767,54 @@ export default function AdminHome() {
       {/* Contenu principal */}
       <main className="p-4 sm:p-8">
         {view === 'dashboard' && <DashboardAdmin />}
-        {view === 'users' && <AdminUserManagement />}
-        {view === 'campaigns' && <AdminCampaignManagement />}
+        {view === 'users' && (
+          <Suspense fallback={<PageLoadingFallback />}>
+            <AdminUserManagement />
+          </Suspense>
+        )}
+        {view === 'campaigns' && (
+          <Suspense fallback={<PageLoadingFallback />}>
+            <AdminCampaignManagement />
+          </Suspense>
+        )}
         {view === 'pending-approvals' && (
-          <AdminPendingApprovals 
-            onNavigateToRequests={() => {
-              // Naviguer vers la vraie page des demandes PM
-              setView('pm-requests');
-            }}
-            onNavigateToCreatePM={() => {
-              // Naviguer vers la page de création de PM en utilisant le système de navigation interne
-              setView('create-pm');
-            }}
-          />
+          <Suspense fallback={<PageLoadingFallback />}>
+            <AdminPendingApprovals 
+              onNavigateToRequests={() => {
+                // Naviguer vers la vraie page des demandes PM
+                setView('pm-requests');
+              }}
+              onNavigateToCreatePM={() => {
+                // Naviguer vers la page de création de PM en utilisant le système de navigation interne
+                setView('create-pm');
+              }}
+            />
+          </Suspense>
         )}
         {view === 'pm-requests' && (
-          <AdminPMRequests 
-            onBack={() => setView('pending-approvals')}
-          />
+          <Suspense fallback={<PageLoadingFallback />}>
+            <AdminPMRequests 
+              onBack={() => setView('pending-approvals')}
+            />
+          </Suspense>
         )}
         {view === 'create-pm' && (
-          <AdminCreateProjectManager 
-            onBack={() => setView('pending-approvals')}
-          />
+          <Suspense fallback={<PageLoadingFallback />}>
+            <AdminCreateProjectManager 
+              onBack={() => setView('pending-approvals')}
+            />
+          </Suspense>
         )}
-        {view === 'campaign-data' && <AdminCampaignData />}
-        {view === 'settings' && <AdminSettings />}
+        {view === 'campaign-data' && (
+          <Suspense fallback={<PageLoadingFallback />}>
+            <AdminCampaignData />
+          </Suspense>
+        )}
+        {view === 'settings' && (
+          <Suspense fallback={<PageLoadingFallback />}>
+            <AdminSettings />
+          </Suspense>
+        )}
       </main>
       
       <PNUDFooter />

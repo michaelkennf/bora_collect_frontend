@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import ConfirmModal from '../components/ConfirmModal';
@@ -203,13 +203,30 @@ export default function AdminUsers() {
     }
   };
 
-  // Recherche et pagination avec debounce
-  const filtered = users.filter(u =>
-    u.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-    u.email.toLowerCase().includes(debouncedSearch.toLowerCase())
-  );
-  const totalPages = Math.ceil(filtered.length / USERS_PER_PAGE);
-  const paginated = filtered.slice((page - 1) * USERS_PER_PAGE, page * USERS_PER_PAGE);
+  // Handlers optimisés avec useCallback pour éviter les re-renders
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearch(e.target.value);
+  }, []);
+
+  const handleFilterStatusChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    setFilterStatus(e.target.value);
+  }, []);
+
+  // Recherche et pagination avec debounce - Utiliser useMemo pour éviter les re-renders inutiles
+  const filtered = useMemo(() => {
+    return users.filter(u => {
+      const matchesSearch = !debouncedSearch || 
+        u.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        u.email.toLowerCase().includes(debouncedSearch.toLowerCase());
+      const matchesStatus = !filterStatus || u.status === filterStatus;
+      return matchesSearch && matchesStatus;
+    });
+  }, [users, debouncedSearch, filterStatus]);
+  
+  const totalPages = useMemo(() => Math.ceil(filtered.length / USERS_PER_PAGE), [filtered.length]);
+  const paginated = useMemo(() => {
+    return filtered.slice((page - 1) * USERS_PER_PAGE, page * USERS_PER_PAGE);
+  }, [filtered, page]);
 
   // Réactiver un utilisateur
   const handleReactivate = async (id: string) => {
@@ -248,12 +265,12 @@ export default function AdminUsers() {
             type="text"
             placeholder="Rechercher un utilisateur..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={handleSearchChange}
             className="px-3 py-2 border border-gray-300 rounded-lg text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <select
             value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
+            onChange={handleFilterStatusChange}
             className="px-3 py-2 border border-gray-300 rounded-lg text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">Tous les statuts</option>
@@ -263,7 +280,7 @@ export default function AdminUsers() {
           </select>
         </div>
         <div className="text-sm text-gray-600">
-          {users.length} Project Manager(s) trouvé(s)
+          {filtered.length} Project Manager(s) trouvé(s)
         </div>
       </div>
 
@@ -280,7 +297,7 @@ export default function AdminUsers() {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {users.map((user) => (
+            {paginated.map((user) => (
               <tr key={user.id} className="hover:bg-gray-50">
                 <td className="px-3 sm:px-4 py-4 whitespace-nowrap">
                   <div className="flex items-center">

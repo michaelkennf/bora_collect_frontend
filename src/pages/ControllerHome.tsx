@@ -1,16 +1,28 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense, lazy } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import logo2 from '../assets/images/logo2.jpg';
 import ControllerDashboardCharts from '../components/ControllerDashboardCharts';
 import ControllerDailyObjectives from '../components/ControllerDailyObjectives';
 import ObjectiveAlerts from '../components/ObjectiveAlerts';
 import ObjectiveProjection from '../components/ObjectiveProjection';
-import ControllerCampaignForms from './ControllerCampaignForms';
-import RecordsList from './RecordsList';
-import ControllerAvailableSurveys from './ControllerAvailableSurveys';
-import Settings from './Settings';
 import PNUDFooter from '../components/PNUDFooter';
 import { environment } from '../config/environment';
+
+// Lazy loading pour toutes les pages Controller
+const ControllerCampaignForms = lazy(() => import('./ControllerCampaignForms'));
+const RecordsList = lazy(() => import('./RecordsList'));
+const ControllerAvailableSurveys = lazy(() => import('./ControllerAvailableSurveys'));
+const Settings = lazy(() => import('./Settings'));
+
+// Composant de chargement pour les pages lazy
+const PageLoadingFallback = () => (
+  <div className="flex items-center justify-center p-8">
+    <div className="text-center">
+      <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <p className="mt-2 text-gray-600">Chargement...</p>
+    </div>
+  </div>
+);
 
 // Styles CSS pour les animations 3D
 const flipCardStyles = `
@@ -1012,13 +1024,25 @@ export default function ControllerHome() {
       <main className="p-4 sm:p-8">
         {view === 'dashboard' && <DashboardController setView={setView} />}
         {view === 'formulaire' && (
-          <ControllerCampaignForms />
+          <Suspense fallback={<PageLoadingFallback />}>
+            <ControllerCampaignForms />
+          </Suspense>
         )}
         {view === 'enquetes' && (
-          <RecordsList />
+          <Suspense fallback={<PageLoadingFallback />}>
+            <RecordsList />
+          </Suspense>
         )}
-        {view === 'surveys' && <ControllerAvailableSurveys />}
-        {view === 'parametres' && <Settings />}
+        {view === 'surveys' && (
+          <Suspense fallback={<PageLoadingFallback />}>
+            <ControllerAvailableSurveys />
+          </Suspense>
+        )}
+        {view === 'parametres' && (
+          <Suspense fallback={<PageLoadingFallback />}>
+            <Settings />
+          </Suspense>
+        )}
       </main>
       
       <PNUDFooter />

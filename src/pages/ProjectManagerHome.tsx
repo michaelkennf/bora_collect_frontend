@@ -1,20 +1,32 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { useNavigate } from 'react-router-dom';
 import logo2 from '../assets/images/logo2.jpg';
-import DashboardPM from './pm/DashboardPM';
-import PMAnalystManagement from './pm/PMAnalystManagement';
-import PMSurveyManagement from './pm/PMSurveyManagement';
-import PMApprovalRequests from './pm/PMApprovalRequests';
-import PMFormBuilder from './pm/PMFormBuilder';
-import PMApplicationReview from './pm/PMApplicationReview';
-import PMDemands from './pm/PMDemands';
-import PMEnumeratorRequests from './PMEnumeratorRequests';
-import PMSettings from './pm/PMSettings';
-import PMValidatedForms from './pm/PMValidatedForms';
 import FormBuilder from '../components/FormBuilder';
 import PNUDFooter from '../components/PNUDFooter';
 import NotificationPanel from '../components/NotificationPanel';
 import { environment } from '../config/environment';
+
+// Lazy loading pour toutes les pages PM
+const DashboardPM = lazy(() => import('./pm/DashboardPM'));
+const PMAnalystManagement = lazy(() => import('./pm/PMAnalystManagement'));
+const PMSurveyManagement = lazy(() => import('./pm/PMSurveyManagement'));
+const PMApprovalRequests = lazy(() => import('./pm/PMApprovalRequests'));
+const PMFormBuilder = lazy(() => import('./pm/PMFormBuilder'));
+const PMApplicationReview = lazy(() => import('./pm/PMApplicationReview'));
+const PMDemands = lazy(() => import('./pm/PMDemands'));
+const PMEnumeratorRequests = lazy(() => import('./PMEnumeratorRequests'));
+const PMSettings = lazy(() => import('./pm/PMSettings'));
+const PMValidatedForms = lazy(() => import('./pm/PMValidatedForms'));
+
+// Composant de chargement pour les pages lazy
+const PageLoadingFallback = () => (
+  <div className="flex items-center justify-center p-8">
+    <div className="text-center">
+      <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <p className="mt-2 text-gray-600">Chargement...</p>
+    </div>
+  </div>
+);
 
 const ProjectManagerHome = () => {
   const [user, setUser] = useState<any>(null);
@@ -518,20 +530,54 @@ const ProjectManagerHome = () => {
       
       {/* Contenu principal */}
       <main className="p-4 sm:p-8">
-        {view === 'dashboard' && <DashboardPM />}
-        {view === 'users' && <PMAnalystManagement />}
-        {view === 'campaigns' && <PMSurveyManagement />}
-        {view === 'demands' && (
-          <PMDemands 
-            onNavigateToApprovalRequests={() => setView('pending-approvals')}
-            onNavigateToApplicationReview={() => setView('create-user')}
-          />
+        {view === 'dashboard' && (
+          <Suspense fallback={<PageLoadingFallback />}>
+            <DashboardPM />
+          </Suspense>
         )}
-        {view === 'pending-approvals' && <PMApprovalRequests onBack={() => setView('demands')} />}
-        {view === 'create-user' && <PMApplicationReview onBack={() => setView('demands')} />}
-        {view === 'forms' && <PMFormBuilder />}
-        {view === 'validated-forms' && <PMValidatedForms />}
-        {view === 'settings' && <PMSettings />}
+        {view === 'users' && (
+          <Suspense fallback={<PageLoadingFallback />}>
+            <PMAnalystManagement />
+          </Suspense>
+        )}
+        {view === 'campaigns' && (
+          <Suspense fallback={<PageLoadingFallback />}>
+            <PMSurveyManagement />
+          </Suspense>
+        )}
+        {view === 'demands' && (
+          <Suspense fallback={<PageLoadingFallback />}>
+            <PMDemands 
+              onNavigateToApprovalRequests={() => setView('pending-approvals')}
+              onNavigateToApplicationReview={() => setView('create-user')}
+            />
+          </Suspense>
+        )}
+        {view === 'pending-approvals' && (
+          <Suspense fallback={<PageLoadingFallback />}>
+            <PMApprovalRequests onBack={() => setView('demands')} />
+          </Suspense>
+        )}
+        {view === 'create-user' && (
+          <Suspense fallback={<PageLoadingFallback />}>
+            <PMApplicationReview onBack={() => setView('demands')} />
+          </Suspense>
+        )}
+        {view === 'forms' && (
+          <Suspense fallback={<PageLoadingFallback />}>
+            <PMFormBuilder />
+          </Suspense>
+        )}
+        {view === 'validated-forms' && (
+          <Suspense fallback={<PageLoadingFallback />}>
+            <PMValidatedForms />
+          </Suspense>
+        )}
+        {view === 'settings' && (
+          <Suspense fallback={<PageLoadingFallback />}>
+            <PMSettings />
+          </Suspense>
+        )}
       </main>
       
       <PNUDFooter />
