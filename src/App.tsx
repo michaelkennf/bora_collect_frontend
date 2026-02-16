@@ -10,7 +10,7 @@ import Login from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
 import PublicFormPage from './pages/PublicFormPage';
 
-// Lazy loading pour réduire le bundle initial
+// Lazy loading pour réduire le bundle initial - TOUTES les pages sont lazy
 const CreateAccount = lazy(() => import('./pages/CreateAccount'));
 const ProjectManagerRegistration = lazy(() => import('./pages/ProjectManagerRegistration'));
 const AccountCreatedSuccess = lazy(() => import('./pages/AccountCreatedSuccess'));
@@ -31,6 +31,26 @@ const AdminSurveyPublication = lazy(() => import('./pages/AdminSurveyPublication
 const AdminCandidatures = lazy(() => import('./pages/AdminCandidatures'));
 const ControllerAvailableSurveys = lazy(() => import('./pages/ControllerAvailableSurveys'));
 const Settings = lazy(() => import('./pages/Settings'));
+const AdminUserManagement = lazy(() => import('./pages/AdminUserManagement'));
+const AdminCampaignManagement = lazy(() => import('./pages/AdminCampaignManagement'));
+const AdminCampaignData = lazy(() => import('./pages/AdminCampaignData'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const AdminCreateProjectManager = lazy(() => import('./pages/AdminCreateProjectManager'));
+const AdminProjectManagerManagement = lazy(() => import('./pages/AdminProjectManagerManagement'));
+const AdminPMRequests = lazy(() => import('./pages/AdminPMRequests'));
+const AdminSettings = lazy(() => import('./pages/AdminSettings'));
+const AdminValidatedForms = lazy(() => import('./pages/admin/AdminValidatedForms'));
+const ControllerCampaignForms = lazy(() => import('./pages/ControllerCampaignForms'));
+const DashboardPM = lazy(() => import('./pages/pm/DashboardPM'));
+const PMAnalystManagement = lazy(() => import('./pages/pm/PMAnalystManagement'));
+const PMApplicationReview = lazy(() => import('./pages/pm/PMApplicationReview'));
+const PMApprovalRequests = lazy(() => import('./pages/pm/PMApprovalRequests'));
+const PMDemands = lazy(() => import('./pages/pm/PMDemands'));
+const PMFormBuilder = lazy(() => import('./pages/pm/PMFormBuilder'));
+const PMSettings = lazy(() => import('./pages/pm/PMSettings'));
+const PMStats = lazy(() => import('./pages/pm/PMStats'));
+const PMSurveyManagement = lazy(() => import('./pages/pm/PMSurveyManagement'));
+const PMValidatedForms = lazy(() => import('./pages/pm/PMValidatedForms'));
 
 // Composant de chargement
 const LoadingFallback = () => (
@@ -156,73 +176,24 @@ export default function App() {
     // Écouter les événements de stockage (pour les autres onglets)
     window.addEventListener('storage', handleStorageChange);
     
-    // Vérifier périodiquement si le compte actuel est toujours valide
-    // IMPORTANT: Ne vérifier que si currentUserId existe, sinon on peut créer des faux positifs
-    const checkSession = setInterval(() => {
-      const currentUser = localStorage.getItem('user');
-      const currentUserId = localStorage.getItem('currentUserId');
-      const token = localStorage.getItem('token');
-      
-      // Si pas de token, pas besoin de vérifier
-      if (!token) {
-        return;
-      }
-      
-      // Si currentUserId n'existe pas encore, l'initialiser depuis user
-      if (currentUser && !currentUserId) {
-        try {
-          const userData = JSON.parse(currentUser);
-          if (userData.id) {
-            localStorage.setItem('currentUserId', userData.id);
-            console.log('✅ currentUserId initialisé depuis user:', userData.id);
-          }
-        } catch (error) {
-          console.error('Erreur lors de l\'initialisation de currentUserId:', error);
+    // Vérification de session supprimée - la vérification se fait uniquement via les événements storage
+    // Initialiser currentUserId si nécessaire au montage
+    const currentUser = localStorage.getItem('user');
+    const currentUserId = localStorage.getItem('currentUserId');
+    if (currentUser && !currentUserId) {
+      try {
+        const userData = JSON.parse(currentUser);
+        if (userData.id) {
+          localStorage.setItem('currentUserId', userData.id);
+          console.log('✅ currentUserId initialisé depuis user:', userData.id);
         }
-        return;
+      } catch (error) {
+        console.error('Erreur lors de l\'initialisation de currentUserId:', error);
       }
-      
-      // Vérifier la cohérence seulement si les deux existent
-      // IMPORTANT: Ne pas déconnecter trop rapidement - laisser le temps à la connexion de se stabiliser
-      if (currentUser && currentUserId && token) {
-        try {
-          const userData = JSON.parse(currentUser);
-          // Si l'ID utilisateur ne correspond pas ET que currentUserId a été défini (pas juste initialisé)
-          // Vérifier aussi qu'il n'y a pas de forceLogout en cours (pour éviter les faux positifs)
-          const forceLogout = localStorage.getItem('forceLogout');
-          const isForceLogoutInProgress = forceLogout ? (() => {
-            try {
-              const data = JSON.parse(forceLogout);
-              return data.userId === userData.id;
-            } catch {
-              return false;
-            }
-          })() : false;
-          
-          // Ne déconnecter que si :
-          // 1. Les IDs ne correspondent pas
-          // 2. Ce n'est PAS un forceLogout en cours (car forceLogout gère déjà la déconnexion)
-          // 3. Le token existe (pour éviter les déconnexions sur des sessions expirées)
-          if (userData.id && userData.id !== currentUserId && !isForceLogoutInProgress) {
-            console.log('⚠️ Incohérence détectée entre user et currentUserId. Déconnexion...');
-            console.log('   user.id:', userData.id);
-            console.log('   currentUserId:', currentUserId);
-            console.log('   forceLogout en cours:', isForceLogoutInProgress);
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            localStorage.removeItem('currentUserId');
-            localStorage.removeItem('sessionId');
-            window.location.href = '/login';
-          }
-        } catch (error) {
-          console.error('Erreur lors de la vérification de session:', error);
-        }
-      }
-    }, 10000); // Vérifier toutes les 10 secondes (moins agressif)
+    }
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
-      clearInterval(checkSession);
     };
   }, []);
 

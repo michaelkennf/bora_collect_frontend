@@ -396,10 +396,7 @@ export default function AdminHome() {
     fetchUsers();
     fetchPendingCounts();
 
-    // Rafraîchir les compteurs toutes les 30 secondes
-    const interval = setInterval(() => {
-      fetchPendingCounts();
-    }, 30000);
+    // Refresh automatique supprimé - les compteurs seront mis à jour uniquement via les événements
 
     // Écouter les événements de nouvelle demande
     const handleNewApplication = () => {
@@ -428,7 +425,6 @@ export default function AdminHome() {
     window.addEventListener('userProfileUpdated', handleProfileUpdate as EventListener);
     
     return () => {
-      clearInterval(interval);
       window.removeEventListener('newApplicationSubmitted', handleNewApplication);
       window.removeEventListener('applicationStatusChanged', handleNewApplication);
       window.removeEventListener('newRecordSubmitted', handleNewRecord);

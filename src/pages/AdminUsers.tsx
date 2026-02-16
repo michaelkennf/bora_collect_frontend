@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import ConfirmModal from '../components/ConfirmModal';
 import UserCreationForm from '../components/UserCreationForm';
 import { environment } from '../config/environment';
+import { useDebounce } from '../hooks/useDebounce';
 
 // Rôles disponibles pour l'admin (seulement Project Managers)
 const roles = [
@@ -43,6 +44,7 @@ export default function AdminUsers() {
   const [editRole, setEditRole] = useState('CONTROLLER');
   const [roleSaving, setRoleSaving] = useState(false);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [filterStatus, setFilterStatus] = useState('');
   const [page, setPage] = useState(1);
   const [showReset, setShowReset] = useState<string | null>(null);
@@ -201,10 +203,10 @@ export default function AdminUsers() {
     }
   };
 
-  // Recherche et pagination
+  // Recherche et pagination avec debounce
   const filtered = users.filter(u =>
-    u.name.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase())
+    u.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+    u.email.toLowerCase().includes(debouncedSearch.toLowerCase())
   );
   const totalPages = Math.ceil(filtered.length / USERS_PER_PAGE);
   const paginated = filtered.slice((page - 1) * USERS_PER_PAGE, page * USERS_PER_PAGE);

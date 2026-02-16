@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useDebounce } from '../utils/debounce';
 import { useNavigate } from 'react-router-dom';
+import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import logo2 from '../assets/images/logo2.jpg';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import Settings from './Settings';
@@ -341,7 +342,7 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
     // Ne recharger que si on a déjà chargé des données une fois
     if (hasTriedReloadRecords || records.length > 0 || analystStats) {
       setCurrentPage(1);
-      fetchRecords(1);
+      fetchRecords(1, false); // Ne pas append, remplacer les données
     }
   }, [debouncedSearch, communeFilter, provinceFilter]);
 
@@ -501,7 +502,8 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
   // Pas besoin d'un endpoint séparé car l'analyste n'a pas accès à /surveys/admin
 
   // Récupérer les enquêtes - AVEC PAGINATION ET FILTRES (optimisé pour 15 000+ enregistrements)
-  const fetchRecords = async (page: number = 1) => {
+  // Support du chargement incrémental pour infinite scroll
+  const fetchRecords = useCallback(async (page: number = 1, append: boolean = false) => {
     console.log('🔍 fetchRecords: Début', { page, pageSize, search: debouncedSearch, communeFilter, provinceFilter });
     setRecordsLoading(true);
     setRecordsError('');
@@ -554,7 +556,13 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
       }));
       
       console.log('✅ Enregistrements chargés (optimisé - pas de requêtes N+1)');
-      setRecords(enrichedRecords);
+      
+      // Si append est true, ajouter les nouveaux enregistrements aux existants
+      if (append) {
+        setRecords(prev => [...prev, ...enrichedRecords]);
+      } else {
+        setRecords(enrichedRecords);
+      }
     } catch (err: any) {
       console.error('❌ Erreur lors de la récupération des enquêtes:', err);
       setRecordsError(err.message || 'Erreur inconnue');
@@ -563,7 +571,20 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
       setRecordsLoading(false);
       console.log('🔍 fetchRecords: Terminé');
     }
-  };
+  }, [debouncedSearch, communeFilter, provinceFilter, pageSize]);
+
+  // Hook pour le chargement au scroll (infinite scroll) - après la déclaration de fetchRecords
+  const hasMore = currentPage < totalPages;
+  const { observerTarget } = useInfiniteScroll({
+    hasMore,
+    loading: recordsLoading,
+    onLoadMore: () => {
+      if (hasMore && !recordsLoading) {
+        fetchRecords(currentPage + 1, true); // Append les nouvelles données
+      }
+    },
+    threshold: 200
+  });
 
   // Les filtres sont maintenant appliqués côté serveur, donc on utilise directement records
   // On garde seulement le filtre par enquêteur sélectionné (côté client car c'est une sélection UI)
@@ -2184,6 +2205,18 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
               </div>
             )}
 
+            {/* Élément d'observation pour le chargement au scroll (infinite scroll) */}
+            {view === 'enquetes' && !selectedEnumeratorId && hasMore && (
+              <div ref={observerTarget} className="h-10 flex items-center justify-center">
+                {recordsLoading && (
+                  <div className="text-center py-4">
+                    <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                    <p className="mt-2 text-sm text-gray-600">Chargement...</p>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Pagination pour les records - affichée même s'il n'y a qu'une seule page */}
             {view === 'enquetes' && !selectedEnumeratorId && records.length > 0 && (
               <div className="mt-6">
@@ -2194,7 +2227,7 @@ const [recordActionMessage, setRecordActionMessage] = useState<string | null>(nu
                   pageSize={pageSize}
                   onPageChange={(page) => {
                     setCurrentPage(page);
-                    fetchRecords(page);
+                    fetchRecords(page, false); // Ne pas append lors du changement de page manuel
                   }}
                   loading={false}
                 />

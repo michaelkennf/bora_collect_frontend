@@ -135,13 +135,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ userRole, onNotif
     fetchNotifications();
     fetchUnreadCount();
 
-    // Rafraîchir toutes les 30 secondes
-    const interval = setInterval(() => {
-      fetchNotifications();
-      fetchUnreadCount();
-    }, 30000);
-
-    return () => clearInterval(interval);
+    // Refresh automatique supprimé - les notifications seront mises à jour uniquement via les événements
   }, []);
 
   useEffect(() => {

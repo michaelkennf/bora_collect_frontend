@@ -385,7 +385,30 @@ export default function PMDashboardCharts({
         });
 
         if (recordsResponse.ok) {
-          const records = await recordsResponse.json();
+          // Vérifier si la réponse a du contenu avant de parser le JSON
+          const responseText = await recordsResponse.text();
+          let records;
+          
+          if (responseText && responseText.trim()) {
+            try {
+              records = JSON.parse(responseText);
+            } catch (parseError) {
+              console.error('❌ Erreur lors du parsing JSON:', parseError);
+              console.error('❌ Contenu de la réponse:', responseText);
+              setChartData({
+                campaignsByPeriod: periodInfo.data,
+                title: periodInfo.title,
+                xAxisLabel: periodInfo.xAxisLabel,
+                total: 0,
+                noData: true,
+                message: 'Erreur lors du chargement des données'
+              });
+              return;
+            }
+          } else {
+            // Réponse vide
+            records = [];
+          }
           
           console.log('📊 PMDashboardCharts - Records reçus:', records);
           console.log('📊 PMDashboardCharts - Période sélectionnée:', selectedPeriod);

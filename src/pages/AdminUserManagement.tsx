@@ -4,6 +4,7 @@ import { useNotification } from '../hooks/useNotification';
 import NotificationContainer from '../components/NotificationContainer';
 import Pagination from '../components/Pagination';
 import enhancedApiService from '../services/enhancedApiService';
+import { useDebounce } from '../hooks/useDebounce';
 
 interface User {
   id: string;
@@ -46,6 +47,7 @@ const AdminUserManagement: React.FC = () => {
     role: ''
   });
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
   // États pour la pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(50);
@@ -91,8 +93,8 @@ const AdminUserManagement: React.FC = () => {
         limit: pageSize.toString()
       });
       
-      if (searchTerm.trim()) {
-        params.append('search', searchTerm.trim());
+      if (debouncedSearchTerm.trim()) {
+        params.append('search', debouncedSearchTerm.trim());
       }
       if (filters.gender) {
         params.append('gender', filters.gender);
@@ -137,7 +139,7 @@ const AdminUserManagement: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [pageSize, searchTerm, filters]);
+  }, [pageSize, debouncedSearchTerm, filters]);
 
   const fetchCampaigns = useCallback(async () => {
     setLoadingCampaigns(true);
@@ -167,11 +169,11 @@ const AdminUserManagement: React.FC = () => {
     fetchUsers(1); // Charger la première page au montage
   }, [fetchCampaigns]);
 
-  // Recharger les données quand les filtres ou la recherche changent
+  // Recharger les données quand les filtres ou la recherche changent (avec debounce)
   useEffect(() => {
     setCurrentPage(1);
     fetchUsers(1);
-  }, [searchTerm, filters.gender, filters.province, filters.campaign, filters.role, fetchUsers]);
+  }, [debouncedSearchTerm, filters.gender, filters.province, filters.campaign, filters.role, fetchUsers]);
 
   const handleFilterChange = (key: string, value: string) => {
     setFilters(prev => ({

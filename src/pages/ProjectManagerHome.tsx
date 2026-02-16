@@ -147,10 +147,7 @@ const ProjectManagerHome = () => {
     loadUserData();
     fetchPendingCounts();
 
-    // Rafraîchir les compteurs toutes les 30 secondes
-    const interval = setInterval(() => {
-      fetchPendingCounts();
-    }, 30000);
+    // Refresh automatique supprimé - les compteurs seront mis à jour uniquement via les événements
 
     // Écouter les événements de nouvelle demande
     const handleNewApplication = () => {
@@ -168,7 +165,6 @@ const ProjectManagerHome = () => {
     window.addEventListener('newRecordSubmitted', handleNewRecord);
 
     return () => {
-      clearInterval(interval);
       window.removeEventListener('newApplicationSubmitted', handleNewApplication);
       window.removeEventListener('applicationStatusChanged', handleNewApplication);
       window.removeEventListener('newRecordSubmitted', handleNewRecord);

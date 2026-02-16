@@ -284,24 +284,29 @@ const FormBuilder: React.FC = () => {
     });
   }, [currentForm]);
 
-  const updateField = useCallback((fieldId: string, updates: Partial<FormField>) => {
-    // Mettre à jour immédiatement l'état local pour éviter la perte de données
-    setCurrentForm(prevForm => {
-      if (!prevForm) return null;
-      
-      return {
-        ...prevForm,
-        fields: prevForm.fields.map((field: any) =>
-        field.id === fieldId ? { ...field, ...updates } : field
-      ),
-      };
-    });
-    
-    // Stocker aussi dans la référence pour la synchronisation finale
+  const updateField = useCallback((fieldId: string, updates: Partial<FormField>, immediate: boolean = false) => {
+    // Stocker dans la référence pour la synchronisation finale
+    const currentStored = fieldDataRef.current.get(fieldId) || {};
     fieldDataRef.current.set(fieldId, {
-      ...fieldDataRef.current.get(fieldId),
+      ...currentStored,
       ...updates
     });
+    
+    // Mettre à jour l'état local seulement si c'est une mise à jour immédiate (blur)
+    // Pendant le debounce, on ne met PAS à jour currentForm pour éviter les re-renders
+    if (immediate) {
+      setCurrentForm(prevForm => {
+        if (!prevForm) return null;
+        
+        return {
+          ...prevForm,
+          fields: prevForm.fields.map((field: any) =>
+            field.id === fieldId ? { ...field, ...updates } : field
+          ),
+        };
+      });
+    }
+    // Sinon, on ne fait rien - on attend le blur pour mettre à jour currentForm
   }, []);
 
   const removeField = useCallback((fieldId: string) => {
@@ -576,47 +581,297 @@ const FormBuilder: React.FC = () => {
   const FormFieldEditor = React.memo(({ field, index, onUpdate, onRemove }: {
     field: FormField;
     index: number;
-    onUpdate: (fieldId: string, updates: Partial<FormField>) => void;
+    onUpdate: (fieldId: string, updates: Partial<FormField>, immediate?: boolean) => void;
     onRemove: (fieldId: string) => void;
   }) => {
-    // Utiliser des états locaux pour éviter les re-renders
-    const [localLabel, setLocalLabel] = useState(field.label);
-    const [localPlaceholder, setLocalPlaceholder] = useState(field.placeholder || '');
-    const [localOptions, setLocalOptions] = useState(field.options?.join('\n') || '');
-    const [localRequired, setLocalRequired] = useState(field.required);
-
-    // Mettre à jour les états locaux quand le field change
+    // Utiliser une ref pour stocker les valeurs locales et éviter les réinitialisations
+    // Cette ref est la source de vérité absolue pour les valeurs
+    const localValuesRef = useRef({
+      label: field.label,
+      placeholder: field.placeholder || '',
+      options: field.options?.join('\n') || '',
+      required: field.required,
+      fieldId: field.id,
+      initialized: false
+    });
+    
+    // Initialiser la ref si c'est un nouveau champ
+    if (localValuesRef.current.fieldId !== field.id) {
+      localValuesRef.current = {
+        label: field.label,
+        placeholder: field.placeholder || '',
+        options: field.options?.join('\n') || '',
+        required: field.required,
+        fieldId: field.id,
+        initialized: true
+      };
+    }
+    
+    // Utiliser des états locaux - initialiser UNE SEULE FOIS avec les valeurs de la ref
+    const [localLabel, setLocalLabel] = useState(() => localValuesRef.current.label);
+    const [localPlaceholder, setLocalPlaceholder] = useState(() => localValuesRef.current.placeholder);
+    const [localOptions, setLocalOptions] = useState(() => localValuesRef.current.options);
+    const [localRequired, setLocalRequired] = useState(() => localValuesRef.current.required);
+    
+    // Synchroniser la ref avec les états locaux à chaque changement
+    // Cela garantit que même si le composant est démonté/remonté, les valeurs sont préservées
     useEffect(() => {
-      setLocalLabel(field.label);
-      setLocalPlaceholder(field.placeholder || '');
-      setLocalOptions(field.options?.join('\n') || '');
-      setLocalRequired(field.required);
-    }, [field.label, field.placeholder, field.options, field.required]); // Synchroniser avec toutes les propriétés
+      localValuesRef.current.label = localLabel;
+    }, [localLabel]);
+    
+    useEffect(() => {
+      localValuesRef.current.placeholder = localPlaceholder;
+    }, [localPlaceholder]);
+    
+    useEffect(() => {
+      localValuesRef.current.options = localOptions;
+    }, [localOptions]);
+    
+    useEffect(() => {
+      localValuesRef.current.required = localRequired;
+    }, [localRequired]);
+    const labelInputRef = useRef<HTMLInputElement>(null);
+    const placeholderInputRef = useRef<HTMLInputElement>(null);
+    const optionsTextareaRef = useRef<HTMLTextAreaElement>(null);
+    const updateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const pendingUpdateRef = useRef<Partial<FormField> | null>(null);
+    
+    // Refs pour suivre si l'utilisateur est en train d'éditer
+    const isEditingLabelRef = useRef(false);
+    const isEditingPlaceholderRef = useRef(false);
+    const isEditingOptionsRef = useRef(false);
+    const cursorPositionRef = useRef<{ element: 'label' | 'placeholder' | 'options', position: number } | null>(null);
 
-    // Fonctions locales optimisées - pas de debounce pour une meilleure réactivité
+    // Initialiser les états locaux uniquement au montage ou si le field.id change
+    // Ne JAMAIS réinitialiser si l'utilisateur est en train d'éditer
+    // Utiliser une ref pour suivre le dernier field.id qu'on a traité
+    const lastFieldIdRef = useRef<string | null>(null);
+    
+    // Ref pour suivre si on a déjà initialisé ce champ
+    const initializedRef = useRef(false);
+    
+    useEffect(() => {
+      // Seulement initialiser une fois au montage ou quand field.id change (nouveau champ)
+      const isNewField = lastFieldIdRef.current !== field.id;
+      
+      if (isNewField) {
+        // C'est un nouveau champ, on initialise les états locaux UNE SEULE FOIS
+        lastFieldIdRef.current = field.id;
+        initializedRef.current = true;
+        const fieldPlaceholder = field.placeholder || '';
+        const fieldOptions = field.options?.join('\n') || '';
+        
+        // Mettre à jour la ref des valeurs locales
+        localValuesRef.current = {
+          label: field.label,
+          placeholder: fieldPlaceholder,
+          options: fieldOptions,
+          required: field.required,
+          fieldId: field.id,
+          initialized: true
+        };
+        
+        // Initialiser les valeurs locales depuis field UNIQUEMENT si elles n'ont pas été modifiées
+        // Si l'utilisateur a déjà modifié les valeurs, on ne les réinitialise pas
+        if (!isEditingLabelRef.current && !isEditingPlaceholderRef.current && !isEditingOptionsRef.current) {
+          setLocalLabel(field.label);
+          setLocalPlaceholder(fieldPlaceholder);
+          setLocalOptions(fieldOptions);
+          setLocalRequired(field.required);
+        }
+      } else {
+        // Ce n'est PAS un nouveau champ (même field.id)
+        // On ne fait ABSOLUMENT RIEN - les valeurs locales restent inchangées
+        // Même si field.label change dans les props, on ne synchronise JAMAIS
+        // Les valeurs dans localValuesRef sont la source de vérité absolue
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [field.id]); // Seulement quand le field.id change (nouveau champ)
+    
+    // Protection absolue : ne JAMAIS réinitialiser les valeurs locales
+    // même si le composant re-render avec de nouvelles props ou est démonté/remonté
+    // Les valeurs dans localValuesRef sont la source de vérité absolue
+    // Cette protection garantit que les valeurs tapées par l'utilisateur restent jusqu'à l'enregistrement
+
+    // Fonction pour mettre à jour le parent avec debounce
+    const debouncedUpdate = useCallback((updates: Partial<FormField>) => {
+      // Annuler le timeout précédent
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+      
+      // Stocker la mise à jour en attente
+      pendingUpdateRef.current = { ...pendingUpdateRef.current, ...updates };
+      
+      // Programmer la mise à jour après un délai (sans immediate pour éviter les re-renders)
+      updateTimeoutRef.current = setTimeout(() => {
+        if (pendingUpdateRef.current) {
+          onUpdate(field.id, pendingUpdateRef.current, false);
+          pendingUpdateRef.current = null;
+        }
+      }, 300); // 300ms de délai
+    }, [field.id, onUpdate]);
+
+    // Fonction pour mettre à jour immédiatement (au blur)
+    const immediateUpdate = useCallback((updates: Partial<FormField>) => {
+      // Annuler le debounce en attente
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+        updateTimeoutRef.current = null;
+      }
+      
+      // Appliquer toutes les mises à jour en attente + la nouvelle
+      const allUpdates = { ...pendingUpdateRef.current, ...updates };
+      pendingUpdateRef.current = null;
+      
+      // Mise à jour immédiate au blur (immediate = true)
+      onUpdate(field.id, allUpdates, true);
+    }, [field.id, onUpdate]);
+
+    // Préserver le focus et la position du curseur après un re-render
+    useEffect(() => {
+      if (cursorPositionRef.current) {
+        const { element, position } = cursorPositionRef.current;
+        let inputElement: HTMLInputElement | HTMLTextAreaElement | null = null;
+        
+        if (element === 'label' && labelInputRef.current) {
+          inputElement = labelInputRef.current;
+        } else if (element === 'placeholder' && placeholderInputRef.current) {
+          inputElement = placeholderInputRef.current;
+        } else if (element === 'options' && optionsTextareaRef.current) {
+          inputElement = optionsTextareaRef.current;
+        }
+        
+        if (inputElement) {
+          // Restaurer le focus et la position du curseur
+          inputElement.focus();
+          if (inputElement.setSelectionRange) {
+            inputElement.setSelectionRange(position, position);
+          }
+        }
+        
+        // Réinitialiser après avoir restauré
+        cursorPositionRef.current = null;
+      }
+    });
+
+    // Fonctions locales optimisées - mettre à jour seulement l'état local pendant la saisie
     const handleLabelChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
       const newValue = e.target.value;
+      const cursorPos = e.target.selectionStart || 0;
+      
+      // Sauvegarder la position du curseur
+      cursorPositionRef.current = { element: 'label', position: cursorPos };
+      
       setLocalLabel(newValue);
-      // Mettre à jour immédiatement l'état local, synchroniser plus tard
+      
+      // Mettre à jour le parent avec debounce (pas immédiatement)
+      debouncedUpdate({ label: newValue });
+    }, [debouncedUpdate]);
+    
+    // Handlers pour le champ Label
+    const handleLabelFocus = useCallback(() => {
+      isEditingLabelRef.current = true;
+      // S'assurer que l'input a le focus
+      if (labelInputRef.current) {
+        labelInputRef.current.focus();
+      }
+    }, []);
+    
+    const handleLabelBlur = useCallback(() => {
+      // Mettre à jour immédiatement le parent avec la valeur actuelle AVANT de mettre isEditingLabelRef à false
+      immediateUpdate({ label: localLabel });
+      
+      // Attendre un peu avant de mettre isEditingLabelRef à false pour éviter les re-renders
+      setTimeout(() => {
+        isEditingLabelRef.current = false;
+        cursorPositionRef.current = null;
+      }, 100);
+    }, [localLabel, immediateUpdate]);
+
+    // Handlers pour le champ Placeholder
+    const handlePlaceholderFocus = useCallback(() => {
+      isEditingPlaceholderRef.current = true;
+      if (placeholderInputRef.current) {
+        placeholderInputRef.current.focus();
+      }
     }, []);
 
     const handlePlaceholderChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
       const newValue = e.target.value;
+      const cursorPos = e.target.selectionStart || 0;
+      
+      // Sauvegarder la position du curseur
+      cursorPositionRef.current = { element: 'placeholder', position: cursorPos };
+      
       setLocalPlaceholder(newValue);
-      // Mettre à jour immédiatement l'état local, synchroniser plus tard
+      // Mettre à jour avec debounce
+      debouncedUpdate({ placeholder: newValue });
+    }, [debouncedUpdate]);
+
+    const handlePlaceholderBlur = useCallback(() => {
+      // Mettre à jour immédiatement le parent avec la valeur actuelle AVANT de mettre isEditingPlaceholderRef à false
+      immediateUpdate({ placeholder: localPlaceholder });
+      
+      // Attendre un peu avant de mettre isEditingPlaceholderRef à false pour éviter les re-renders
+      setTimeout(() => {
+        isEditingPlaceholderRef.current = false;
+        cursorPositionRef.current = null;
+      }, 100);
+    }, [localPlaceholder, immediateUpdate]);
+
+    // Handlers pour le champ Options (textarea)
+    const handleOptionsFocus = useCallback(() => {
+      isEditingOptionsRef.current = true;
+      if (optionsTextareaRef.current) {
+        optionsTextareaRef.current.focus();
+      }
     }, []);
 
     const handleOptionsChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const newValue = e.target.value;
+      const cursorPos = e.target.selectionStart || 0;
+      
+      // Sauvegarder la position du curseur
+      cursorPositionRef.current = { element: 'options', position: cursorPos };
+      
       setLocalOptions(newValue);
-      // Mettre à jour immédiatement l'état local, synchroniser plus tard
-    }, []);
+      // Convertir en tableau et mettre à jour avec debounce
+      const optionsArray = newValue.split('\n').filter(opt => opt.trim() !== '');
+      debouncedUpdate({ options: optionsArray });
+    }, [debouncedUpdate]);
+
+    const handleOptionsBlur = useCallback(() => {
+      // Mettre à jour immédiatement le parent avec la valeur actuelle AVANT de mettre isEditingOptionsRef à false
+      const optionsArray = localOptions.split('\n').filter(opt => opt.trim() !== '');
+      immediateUpdate({ options: optionsArray });
+      
+      // Attendre un peu avant de mettre isEditingOptionsRef à false pour éviter les re-renders
+      setTimeout(() => {
+        isEditingOptionsRef.current = false;
+        cursorPositionRef.current = null;
+      }, 100);
+    }, [localOptions, immediateUpdate]);
 
     const handleRequiredChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
       const newValue = e.target.checked;
       setLocalRequired(newValue);
-      // Mettre à jour immédiatement l'état local, synchroniser plus tard
-    }, []);
+      // Mettre à jour immédiatement (pas besoin de debounce pour un checkbox)
+      onUpdate(field.id, { required: newValue });
+    }, [field.id, onUpdate]);
+
+    // Nettoyer le timeout au démontage
+    useEffect(() => {
+      return () => {
+        if (updateTimeoutRef.current) {
+          clearTimeout(updateTimeoutRef.current);
+        }
+        // Sauvegarder les mises à jour en attente avant de démonter
+        if (pendingUpdateRef.current) {
+          onUpdate(field.id, pendingUpdateRef.current);
+        }
+      };
+    }, [field.id, onUpdate]);
 
     const handleRemove = useCallback(() => {
       onRemove(field.id);
@@ -631,9 +886,12 @@ const FormBuilder: React.FC = () => {
                Label du champ *
              </label>
              <input
+               ref={labelInputRef}
                type="text"
                value={localLabel}
                onChange={handleLabelChange}
+               onFocus={handleLabelFocus}
+               onBlur={handleLabelBlur}
                className="w-full p-2 border rounded font-medium"
                placeholder="Ex: Nom complet, Âge, Profession..."
              />
@@ -667,8 +925,11 @@ const FormBuilder: React.FC = () => {
                🔘 Options de sélection *
              </label>
              <textarea
+               ref={optionsTextareaRef}
                value={localOptions}
                onChange={handleOptionsChange}
+               onFocus={handleOptionsFocus}
+               onBlur={handleOptionsBlur}
                className="w-full p-2 border rounded text-sm"
                rows={3}
                placeholder="Option 1&#10;Option 2&#10;Option 3"
@@ -686,9 +947,12 @@ const FormBuilder: React.FC = () => {
                💡 Texte d'aide (optionnel)
              </label>
              <input
+               ref={placeholderInputRef}
                type="text"
                value={localPlaceholder}
                onChange={handlePlaceholderChange}
+               onFocus={handlePlaceholderFocus}
+               onBlur={handlePlaceholderBlur}
                className="w-full p-2 border rounded text-sm"
                placeholder="Ex: Entrez votre nom complet..."
              />
@@ -717,6 +981,16 @@ const FormBuilder: React.FC = () => {
             </div>
         </div>
       </div>
+    );
+  }, (prevProps, nextProps) => {
+    // Comparaison personnalisée pour éviter les re-renders inutiles
+    // On compare seulement field.id, pas les autres propriétés
+    // car les valeurs locales sont la source de vérité
+    return (
+      prevProps.field.id === nextProps.field.id &&
+      prevProps.index === nextProps.index &&
+      prevProps.onUpdate === nextProps.onUpdate &&
+      prevProps.onRemove === nextProps.onRemove
     );
   });
 
@@ -785,131 +1059,147 @@ const FormBuilder: React.FC = () => {
           </div>
   ), [surveys, startFormCreation]);
 
-  // Composant de construction de formulaire
+  // Composant de construction de formulaire - Page pleine écran
   const FormBuilderInterface = useCallback(() => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-6xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-800">
-              {currentForm?.name || 'Nouveau Formulaire'}
-            </h2>
-            {currentForm?.survey && (
-              <div className="mt-2">
-                <span className="text-sm text-gray-600">Enquête liée : </span>
-                <span className="font-medium text-blue-600">{currentForm.survey.title}</span>
-                <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${
-                  currentForm.survey.status === 'PUBLISHED' 
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-yellow-100 text-yellow-800'
-                }`}>
-                  {currentForm.survey.status === 'PUBLISHED' ? 'Publiée' : currentForm.survey.status}
-                </span>
-          </div>
-            )}
-            </div>
-              <button
-                onClick={() => setShowBuilder(false)}
-            className="text-gray-500 hover:text-gray-700 text-2xl"
-          >
-            ×
-              </button>
-        </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                     {/* Panneau de gauche - Champs disponibles */}
-            <div className="lg:col-span-1">
-                           <h3 className="font-semibold text-lg mb-4">Champs disponibles</h3>
-             <p className="text-sm text-gray-600 mb-4">
-               Cliquez sur un type de champ pour l'ajouter à votre formulaire. 
-               Chaque champ peut être personnalisé avec un label, des options et des validations.
-             </p>
-                <div className="space-y-2">
-               {fieldTypes.map((fieldType) => (
-                    <button
-                   key={fieldType.value}
-                   onClick={() => addField(fieldType.value)}
-                   className="w-full text-left p-3 border rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-3"
-                 >
-                   <span className="text-gray-600">{renderFieldIcon(fieldType.icon)}</span>
-                   <div className="text-left">
-                     <span className="font-medium">{fieldType.label}</span>
-                     <div className="text-xs text-gray-500 mt-1">
-                       {getFieldTypeDescription(fieldType.value)}
-                     </div>
-                   </div>
-                    </button>
-                  ))}
-                </div>
-           </div>
-
-                     {/* Panneau central - Construction du formulaire */}
-           <div className="lg:col-span-2">
-             <div className="flex justify-between items-center mb-4">
-               <h3 className="font-semibold text-lg">Construction du Formulaire</h3>
-               <div className="flex gap-2">
-                 <button
-                   onClick={saveForm}
-                   disabled={loading}
-                   className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                 >
-                   {loading ? 'Sauvegarde...' : 'Sauvegarder'}
-                 </button>
-              </div>
-            </div>
-
-             {/* Instructions de construction */}
-             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-               <h4 className="font-medium text-blue-800 mb-2">Comment construire votre formulaire :</h4>
-               <ol className="text-sm text-blue-700 space-y-1 list-decimal list-inside">
-                 <li><strong>Ajoutez des champs</strong> : Cliquez sur les types de champs à gauche</li>
-                 <li><strong>Personnalisez chaque champ</strong> : Modifiez le label, ajoutez des options si nécessaire</li>
-                 <li><strong>Organisez l'ordre</strong> : Les champs s'affichent dans l'ordre d'ajout</li>
-                 <li><strong>Sauvegardez</strong> : Cliquez sur "Sauvegarder" quand vous avez terminé</li>
-               </ol>
-                                <p className="text-xs text-blue-600 mt-2">
-                   <strong>Astuce</strong> : Vous pouvez modifier les champs à tout moment avant la sauvegarde
-                 </p>
-             </div>
-
-                         {currentForm?.fields.length === 0 ? (
-               <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
-                 <div className="flex justify-center mb-4">
-                   <svg className="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                   </svg>
-                 </div>
-                 <h4 className="text-lg font-medium text-gray-700 mb-2">Commencez par ajouter des champs</h4>
-                 <p className="text-gray-500 mb-4">
-                   Votre formulaire est vide. Ajoutez des champs depuis le panneau de gauche pour commencer.
-                 </p>
-                 <div className="bg-white p-4 rounded-lg border max-w-md mx-auto">
-                   <p className="text-sm text-gray-600">
-                     <strong>Exemple de formulaire :</strong><br/>
-                     • Nom et prénom (texte)<br/>
-                     • Email (email)<br/>
-                     • Âge (nombre)<br/>
-                     • Profession (sélection)
-                   </p>
-                 </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                {currentForm?.fields.map((field: any, index: number) => (
-                  <FormFieldEditor
-                    key={field.id}
-                    field={field}
-                    index={index}
-                    onUpdate={updateField}
-                    onRemove={removeField}
-                  />
-                ))}
+    <div className="fixed inset-0 bg-white z-50 overflow-y-auto">
+      <div className="min-h-screen bg-gray-50">
+        {/* En-tête fixe */}
+        <div className="bg-white border-b shadow-sm sticky top-0 z-10">
+          <div className="max-w-7xl mx-auto px-6 py-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800">
+                  {currentForm?.name || 'Nouveau Formulaire'}
+                </h2>
+                {currentForm?.survey && (
+                  <div className="mt-2">
+                    <span className="text-sm text-gray-600">Enquête liée : </span>
+                    <span className="font-medium text-blue-600">{currentForm.survey.title}</span>
+                    <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${
+                      currentForm.survey.status === 'PUBLISHED' 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {currentForm.survey.status === 'PUBLISHED' ? 'Publiée' : currentForm.survey.status}
+                    </span>
                   </div>
                 )}
               </div>
+              <button
+                onClick={() => setShowBuilder(false)}
+                className="text-gray-500 hover:text-gray-700 text-3xl font-bold px-3 py-1 rounded-lg hover:bg-gray-100 transition-colors"
+                title="Fermer"
+              >
+                ×
+              </button>
             </div>
           </div>
         </div>
+
+        {/* Contenu principal */}
+        <div className="max-w-7xl mx-auto px-6 py-6">
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Panneau de gauche - Champs disponibles */}
+            <div className="lg:col-span-1">
+              <h3 className="font-semibold text-lg mb-4">Champs disponibles</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Cliquez sur un type de champ pour l'ajouter à votre formulaire. 
+                Chaque champ peut être personnalisé avec un label, des options et des validations.
+              </p>
+              <div className="space-y-2">
+                {fieldTypes.map((fieldType) => (
+                  <button
+                    key={fieldType.value}
+                    onClick={() => addField(fieldType.value)}
+                    className="w-full text-left p-3 border rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-3"
+                  >
+                    <span className="text-gray-600">{renderFieldIcon(fieldType.icon)}</span>
+                    <div className="text-left">
+                      <span className="font-medium">{fieldType.label}</span>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {getFieldTypeDescription(fieldType.value)}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Panneau central - Construction du formulaire */}
+            <div className="lg:col-span-2">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-semibold text-lg">Construction du Formulaire</h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowBuilder(false)}
+                    className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    onClick={saveForm}
+                    disabled={loading}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  >
+                    {loading ? 'Sauvegarde...' : 'Sauvegarder'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Instructions de construction */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <h4 className="font-medium text-blue-800 mb-2">Comment construire votre formulaire :</h4>
+                <ol className="text-sm text-blue-700 space-y-1 list-decimal list-inside">
+                  <li><strong>Ajoutez des champs</strong> : Cliquez sur les types de champs à gauche</li>
+                  <li><strong>Personnalisez chaque champ</strong> : Modifiez le label, ajoutez des options si nécessaire</li>
+                  <li><strong>Organisez l'ordre</strong> : Les champs s'affichent dans l'ordre d'ajout</li>
+                  <li><strong>Sauvegardez</strong> : Cliquez sur "Sauvegarder" quand vous avez terminé</li>
+                </ol>
+                <p className="text-xs text-blue-600 mt-2">
+                  <strong>Astuce</strong> : Vous pouvez modifier les champs à tout moment avant la sauvegarde
+                </p>
+              </div>
+
+              {currentForm?.fields.length === 0 ? (
+                <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
+                  <div className="flex justify-center mb-4">
+                    <svg className="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <h4 className="text-lg font-medium text-gray-700 mb-2">Commencez par ajouter des champs</h4>
+                  <p className="text-gray-500 mb-4">
+                    Votre formulaire est vide. Ajoutez des champs depuis le panneau de gauche pour commencer.
+                  </p>
+                  <div className="bg-white p-4 rounded-lg border max-w-md mx-auto">
+                    <p className="text-sm text-gray-600">
+                      <strong>Exemple de formulaire :</strong><br/>
+                      • Nom et prénom (texte)<br/>
+                      • Email (email)<br/>
+                      • Âge (nombre)<br/>
+                      • Profession (sélection)
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {currentForm?.fields.map((field: any, index: number) => (
+                    <FormFieldEditor
+                      key={field.id}
+                      field={field}
+                      index={index}
+                      onUpdate={updateField}
+                      onRemove={removeField}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   ), [currentForm, addField, updateField, removeField, saveForm, loading, fieldTypes]);
 
   return (
