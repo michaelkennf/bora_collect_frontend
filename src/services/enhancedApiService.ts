@@ -53,14 +53,15 @@ class EnhancedApiService {
     // Nettoyer les requêtes en attente expirées
     setInterval(() => this.cleanPendingRequests(), 60 * 1000);
 
-    // Rafraîchissement proactif du token (toutes les 12h) pour les longues journées de terrain
+    // Rafraîchissement proactif (à mi-session) pour les longues journées de terrain
+    const proactiveRefreshMs = 12 * 60 * 60 * 1000;
     setInterval(() => {
       if (USE_HTTPONLY_COOKIES || (this.getToken() && this.getRefreshToken())) {
         void this.refreshToken().catch(() => {
           // Ignorer : le prochain appel API déclenchera un refresh ou une reconnexion
         });
       }
-    }, 12 * 60 * 60 * 1000);
+    }, proactiveRefreshMs);
   }
 
   private useCookies(): boolean {
